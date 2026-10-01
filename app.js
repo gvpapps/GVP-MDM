@@ -223,6 +223,15 @@ const app = {
       cloudSync.init();
     }
 
+    // Auto-populate all Firebase URL inputs across the application
+    const effectiveFb = (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl) 
+      ? cloudSync.getEffectiveFirebaseUrl() 
+      : 'https://gvp-pm-poshan-f390e-default-rtdb.firebaseio.com';
+    const adminInp = document.getElementById('adminFirebaseUrlInput');
+    if (adminInp && (!adminInp.value || !adminInp.value.trim())) adminInp.value = effectiveFb;
+    const cloudInp = document.getElementById('cloudFirebaseUrl');
+    if (cloudInp && (!cloudInp.value || !cloudInp.value.trim())) cloudInp.value = effectiveFb;
+
     // Auto-run test suite in background to verify correctness
     testSuite.runAllTests();
   },
@@ -1821,8 +1830,10 @@ const app = {
     const resBox = document.getElementById('adminKeyResultBox');
     if (resBox) resBox.classList.add('d-none');
     const fbInp = document.getElementById('adminFirebaseUrlInput');
-    if (fbInp && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
-      fbInp.value = cloudSync.getEffectiveFirebaseUrl();
+    if (fbInp) {
+      fbInp.value = (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl) 
+        ? cloudSync.getEffectiveFirebaseUrl() 
+        : 'https://gvp-pm-poshan-f390e-default-rtdb.firebaseio.com';
     }
     this.switchAdminTab('schools');
     modal.style.display = 'flex';
@@ -1851,6 +1862,13 @@ const app = {
 
     if (tab === 'schools') {
       this.renderAdminSchoolsList();
+    } else if (tab === 'cloud') {
+      const fbInp = document.getElementById('adminFirebaseUrlInput');
+      if (fbInp) {
+        fbInp.value = (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl) 
+          ? cloudSync.getEffectiveFirebaseUrl() 
+          : 'https://gvp-pm-poshan-f390e-default-rtdb.firebaseio.com';
+      }
     }
   },
 
@@ -8129,6 +8147,15 @@ const app = {
   },
 
   openCloudSyncModal() {
+    const cInp = document.getElementById('cloudFirebaseUrl');
+    if (cInp) {
+      cInp.value = (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl) 
+        ? cloudSync.getEffectiveFirebaseUrl() 
+        : 'https://gvp-pm-poshan-f390e-default-rtdb.firebaseio.com';
+    }
+    const sInp = document.getElementById('cloudSchoolCode');
+    if (sInp) sInp.value = this.getActiveUdise() || '';
+
     const isAdmin = (sessionStorage.getItem('MDM_ADMIN_LOGGED_IN') === 'true') || 
                     (this.isAdminLoggedIn === true) || 
                     (this.getActiveUdise() === '9226979531');

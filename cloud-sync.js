@@ -12,13 +12,16 @@
  * 7. Live Online/Offline Network Resilience
  */
 
+const DEFAULT_FIREBASE_URL = 'https://gvp-pm-poshan-f390e-default-rtdb.firebaseio.com';
+
 const cloudSync = {
+  DEFAULT_URL: DEFAULT_FIREBASE_URL,
   config: {
-    enabled: false,
+    enabled: true,
     autoSync: true,
     schoolCode: '',             // School UDISE (e.g. 27240801201)
     secretPin: 'Ican@123',      // Security PIN
-    firebaseUrl: '',            // Google Firebase Realtime Database URL
+    firebaseUrl: DEFAULT_FIREBASE_URL, // Google Firebase Realtime Database URL
     lastSyncTime: null,
     status: 'idle',             // 'idle', 'syncing', 'synced', 'error', 'offline'
     lastError: ''
@@ -74,7 +77,7 @@ const cloudSync = {
   },
 
   /**
-   * Helper: Get effective Firebase URL (GitHub firebase-config.js takes 100% priority)
+   * Helper: Get effective Firebase URL (GitHub firebase-config.js takes 100% priority, with permanent default fallback)
    */
   getEffectiveFirebaseUrl() {
     if (typeof window !== 'undefined' && window.MDM_CONFIG && window.MDM_CONFIG.firebaseUrl && typeof window.MDM_CONFIG.firebaseUrl === 'string') {
@@ -83,7 +86,27 @@ const cloudSync = {
         return this.normalizeFirebaseUrl(trimmed);
       }
     }
-    return this.normalizeFirebaseUrl(this.config.firebaseUrl || '');
+    if (this.config && this.config.firebaseUrl) {
+      const clean = this.normalizeFirebaseUrl(this.config.firebaseUrl);
+      if (clean) return clean;
+    }
+    return this.DEFAULT_URL;
+  },
+
+  /**
+   * Helper: Pre-fill input elements in DOM if they exist
+   */
+  populateFormInputs() {
+    if (typeof document === 'undefined') return;
+    const effectiveUrl = this.getEffectiveFirebaseUrl();
+    const adminInp = document.getElementById('adminFirebaseUrlInput');
+    if (adminInp && (!adminInp.value || !adminInp.value.trim())) {
+      adminInp.value = effectiveUrl;
+    }
+    const cloudInp = document.getElementById('cloudFirebaseUrl');
+    if (cloudInp && (!cloudInp.value || !cloudInp.value.trim())) {
+      cloudInp.value = effectiveUrl;
+    }
   },
 
   /**
@@ -96,6 +119,9 @@ const cloudSync = {
 
     const activeUdise = this.getSchoolUdise();
     const effectiveUrl = this.getEffectiveFirebaseUrl();
+
+    // Auto-fill DOM inputs
+    this.populateFormInputs();
 
     // Auto pull on startup ONLY IF Firebase is enabled, URL exists, AND a school is authenticated & logged in
     if (this.config.enabled && effectiveUrl && activeUdise && activeUdise.length === 11) {
@@ -121,6 +147,9 @@ const cloudSync = {
           this.config.enabled = true;
           this.saveConfig();
         }
+      } else if (!this.config.firebaseUrl) {
+        this.config.firebaseUrl = this.DEFAULT_URL;
+        this.config.enabled = true;
       }
       if (cfg.singleSchoolMode === true && cfg.schoolUdise && /^\d{11}$/.test(String(cfg.schoolUdise).trim())) {
         this.config.schoolCode = String(cfg.schoolUdise).trim();
@@ -129,6 +158,7 @@ const cloudSync = {
         this.config.autoSync = !!cfg.autoSync;
       }
     }
+    this.populateFormInputs();
   },
 
   loadConfig() {
@@ -140,6 +170,11 @@ const cloudSync = {
         if (this.config.firebaseUrl) {
           this.config.firebaseUrl = this.normalizeFirebaseUrl(this.config.firebaseUrl);
         }
+      }
+      // If firebaseUrl ended up empty from an old localStorage cache, self-heal with DEFAULT_URL
+      if (!this.config.firebaseUrl) {
+        this.config.firebaseUrl = this.DEFAULT_URL;
+        this.config.enabled = true;
       }
     } catch (e) {
       console.warn("Could not load cloud sync config:", e);
@@ -824,6 +859,8 @@ const cloudSync = {
         statusInModal.innerHTML = `<span class="badge badge-secondary" style="font-size: 0.9rem;">❌ सिंक बंद आहे (डेटा फक्त या डिव्हाइसवर सुरक्षित आहे)</span>`;
       }
     }
+
+    this.populateFormInputs();
   },
 
   /**
