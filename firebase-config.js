@@ -12,7 +12,7 @@
  */
 
 window.MDM_CONFIG = {
-  // १.https://gvp-pm-poshan-f390e-default-rtdb.firebaseio.com
+  //https://gvp-pm-poshan-f390e-default-rtdb.firebaseio.com
   // उदा. "https://your-project-name-default-rtdb.firebaseio.com"
   firebaseUrl: "",
 
