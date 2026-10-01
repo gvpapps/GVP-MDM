@@ -74,6 +74,19 @@ const cloudSync = {
   },
 
   /**
+   * Helper: Get effective Firebase URL (GitHub firebase-config.js takes 100% priority)
+   */
+  getEffectiveFirebaseUrl() {
+    if (typeof window !== 'undefined' && window.MDM_CONFIG && window.MDM_CONFIG.firebaseUrl && typeof window.MDM_CONFIG.firebaseUrl === 'string') {
+      const trimmed = window.MDM_CONFIG.firebaseUrl.trim();
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return this.normalizeFirebaseUrl(trimmed);
+      }
+    }
+    return this.normalizeFirebaseUrl(this.config.firebaseUrl || '');
+  },
+
+  /**
    * Initialize Cloud Sync
    */
   init() {
@@ -81,8 +94,11 @@ const cloudSync = {
     this.applyGlobalConfig();
     this.bindOnlineEvents();
 
-    // Auto pull on startup if Firebase is enabled & configured
-    if (this.config.enabled && this.config.firebaseUrl && this.getSchoolUdise()) {
+    const activeUdise = this.getSchoolUdise();
+    const effectiveUrl = this.getEffectiveFirebaseUrl();
+
+    // Auto pull on startup ONLY IF Firebase is enabled, URL exists, AND a school is authenticated & logged in
+    if (this.config.enabled && effectiveUrl && activeUdise && activeUdise.length === 11) {
       setTimeout(() => {
         this.pullFromCloud(true);
       }, 700);
@@ -93,21 +109,25 @@ const cloudSync = {
 
   /**
    * Auto-apply configuration from window.MDM_CONFIG (e.g. from firebase-config.js in GitHub repository)
+   * The Firebase URL in firebase-config.js ALWAYS takes 100% priority over any stale localStorage URL.
    */
   applyGlobalConfig() {
     if (typeof window !== 'undefined' && window.MDM_CONFIG) {
       const cfg = window.MDM_CONFIG;
-      if (cfg.firebaseUrl && typeof cfg.firebaseUrl === 'string' && cfg.firebaseUrl.trim() && cfg.firebaseUrl.startsWith('http')) {
-        this.config.firebaseUrl = this.normalizeFirebaseUrl(cfg.firebaseUrl);
-        this.config.enabled = true;
+      if (cfg.firebaseUrl && typeof cfg.firebaseUrl === 'string' && cfg.firebaseUrl.trim()) {
+        const cleanUrl = this.normalizeFirebaseUrl(cfg.firebaseUrl.trim());
+        if (cleanUrl && (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://'))) {
+          this.config.firebaseUrl = cleanUrl;
+          this.config.enabled = true;
+          this.saveConfig();
+        }
       }
-      if (cfg.schoolUdise && /^\d{11}$/.test(String(cfg.schoolUdise).trim())) {
+      if (cfg.singleSchoolMode === true && cfg.schoolUdise && /^\d{11}$/.test(String(cfg.schoolUdise).trim())) {
         this.config.schoolCode = String(cfg.schoolUdise).trim();
       }
       if (cfg.autoSync !== undefined) {
         this.config.autoSync = !!cfg.autoSync;
       }
-      this.saveConfig();
     }
   },
 
@@ -142,7 +162,7 @@ const cloudSync = {
     window.addEventListener('online', () => {
       this.config.lastError = '';
       this.updateUIStatus();
-      if (this.config.enabled && this.config.firebaseUrl && this.config.autoSync) {
+      if (this.config.enabled && this.getEffectiveFirebaseUrl() && this.config.autoSync && this.getSchoolUdise()) {
         this.scheduleDebouncedPush();
       }
     });
@@ -153,15 +173,23 @@ const cloudSync = {
     });
   },
 
+  /**
+   * Return active school UDISE ONLY if user is actively logged in.
+   * NEVER fallback to a default or arbitrary school.
+   */
   getSchoolUdise() {
-    return String(
-      (typeof window !== 'undefined' && window.MDM_CONFIG && window.MDM_CONFIG.schoolUdise)
-      || (typeof app !== 'undefined' && app.data && app.data.settings && app.data.settings.udise)
-      || (typeof app !== 'undefined' && typeof app.getActiveUdise === 'function' && app.getActiveUdise())
-      || (typeof localStorage !== 'undefined' && localStorage.getItem('MDM_CURRENT_UDISE'))
-      || this.config.schoolCode
-      || '27240304501'
-    ).trim();
+    let udise = '';
+    if (typeof app !== 'undefined' && typeof app.getActiveUdise === 'function') {
+      udise = app.getActiveUdise();
+    }
+    if (!udise && typeof localStorage !== 'undefined') {
+      udise = localStorage.getItem('MDM_CURRENT_UDISE') || '';
+    }
+    if (!udise && typeof window !== 'undefined' && window.MDM_CONFIG && window.MDM_CONFIG.singleSchoolMode === true && window.MDM_CONFIG.schoolUdise) {
+      udise = String(window.MDM_CONFIG.schoolUdise).trim();
+    }
+    udise = String(udise || '').trim();
+    return (/^\d{11}$/.test(udise)) ? udise : '';
   },
 
   getCloudKey() {
@@ -198,7 +226,13 @@ const cloudSync = {
    * Push local data to Google Firebase Realtime Database
    */
   async pushToCloud(isSilent = false) {
-    const cleanBaseUrl = this.normalizeFirebaseUrl(this.config.firebaseUrl);
+    const currentUdise = this.getSchoolUdise();
+    if (!currentUdise || currentUdise.length !== 11) {
+      this.isSyncing = false;
+      return false;
+    }
+
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
     if (!cleanBaseUrl) {
       if (!isSilent) {
         alert('⚠️ Google Firebase Realtime Database URL प्रविष्ट केलेली नाही!\n\nकृपया प्रथम Firebase Realtime Database ची URL टाका.\nउदा. https://your-project-default-rtdb.firebaseio.com/');
@@ -227,7 +261,6 @@ const cloudSync = {
     this.config.status = 'syncing';
     this.updateUIStatus();
 
-    const currentUdise = this.getSchoolUdise();
     this.config.schoolCode = currentUdise;
     const endpoint = `${cleanBaseUrl}/mdm_schools/${this.getCloudKey()}.json`;
 
@@ -415,7 +448,13 @@ const cloudSync = {
    * Pull data from Google Firebase Realtime Database
    */
   async pullFromCloud(isSilent = false) {
-    const cleanBaseUrl = this.normalizeFirebaseUrl(this.config.firebaseUrl);
+    const currentUdise = this.getSchoolUdise();
+    if (!currentUdise || currentUdise.length !== 11) {
+      this.isSyncing = false;
+      return false;
+    }
+
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
     if (!cleanBaseUrl) {
       if (!isSilent) {
         alert('⚠️ Google Firebase Realtime Database URL प्रविष्ट केलेली नाही!\n\nकृपया प्रथम Firebase Realtime Database ची URL टाका.\nउदा. https://your-project-default-rtdb.firebaseio.com/');
@@ -437,7 +476,6 @@ const cloudSync = {
     this.config.status = 'syncing';
     this.updateUIStatus();
 
-    const currentUdise = this.getSchoolUdise();
     this.config.schoolCode = currentUdise;
     const endpoint = `${cleanBaseUrl}/mdm_schools/${this.getCloudKey()}.json`;
 
@@ -509,9 +547,6 @@ const cloudSync = {
 
             if (remoteData.settings) {
               app.data.settings = Object.assign({}, app.data.settings, remoteData.settings);
-              if (remoteData.settings.udise && /^\d{11}$/.test(remoteData.settings.udise)) {
-                localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, remoteData.settings.udise);
-              }
             }
             if (remoteData.initialStock) {
               app.data.initialStock = Object.assign({}, app.data.initialStock, remoteData.initialStock);
@@ -556,35 +591,7 @@ const cloudSync = {
           }
           return true;
         } else {
-          // If main school payload is empty, check if root school_info exists in database
-          try {
-            const infoRes = await this.fetchWithTimeout(`${cleanBaseUrl}/school_info.json`, {}, 8000);
-            if (infoRes.ok) {
-              const infoJson = await infoRes.json();
-              if (infoJson && typeof infoJson === 'object' && (infoJson.schoolName || infoJson.udise)) {
-                if (typeof app !== 'undefined' && app.data && app.data.settings) {
-                  app.data.settings = Object.assign({}, app.data.settings, infoJson);
-                  if (infoJson.udise && /^\d{11}$/.test(infoJson.udise)) {
-                    localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, infoJson.udise);
-                  }
-                  if (typeof app.saveState === 'function') app.saveState(true);
-                  if (typeof app.updateHeaderMeta === 'function') app.updateHeaderMeta();
-                  if (typeof app.renderSettingsView === 'function') app.renderSettingsView();
-                  if (typeof app.refreshAllViews === 'function') app.refreshAllViews();
-                }
-                this.config.status = 'synced';
-                this.config.lastSyncTime = infoJson.updatedAt || new Date().toISOString();
-                this.config.lastError = '';
-                this.saveConfig();
-                if (!isSilent && typeof app !== 'undefined') {
-                  app.showToast(`🎉 Firebase वरून शाळेची माहिती (${infoJson.schoolName || infoJson.udise}) डाऊनलोड झाली!`, 'success');
-                }
-                return true;
-              }
-            }
-          } catch(e) {}
-
-          // Empty remote bucket
+          // If remote school bucket is empty
           this.config.status = 'idle';
           this.updateUIStatus();
           if (!isSilent) {
@@ -822,7 +829,7 @@ const cloudSync = {
    * Push school auth profile to Google Firebase Realtime Database
    */
   async pushAuthToCloud(udise, authData) {
-    const cleanBaseUrl = this.normalizeFirebaseUrl(this.config.firebaseUrl);
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
     if (!cleanBaseUrl || !udise || !authData) return false;
     const cleanUdise = String(udise).trim();
     const endpoint = `${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/auth.json`;
@@ -843,7 +850,7 @@ const cloudSync = {
    * Push school license/trial to Google Firebase Realtime Database
    */
   async pushLicenseToCloud(udise, licenseData) {
-    const cleanBaseUrl = this.normalizeFirebaseUrl(this.config.firebaseUrl);
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
     if (!cleanBaseUrl || !udise || !licenseData) return false;
     const cleanUdise = String(udise).trim();
     const endpoint = `${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/license.json`;
@@ -864,7 +871,7 @@ const cloudSync = {
    * Pull school license from Cloud to check remote Admin activation
    */
   async pullLicenseFromCloud(udise) {
-    const cleanBaseUrl = this.normalizeFirebaseUrl(this.config.firebaseUrl);
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
     if (!cleanBaseUrl || !udise) return null;
     const cleanUdise = String(udise).trim();
     const endpoint = `${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/license.json`;

@@ -12,7 +12,7 @@
  */
 
 window.MDM_CONFIG = {
-  // १.https://gvp-pm-poshan-f390e-default-rtdb.firebaseio.com
+  // १. Google Firebase Realtime Database URL (येथे तुमची Firebase URL पेस्ट करा):
   // उदा. "https://your-project-name-default-rtdb.firebaseio.com"
   firebaseUrl: "",
 

@@ -177,7 +177,8 @@ const app = {
   applyGlobalConfig() {
     if (typeof window !== 'undefined' && window.MDM_CONFIG) {
       const cfg = window.MDM_CONFIG;
-      if (cfg.schoolUdise && /^\d{11}$/.test(String(cfg.schoolUdise).trim())) {
+      // In singleSchoolMode only, auto-set the school UDISE
+      if (cfg.singleSchoolMode === true && cfg.schoolUdise && /^\d{11}$/.test(String(cfg.schoolUdise).trim())) {
         const cleanUdise = String(cfg.schoolUdise).trim();
         const existingUdise = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY);
         if (!existingUdise || existingUdise !== cleanUdise) {
@@ -187,7 +188,7 @@ const app = {
           this.data.settings.udise = cleanUdise;
         }
       }
-      if (cfg.schoolName && this.data && this.data.settings) {
+      if (cfg.singleSchoolMode === true && cfg.schoolName && this.data && this.data.settings) {
         if (!this.data.settings.schoolName || this.data.settings.schoolName.includes('(')) {
           this.data.settings.schoolName = cfg.schoolName;
         }
@@ -200,16 +201,20 @@ const app = {
    */
   init() {
     this.applyGlobalConfig();
-    this.loadState();
-    this.populateInitialSampleDataIfEmpty();
     this.setupDatePickers();
     this.populateMenuDropdown();
     this.bindEvents();
-    this.initCalcTableVisibility();
-    this.refreshAllViews();
-    this.renderCurrentTab();
-    
-    // Check Access Control (Activation Screen & School UDISE Login)
+
+    const activeUdise = this.getActiveUdise();
+    if (activeUdise && activeUdise.length === 11) {
+      this.loadState(activeUdise);
+      this.populateInitialSampleDataIfEmpty();
+      this.initCalcTableVisibility();
+      this.refreshAllViews();
+      this.renderCurrentTab();
+    }
+
+    // Check Access Control (Show Login/Registration Screen if not logged in)
     this.checkAccessControl();
     this.updateAdminVisibility();
 
@@ -466,14 +471,15 @@ const app = {
   },
 
   /**
-   * Get active UDISE
+   * Get active UDISE of logged in school.
+   * Returns empty string if no user/school is logged in.
    */
   getActiveUdise() {
-    return String(
-      (this.data && this.data.settings && this.data.settings.udise)
-      || localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY)
-      || '27240304501'
-    ).trim();
+    const active = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY);
+    if (active && /^\d{11}$/.test(active.trim())) {
+      return active.trim();
+    }
+    return '';
   },
 
   /**
@@ -2328,13 +2334,15 @@ const app = {
    */
   loadState(targetUdise = null) {
     try {
-      const udise = targetUdise 
-        || localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY) 
-        || (this.data && this.data.settings && this.data.settings.udise) 
-        || '27240304501';
+      const activeStored = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY);
+      const udise = targetUdise || activeStored;
 
-      const schoolStorageKey = this.getSchoolStorageKey(udise);
-      const schoolBackupKey = this.getSchoolBackupKey(udise);
+      if (!udise || String(udise).trim().length !== 11) {
+        return;
+      }
+      const cleanUdise = String(udise).trim();
+      const schoolStorageKey = this.getSchoolStorageKey(cleanUdise);
+      const schoolBackupKey = this.getSchoolBackupKey(cleanUdise);
 
       let saved = localStorage.getItem(schoolStorageKey);
 
@@ -2344,8 +2352,8 @@ const app = {
         if (legacySaved) {
           try {
             const parsedLegacy = JSON.parse(legacySaved);
-            const legacyUdise = (parsedLegacy.settings && parsedLegacy.settings.udise) || '27240304501';
-            if (legacyUdise === udise || udise === '27240304501') {
+            const legacyUdise = (parsedLegacy.settings && parsedLegacy.settings.udise) || '';
+            if (legacyUdise === cleanUdise) {
               saved = legacySaved;
               localStorage.setItem(schoolStorageKey, legacySaved);
             }
