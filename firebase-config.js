@@ -12,9 +12,8 @@
  */
 
 window.MDM_CONFIG = {
-  //https://gvp-pm-poshan-f390e-default-rtdb.firebaseio.com
-  // उदा. "https://your-project-name-default-rtdb.firebaseio.com"
-  firebaseUrl: "",
+  // १. Google Firebase Realtime Database URL:
+  firebaseUrl: "https://gvp-pm-poshan-f390e-default-rtdb.firebaseio.com",
 
   // २. ऑटोमॅटिक क्लाऊड बॅकअप व सिंक सुरू ठेवायचे का? (true = चालू)
   autoSync: true,

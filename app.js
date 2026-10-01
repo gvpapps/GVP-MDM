@@ -1233,7 +1233,7 @@ const app = {
     }));
 
     // Sync to cloud if available
-    if (typeof cloudSync !== 'undefined' && cloudSync.config && cloudSync.config.firebaseUrl) {
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
       cloudSync.pushLicenseToCloud(cleanUdise, updatedLic);
     }
 
@@ -1422,9 +1422,9 @@ const app = {
   },
 
   /**
-   * Handle School Login via UDISE + Password
+   * Handle School Login via UDISE + Password (supports cross-device cloud authentication)
    */
-  handleSchoolLogin() {
+  async handleSchoolLogin() {
     const udiseInput = document.getElementById('schoolUdiseInput');
     const pwdInput = document.getElementById('schoolPasswordInput');
     const alertBox = document.getElementById('schoolLoginAlert');
@@ -1466,6 +1466,7 @@ const app = {
         return true;
       } else {
         if (alertBox) {
+          alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
           alertBox.textContent = '❌ चुकीचा पासवर्ड! कृपया ॲडमिन पासवर्ड अचूक प्रविष्ट करा.';
           alertBox.classList.remove('d-none');
         }
@@ -1479,6 +1480,7 @@ const app = {
 
     if (!/^\d{11}$/.test(udise)) {
       if (alertBox) {
+        alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
         alertBox.textContent = '❌ कृपया अचूक 11 अंकी इंग्रजी UDISE कोड टाका (उदा. 27240304501).';
         alertBox.classList.remove('d-none');
       }
@@ -1488,6 +1490,7 @@ const app = {
 
     if (!pwd) {
       if (alertBox) {
+        alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
         alertBox.textContent = '❌ कृपया शाळेचा पासवर्ड प्रविष्ट करा.';
         alertBox.classList.remove('d-none');
       }
@@ -1495,10 +1498,30 @@ const app = {
       return false;
     }
 
-    // Check Auth
+    // 1. Check local Auth first
     let auth = this.getSchoolAuth(udise);
+
+    // 2. If not found locally, check Google Firebase Realtime Database for cross-device registration!
+    if (!auth && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+      if (alertBox) {
+        alertBox.className = 'alert alert-info py-2 px-3 mb-3 small';
+        alertBox.innerHTML = `🔄 <strong>UDISE ${udise}</strong> ची माहिती क्लाऊडवरून शोधत आहे...`;
+        alertBox.classList.remove('d-none');
+      }
+      try {
+        const remoteAuth = await cloudSync.pullAuthFromCloud(udise);
+        if (remoteAuth) {
+          auth = remoteAuth;
+          this.saveSchoolAuth(udise, remoteAuth);
+        }
+      } catch(e) {
+        console.warn("Cloud auth check error:", e);
+      }
+    }
+
     if (!auth) {
       if (alertBox) {
+        alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
         alertBox.innerHTML = `⚠️ <strong>UDISE ${udise}</strong> ची अजून नोंदणी झालेली नाही!<br>कृपया वरील 'नवीन शाळा नोंदणी' टॅबवर जाऊन नोंदणी करा.`;
         alertBox.classList.remove('d-none');
       }
@@ -1511,6 +1534,7 @@ const app = {
     // Verify Password Hash
     if (auth.passwordHash && this.sha256(pwd) !== auth.passwordHash) {
       if (alertBox) {
+        alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
         alertBox.textContent = '❌ चुकीचा पासवर्ड! कृपया योग्य पासवर्ड प्रविष्ट करा.';
         alertBox.classList.remove('d-none');
       }
@@ -1523,6 +1547,7 @@ const app = {
 
     // Password is valid! Login school
     if (pwdInput) pwdInput.value = '';
+    if (alertBox) alertBox.classList.add('d-none');
     localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, udise);
 
     this.loadState(udise);
@@ -1536,8 +1561,14 @@ const app = {
     this.refreshAllViews();
     this.renderCurrentTab();
 
-    if (typeof cloudSync !== 'undefined' && cloudSync.onSchoolSwitched) {
-      cloudSync.onSchoolSwitched(udise);
+    if (typeof cloudSync !== 'undefined') {
+      if (cloudSync.onSchoolSwitched) cloudSync.onSchoolSwitched(udise);
+      // Auto-pull latest records from Firebase seamlessly upon login
+      if (cloudSync.getEffectiveFirebaseUrl()) {
+        setTimeout(() => {
+          cloudSync.pullFromCloud(true);
+        }, 300);
+      }
     }
     return true;
   },
@@ -1661,7 +1692,7 @@ const app = {
     this.renderCurrentTab();
 
     // Push new registration to Cloud if configured
-    if (typeof cloudSync !== 'undefined' && cloudSync.config && cloudSync.config.firebaseUrl) {
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
       cloudSync.onSchoolSwitched(udise);
       cloudSync.pushAuthToCloud(udise, authData);
       cloudSync.pushLicenseToCloud(udise, trialData);
@@ -1790,8 +1821,8 @@ const app = {
     const resBox = document.getElementById('adminKeyResultBox');
     if (resBox) resBox.classList.add('d-none');
     const fbInp = document.getElementById('adminFirebaseUrlInput');
-    if (fbInp && typeof cloudSync !== 'undefined' && cloudSync.config && cloudSync.config.firebaseUrl) {
-      fbInp.value = cloudSync.config.firebaseUrl;
+    if (fbInp && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+      fbInp.value = cloudSync.getEffectiveFirebaseUrl();
     }
     this.switchAdminTab('schools');
     modal.style.display = 'flex';
@@ -1884,8 +1915,8 @@ const app = {
     }
 
     // 3. Fetch from Google Firebase Cloud if configured
-    if (typeof cloudSync !== 'undefined' && cloudSync.config && cloudSync.config.firebaseUrl) {
-      const cleanBaseUrl = cloudSync.normalizeFirebaseUrl(cloudSync.config.firebaseUrl);
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+      const cleanBaseUrl = cloudSync.getEffectiveFirebaseUrl();
       if (cleanBaseUrl) {
         try {
           const res = await cloudSync.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools.json?t=${Date.now()}`, { cache: 'no-store' }, 7000);
@@ -2174,8 +2205,8 @@ const app = {
     localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(list));
 
     // 2. Delete from cloud if configured
-    if (typeof cloudSync !== 'undefined' && cloudSync.config && cloudSync.config.firebaseUrl) {
-      const cleanBaseUrl = cloudSync.normalizeFirebaseUrl(cloudSync.config.firebaseUrl);
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+      const cleanBaseUrl = cloudSync.getEffectiveFirebaseUrl();
       if (cleanBaseUrl) {
         try {
           await cloudSync.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${udise}.json`, { method: 'DELETE' }, 7000);
@@ -2678,7 +2709,7 @@ const app = {
       }
 
       // 5. Trigger Cloud Auto-Sync in background if enabled (debounced and never if skipCloud is true)
-      if (!skipCloud && typeof cloudSync !== 'undefined' && cloudSync.config && cloudSync.config.enabled && cloudSync.config.autoSync) {
+      if (!skipCloud && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl() && cloudSync.config && cloudSync.config.autoSync) {
         if (!cloudSync.isSyncing) {
           cloudSync.scheduleDebouncedPush();
         }
@@ -2755,7 +2786,7 @@ const app = {
           this.renderCurrentTab();
 
           // Push to cloud if configured
-          if (typeof cloudSync !== 'undefined' && cloudSync.config && cloudSync.config.enabled && cloudSync.config.firebaseUrl) {
+          if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
             cloudSync.pushToCloud(true);
           }
 
@@ -2764,7 +2795,7 @@ const app = {
         }
       } else {
         // Try Cloud backup
-        if (typeof cloudSync !== 'undefined' && cloudSync.config && cloudSync.config.firebaseUrl) {
+        if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
           if (confirm('या डिव्हाइसवर स्थानिक बॅकअप सापडला नाही. क्लाऊड बॅकअप व्हॉल्टमधून (Cloud Backup) शोधायचा का?')) {
             cloudSync.restoreFromCloudBackup();
             return;
@@ -8049,7 +8080,7 @@ const app = {
     this.refreshAllViews();
 
     // Direct immediate push to Google Firebase Realtime Database
-    if (typeof cloudSync !== 'undefined' && cloudSync.config && cloudSync.config.enabled && cloudSync.config.firebaseUrl) {
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
       cloudSync.pushToCloud(true);
     }
 
@@ -8087,7 +8118,8 @@ const app = {
       this.openMasterAdminModal();
       this.switchAdminTab('cloud');
     } else {
-      const isOnline = (typeof cloudSync !== 'undefined' && cloudSync.config && cloudSync.config.enabled && cloudSync.config.firebaseUrl && cloudSync.config.status !== 'offline' && cloudSync.config.status !== 'error');
+      const hasFirebase = (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl());
+      const isOnline = hasFirebase && (cloudSync.config ? (cloudSync.config.status !== 'offline' && cloudSync.config.status !== 'error') : true);
       if (isOnline) {
         this.showToast('🟢 Google Firebase क्लाऊड सिंक चालू आहे. सर्व डेटा सुरक्षित आहे.', 'success');
       } else {
@@ -8137,7 +8169,7 @@ const app = {
     const codeInput = document.getElementById('cloudSchoolCode');
     const pinInput = document.getElementById('cloudSecretPin');
     
-    const url = (urlInput ? urlInput.value.trim() : '') || (cloudSync.config ? cloudSync.config.firebaseUrl : '');
+    const url = (urlInput ? urlInput.value.trim() : '') || (cloudSync.getEffectiveFirebaseUrl ? cloudSync.getEffectiveFirebaseUrl() : (cloudSync.config ? cloudSync.config.firebaseUrl : ''));
     if (!url) {
       alert('⚠️ कृपया प्रथम Google Firebase Realtime Database ची URL प्रविष्ट करा!\n\nउदा. https://your-project-default-rtdb.firebaseio.com/');
       if (urlInput) urlInput.focus();
@@ -8176,7 +8208,7 @@ const app = {
     const codeInput = document.getElementById('cloudSchoolCode');
     const pinInput = document.getElementById('cloudSecretPin');
     
-    const url = (urlInput ? urlInput.value.trim() : '') || (cloudSync.config ? cloudSync.config.firebaseUrl : '');
+    const url = (urlInput ? urlInput.value.trim() : '') || (cloudSync.getEffectiveFirebaseUrl ? cloudSync.getEffectiveFirebaseUrl() : (cloudSync.config ? cloudSync.config.firebaseUrl : ''));
     if (!url) {
       alert('⚠️ कृपया प्रथम Google Firebase Realtime Database ची URL प्रविष्ट करा!\n\nउदा. https://your-project-default-rtdb.firebaseio.com/');
       if (urlInput) urlInput.focus();
@@ -8213,7 +8245,7 @@ const app = {
     if (typeof cloudSync === 'undefined') return;
     const urlInput = document.getElementById('cloudFirebaseUrl');
     const codeInput = document.getElementById('cloudSchoolCode');
-    const url = (urlInput ? urlInput.value.trim() : '') || (cloudSync.config ? cloudSync.config.firebaseUrl : '');
+    const url = (urlInput ? urlInput.value.trim() : '') || (cloudSync.getEffectiveFirebaseUrl ? cloudSync.getEffectiveFirebaseUrl() : (cloudSync.config ? cloudSync.config.firebaseUrl : ''));
     const code = (codeInput ? codeInput.value.trim() : '') || (cloudSync.config ? cloudSync.config.schoolCode : '');
     
     if (!url) {

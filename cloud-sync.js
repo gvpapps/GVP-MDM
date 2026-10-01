@@ -216,7 +216,7 @@ const cloudSync = {
     }
 
     this.debounceTimer = setTimeout(() => {
-      if (this.config.enabled && this.config.firebaseUrl && this.config.autoSync) {
+      if (this.config.enabled && this.getEffectiveFirebaseUrl() && this.config.autoSync) {
         this.pushToCloud(true);
       }
     }, 2500);
@@ -772,7 +772,8 @@ const cloudSync = {
     const headerText = document.getElementById('cloudStatusText');
     const headerDot = document.getElementById('cloudStatusDot');
 
-    const isConnected = !!(this.config.enabled && this.config.firebaseUrl && this.config.status !== 'offline' && this.config.status !== 'error');
+    const effectiveUrl = this.getEffectiveFirebaseUrl();
+    const isConnected = !!(this.config.enabled && effectiveUrl && this.config.status !== 'offline' && this.config.status !== 'error');
 
     if (headerPill) {
       if (isConnected) {
@@ -807,7 +808,7 @@ const cloudSync = {
 
     const statusInModal = document.getElementById('cloudModalStatusText');
     if (statusInModal) {
-      if (this.config.enabled && this.config.firebaseUrl) {
+      if (this.config.enabled && effectiveUrl) {
         if (this.config.status === 'synced') {
           statusInModal.innerHTML = `<span class="badge badge-success" style="font-size: 0.9rem;">✅ Google Firebase क्लाऊड सिंक सक्रिय</span> (शाळा UDISE: <code>${this.config.schoolCode}</code>) <br><small class="text-success" style="font-weight: 600;">शेवटचा यशस्वी सिंक: ${this.formatTimeStr(this.config.lastSyncTime)}</small>`;
         } else if (this.config.status === 'syncing') {
@@ -844,6 +845,32 @@ const cloudSync = {
       console.warn("Could not push auth to cloud:", e);
       return false;
     }
+  },
+
+  /**
+   * Pull school auth profile from Google Firebase Realtime Database
+   * Enables cross-device login for schools registered on another device
+   */
+  async pullAuthFromCloud(udise) {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl || !udise) return null;
+    const cleanUdise = String(udise).trim();
+    const endpoint = `${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/auth.json`;
+    try {
+      const res = await this.fetchWithTimeout(endpoint, {}, 8000);
+      if (res.ok) {
+        const remoteAuth = await res.json();
+        if (remoteAuth && remoteAuth.passwordHash) {
+          if (typeof app !== 'undefined' && typeof app.saveSchoolAuth === 'function') {
+            app.saveSchoolAuth(cleanUdise, remoteAuth);
+          }
+          return remoteAuth;
+        }
+      }
+    } catch(e) {
+      console.warn("Could not pull remote auth:", e);
+    }
+    return null;
   },
 
   /**
