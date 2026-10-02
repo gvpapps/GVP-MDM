@@ -20,8 +20,10 @@ const app = {
   ACTIVATION_STORAGE_KEY: 'MDM_ACTIVATION_DATA',
   ACTIVE_UDISE_STORAGE_KEY: 'MDM_CURRENT_UDISE',
   REGISTERED_SCHOOLS_KEY: 'MDM_REGISTERED_SCHOOLS',
+  TOMBSTONES_STORAGE_KEY: 'MDM_DELETED_SCHOOL_TOMBSTONES',
   AUTH_STORAGE_PREFIX: 'MDM_SCHOOL_AUTH_',
   LICENSE_STORAGE_PREFIX: 'MDM_SCHOOL_LICENSE_',
+  SAFE_BACKUP_PREFIX: 'MDM_SAFE_BACKUP_',
   MASTER_KEY_SECRET_SALT: 'GVP_PM_POSHAN_SECURE_SALT_2026',
   ADMIN_CONTACT_NUMBER: '9226979531',
 
@@ -482,13 +484,72 @@ const app = {
   },
 
   /**
+   * Get all locally stored school deletion tombstones
+   */
+  getLocalTombstones() {
+    try {
+      const raw = localStorage.getItem(this.TOMBSTONES_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch(e) {}
+    return {};
+  },
+
+  /**
+   * Add school UDISE to local tombstone registry (prevents resurrection)
+   */
+  addLocalTombstone(udise) {
+    if (!udise) return;
+    const clean = String(udise).trim();
+    if (!/^\d{11}$/.test(clean)) return;
+    const tombstones = this.getLocalTombstones();
+    tombstones[clean] = { deletedAt: new Date().toISOString() };
+    try {
+      localStorage.setItem(this.TOMBSTONES_STORAGE_KEY, JSON.stringify(tombstones));
+    } catch(e) {}
+  },
+
+  /**
+   * Remove school UDISE from local tombstone registry (when school is intentionally re-registered)
+   */
+  removeLocalTombstone(udise) {
+    if (!udise) return;
+    const clean = String(udise).trim();
+    const tombstones = this.getLocalTombstones();
+    if (tombstones[clean]) {
+      delete tombstones[clean];
+      try {
+        localStorage.setItem(this.TOMBSTONES_STORAGE_KEY, JSON.stringify(tombstones));
+      } catch(e) {}
+    }
+    if (typeof cloudSync !== 'undefined' && cloudSync.clearTombstone) {
+      cloudSync.clearTombstone(clean);
+    }
+  },
+
+  /**
+   * Check if school UDISE is tombstoned (permanently deleted)
+   */
+  isSchoolTombstoned(udise) {
+    if (!udise) return false;
+    const clean = String(udise).trim();
+    const tombstones = this.getLocalTombstones();
+    return !!tombstones[clean];
+  },
+
+  /**
    * Get active UDISE of logged in school.
    * Returns empty string if no user/school is logged in.
    */
   getActiveUdise() {
     const active = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY);
     if (active && /^\d{11}$/.test(active.trim())) {
-      return active.trim();
+      const clean = active.trim();
+      if (!this.isSchoolTombstoned(clean)) {
+        return clean;
+      }
     }
     return '';
   },
@@ -497,11 +558,14 @@ const app = {
    * Get registered schools list from device storage
    */
   getRegisteredSchools() {
+    const tombstones = this.getLocalTombstones();
     try {
       const raw = localStorage.getItem(this.REGISTERED_SCHOOLS_KEY);
       if (raw !== null) {
         const list = JSON.parse(raw);
-        if (Array.isArray(list)) return list;
+        if (Array.isArray(list)) {
+          return list.filter(s => s && s.udise && !tombstones[String(s.udise).trim()]);
+        }
       }
     } catch (e) {
       console.warn("Could not read registered schools:", e);
@@ -516,7 +580,7 @@ const app = {
         pat: (this.data && this.data.settings && this.data.settings.pat) || 9,
         lastActive: new Date().toISOString()
       }
-    ];
+    ].filter(s => !tombstones[s.udise]);
     try {
       localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(defaultList));
     } catch (e) {}
@@ -530,6 +594,9 @@ const app = {
     if (!schoolInfo || !schoolInfo.udise) return;
     const cleanUdise = String(schoolInfo.udise).trim();
     if (cleanUdise.length !== 11) return;
+
+    // Lifting tombstone upon legitimate school registration
+    this.removeLocalTombstone(cleanUdise);
 
     const list = this.getRegisteredSchools();
     const idx = list.findIndex(s => s.udise === cleanUdise);
@@ -647,9 +714,9 @@ const app = {
   },
 
   /**
-   * Execute permanent school deletion: removes storage bucket, backup, and registry entry
+   * Execute permanent school deletion: removes storage bucket, auth, license, backups + tombstone
    */
-  executeDeleteSchool(udise) {
+  async executeDeleteSchool(udise) {
     if (!udise) return false;
     const cleanUdise = String(udise).trim();
     const list = this.getRegisteredSchools();
@@ -659,27 +726,36 @@ const app = {
     const activeUdise = this.getActiveUdise();
     const isDeletingActive = (activeUdise === cleanUdise);
 
-    // 1. Remove storage data and backups
+    // 1. Purge ALL local storage keys for this school
     localStorage.removeItem(this.getSchoolStorageKey(cleanUdise));
     localStorage.removeItem(this.getSchoolBackupKey(cleanUdise));
+    localStorage.removeItem(this.AUTH_STORAGE_PREFIX + cleanUdise);
+    localStorage.removeItem(this.LICENSE_STORAGE_PREFIX + cleanUdise);
+    localStorage.removeItem('MDM_SAFE_BACKUP_' + cleanUdise);
+    localStorage.removeItem('MDM_PERMANENT_BACKUP_' + cleanUdise);
 
-    // 2. Remove from registry
+    // 2. Add to Local Tombstone Registry to prevent resurrection
+    this.addLocalTombstone(cleanUdise);
+
+    // 3. Remove from local registered schools list
     let updatedList = list.filter(s => s.udise !== cleanUdise);
     localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(updatedList));
 
-    // Also delete from cloud if configured
+    // 4. Delete from Google Firebase Cloud (school data + central registry + backup + create cloud tombstone)
     if (typeof cloudSync !== 'undefined' && cloudSync.deleteSchoolFromCloud) {
-      cloudSync.deleteSchoolFromCloud(cleanUdise);
+      try {
+        await cloudSync.deleteSchoolFromCloud(cleanUdise);
+      } catch(e) {
+        console.warn("Cloud delete notice:", e);
+      }
     }
 
     this.showToast(`🗑️ '${name}' शाळा यशस्वीरित्या डिलीट केली.`, 'info');
 
-    // 3. If currently active school was deleted
+    // 5. If currently active school was deleted
     if (isDeletingActive) {
       localStorage.removeItem(this.ACTIVE_UDISE_STORAGE_KEY);
-      if (this.data && this.data.settings) {
-        this.data.settings.udise = '';
-      }
+      this.data = this.createDefaultSchoolData('');
       this.closeSchoolSwitcherModal();
       this.checkAccessControl();
     } else {
@@ -692,14 +768,14 @@ const app = {
    * Delete school method with optional PIN verification
    * If PIN not passed, opens PIN prompt modal
    */
-  deleteSchool(udise, pin = null) {
+  async deleteSchool(udise, pin = null) {
     if (!udise) return false;
     if (pin !== null) {
       if (this.sha256(String(pin).trim()) !== this.DELETE_PIN_HASH) {
         this.showToast('❌ चुकीचा सुरक्षा PIN!', 'danger');
         return false;
       }
-      return this.executeDeleteSchool(udise);
+      return await this.executeDeleteSchool(udise);
     }
     this.openDeleteSchoolModal(udise);
     return true;
@@ -1974,12 +2050,28 @@ const app = {
   },
 
   async getAllSchoolsRegistry(forceCloud = false) {
+    // 0. Synchronize Tombstones (Deleted schools that must NEVER resurrect)
+    if (typeof cloudSync !== 'undefined' && cloudSync.pullTombstones) {
+      try {
+        const remoteTombstones = await cloudSync.pullTombstones();
+        if (remoteTombstones && typeof remoteTombstones === 'object') {
+          const localTombstones = this.getLocalTombstones();
+          const mergedTombstones = Object.assign({}, localTombstones, remoteTombstones);
+          localStorage.setItem(this.TOMBSTONES_STORAGE_KEY, JSON.stringify(mergedTombstones));
+        }
+      } catch(e) {}
+    }
+    const tombstones = this.getLocalTombstones();
+
     // 1. Gather all schools from local registry
     const map = {};
     const baseList = this.getRegisteredSchools();
     baseList.forEach(s => {
       if (s && s.udise && /^\d{11}$/.test(String(s.udise).trim())) {
-        map[String(s.udise).trim()] = Object.assign({}, s);
+        const u = String(s.udise).trim();
+        if (!tombstones[u]) {
+          map[u] = Object.assign({}, s);
+        }
       }
     });
 
@@ -1999,6 +2091,16 @@ const app = {
         }
 
         if (u && /^\d{11}$/.test(u)) {
+          if (tombstones[u]) {
+            // Tombstone active: aggressively purge residual local keys!
+            localStorage.removeItem(`MDM_SCHOOL_DATA_${u}`);
+            localStorage.removeItem(`MDM_SCHOOL_BACKUP_${u}`);
+            localStorage.removeItem(this.AUTH_STORAGE_PREFIX + u);
+            localStorage.removeItem(this.LICENSE_STORAGE_PREFIX + u);
+            localStorage.removeItem(`MDM_SAFE_BACKUP_${u}`);
+            localStorage.removeItem(`MDM_PERMANENT_BACKUP_${u}`);
+            continue;
+          }
           if (!map[u]) {
             map[u] = { udise: u, schoolName: `शाळा (${u})` };
           }
@@ -2046,7 +2148,7 @@ const app = {
               Object.keys(regData).forEach(k => {
                 if (!k) return;
                 const u = k.replace(/^mdm_/, '').trim();
-                if (!/^\d{11}$/.test(u)) return;
+                if (!/^\d{11}$/.test(u) || tombstones[u]) return;
                 const item = regData[k] || {};
                 if (!map[u]) {
                   map[u] = { udise: u };
@@ -2075,7 +2177,7 @@ const app = {
             if (shallowKeys && typeof shallowKeys === 'object') {
               const missingUdises = Object.keys(shallowKeys)
                 .map(k => k.replace(/^mdm_/, '').trim())
-                .filter(u => /^\d{11}$/.test(u) && (!map[u] || !map[u].schoolName || map[u].schoolName.includes('(')));
+                .filter(u => /^\d{11}$/.test(u) && !tombstones[u] && (!map[u] || !map[u].schoolName || map[u].schoolName.includes('(')));
 
               await Promise.allSettled(missingUdises.slice(0, 15).map(async (u) => {
                 try {
@@ -2090,8 +2192,10 @@ const app = {
                       map[u].district = sett.district || map[u].district || 'रायगड';
                       map[u].pat = sett.pat || map[u].pat || 9;
                       map[u].schoolLevel = sett.schoolLevel || map[u].schoolLevel || 'both';
-                      // Push to central registry
-                      cloudSync.pushSchoolToRegistry(u, map[u]);
+                      // Push to central registry only if not tombstoned
+                      if (!tombstones[u]) {
+                        cloudSync.pushSchoolToRegistry(u, map[u]);
+                      }
                     }
                   }
                 } catch(e) {}
@@ -2102,7 +2206,7 @@ const app = {
       }
     }
 
-    const schoolsArray = Object.values(map);
+    const schoolsArray = Object.values(map).filter(s => s && s.udise && !tombstones[s.udise]);
     // Sort so Mengalwadi or active school or alphabetically
     schoolsArray.sort((a, b) => (a.udise === '27240304501' ? -1 : (b.udise === '27240304501' ? 1 : a.udise.localeCompare(b.udise))));
 
@@ -2111,10 +2215,12 @@ const app = {
       localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(schoolsArray));
     } catch(e) {}
 
-    // Auto-sync any local schools up to cloud registry if not yet pushed
+    // Auto-sync any non-tombstoned local schools up to cloud registry if not yet pushed
     if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
       schoolsArray.forEach(s => {
-        cloudSync.pushSchoolToRegistry(s.udise, s);
+        if (!tombstones[s.udise]) {
+          cloudSync.pushSchoolToRegistry(s.udise, s);
+        }
       });
     }
 
@@ -2549,21 +2655,30 @@ const app = {
       return;
     }
 
-    // 1. Delete from local storage
+    // 1. Purge ALL local storage keys for this school
     localStorage.removeItem(this.getSchoolStorageKey(udise));
     localStorage.removeItem(this.getSchoolBackupKey(udise));
     localStorage.removeItem(this.AUTH_STORAGE_PREFIX + udise);
     localStorage.removeItem(this.LICENSE_STORAGE_PREFIX + udise);
+    localStorage.removeItem('MDM_SAFE_BACKUP_' + udise);
+    localStorage.removeItem('MDM_PERMANENT_BACKUP_' + udise);
+
+    // 2. Add to Local Tombstone Registry to prevent resurrection
+    this.addLocalTombstone(udise);
 
     const list = this.getRegisteredSchools().filter(s => s.udise !== udise);
     localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(list));
 
-    // 2. Delete from cloud if configured (both from school data and central registry)
+    // 3. Delete from Google Firebase Cloud (school data + central registry + backup + create cloud tombstone)
     if (typeof cloudSync !== 'undefined' && cloudSync.deleteSchoolFromCloud) {
-      cloudSync.deleteSchoolFromCloud(udise);
+      try {
+        await cloudSync.deleteSchoolFromCloud(udise);
+      } catch(e) {
+        console.warn("Cloud delete notice:", e);
+      }
     }
 
-    // 3. Remove row optimistically
+    // 4. Remove row optimistically
     const row = document.querySelector(`tr[data-udise="${udise}"]`);
     if (row) row.remove();
 
@@ -2572,6 +2687,7 @@ const app = {
 
     if (this.getActiveUdise() === udise) {
       localStorage.removeItem(this.ACTIVE_UDISE_STORAGE_KEY);
+      this.data = this.createDefaultSchoolData('');
       this.closeMasterAdminModal();
       this.checkAccessControl();
     }
@@ -2721,6 +2837,9 @@ const app = {
         return;
       }
       const cleanUdise = String(udise).trim();
+      if (this.isSchoolTombstoned(cleanUdise)) {
+        return;
+      }
       const schoolStorageKey = this.getSchoolStorageKey(cleanUdise);
       const schoolBackupKey = this.getSchoolBackupKey(cleanUdise);
 
@@ -2788,7 +2907,29 @@ const app = {
         this.data.initialSampleLoaded = defaultData.initialSampleLoaded;
       }
 
-      // Safeguard: Restore from per-school dedicated backup if records are empty
+      // Safeguard 1: Restore from dedicated Safe Vault (MDM_SAFE_BACKUP_${cleanUdise}) if records are empty
+      const rawSafe = localStorage.getItem('MDM_SAFE_BACKUP_' + cleanUdise);
+      if (rawSafe) {
+        try {
+          const safeData = JSON.parse(rawSafe);
+          if (safeData) {
+            if (safeData.records && Object.keys(safeData.records).length > 0 && Object.keys(this.data.records || {}).length === 0) {
+              this.data.records = Object.assign({}, safeData.records, this.data.records);
+            }
+            if (safeData.recordsUpper && Object.keys(safeData.recordsUpper).length > 0 && Object.keys(this.data.recordsUpper || {}).length === 0) {
+              this.data.recordsUpper = Object.assign({}, safeData.recordsUpper, this.data.recordsUpper);
+            }
+            if (safeData.tasteRecords && Object.keys(this.data.tasteRecords || {}).length === 0) {
+              this.data.tasteRecords = Object.assign({}, safeData.tasteRecords, this.data.tasteRecords);
+            }
+            if (safeData.tasteRecordsUpper && Object.keys(this.data.tasteRecordsUpper || {}).length === 0) {
+              this.data.tasteRecordsUpper = Object.assign({}, safeData.tasteRecordsUpper, this.data.tasteRecordsUpper);
+            }
+          }
+        } catch(e) {}
+      }
+
+      // Safeguard 2: Restore from per-school dedicated backup if records are empty
       const savedSchoolBackup = localStorage.getItem(schoolBackupKey);
       if (savedSchoolBackup) {
         try {
@@ -2986,9 +3127,15 @@ const app = {
    */
   saveState(skipCloud = false) {
     try {
-      const currentUdise = (this.data && this.data.settings && this.data.settings.udise)
-        || localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY)
-        || '27240304501';
+      const udiseVal = (this.data && this.data.settings && (this.data.settings.udise || this.data.settings.uDise)) ? String(this.data.settings.udise || this.data.settings.uDise).trim() : '';
+      const currentUdise = (/^\d{11}$/.test(udiseVal))
+        ? udiseVal
+        : (this.getActiveUdise() || '27240304501');
+
+      // Never write data for a tombstoned school
+      if (this.isSchoolTombstoned(currentUdise)) {
+        return;
+      }
 
       const schoolStorageKey = this.getSchoolStorageKey(currentUdise);
       const schoolBackupKey = this.getSchoolBackupKey(currentUdise);
@@ -3017,20 +3164,41 @@ const app = {
       // 1. Primary school-isolated storage
       localStorage.setItem(schoolStorageKey, JSON.stringify(schoolData));
 
-      // 2. Dedicated school-isolated backup
-      localStorage.setItem(schoolBackupKey, JSON.stringify(schoolData));
+      // 2. Dedicated school-isolated backup (ANTI-WIPE PROTECTED)
+      const currentRecCount = Object.keys(this.data.records || {}).length + Object.keys(this.data.recordsUpper || {}).length;
+      let canWriteBackup = true;
+      if (currentRecCount === 0) {
+        const existingBackupRaw = localStorage.getItem(schoolBackupKey);
+        if (existingBackupRaw) {
+          try {
+            const eb = JSON.parse(existingBackupRaw);
+            const ebCount = Object.keys((eb && eb.records) || {}).length + Object.keys((eb && eb.recordsUpper) || {}).length;
+            if (ebCount > 0) canWriteBackup = false; // Never wipe non-empty backup with 0 records
+          } catch(e) {}
+        }
+      }
+      if (canWriteBackup) {
+        localStorage.setItem(schoolBackupKey, JSON.stringify(schoolData));
+      }
 
-      // 3. Register or update school in the device registry
-      this.registerSchool({
-        udise: currentUdise,
-        schoolName: this.data.settings.schoolName,
-        centre: this.data.settings.centre,
-        taluka: this.data.settings.taluka,
-        district: this.data.settings.district,
-        pat: this.data.settings.pat
-      });
+      // 3. Multi-School Dedicated Safe Rolling Vault (MDM_SAFE_BACKUP_${udise})
+      if (currentRecCount > 0) {
+        localStorage.setItem('MDM_SAFE_BACKUP_' + currentUdise, JSON.stringify(schoolData));
+      }
 
-      // 4. Backwards compatibility for single-school legacy tests / fallback
+      // 4. Register or update school in the device registry (only if not tombstoned)
+      if (!this.isSchoolTombstoned(currentUdise)) {
+        this.registerSchool({
+          udise: currentUdise,
+          schoolName: this.data.settings.schoolName,
+          centre: this.data.settings.centre,
+          taluka: this.data.settings.taluka,
+          district: this.data.settings.district,
+          pat: this.data.settings.pat
+        });
+      }
+
+      // 5. Backwards compatibility for single-school legacy tests / fallback
       if (currentUdise === '27240304501') {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(schoolData));
         localStorage.setItem('MDM_PERMANENT_RECORDS', JSON.stringify(this.data.records || {}));
@@ -3043,7 +3211,6 @@ const app = {
         localStorage.setItem('MDM_PERMANENT_RECEIPTS', JSON.stringify(this.data.stockReceipts || []));
         localStorage.setItem('MDM_PERMANENT_INITIAL_STOCK', JSON.stringify(this.data.initialStock || {}));
 
-        const currentRecCount = Object.keys(this.data.records || {}).length;
         if (currentRecCount > 0) {
           localStorage.setItem('MDM_LAST_KNOWN_GOOD_BACKUP', JSON.stringify({
             records: this.data.records,
@@ -3057,7 +3224,7 @@ const app = {
         }
       }
 
-      // 5. Trigger Cloud Auto-Sync in background if enabled (debounced and never if skipCloud is true)
+      // 6. Trigger Cloud Auto-Sync in background if enabled (debounced and never if skipCloud is true)
       if (!skipCloud && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl() && cloudSync.config && cloudSync.config.autoSync) {
         if (!cloudSync.isSyncing) {
           cloudSync.scheduleDebouncedPush();
@@ -3077,20 +3244,46 @@ const app = {
       let recoveredRecords = null;
       let sourceName = '';
 
-      // 1. Try school-specific backup vault
-      const schoolBackupKey = this.getSchoolBackupKey(currentUdise);
-      const rawSchoolBackup = localStorage.getItem(schoolBackupKey);
-      if (rawSchoolBackup) {
+      // 0. Try dedicated multi-school Safe Vault (MDM_SAFE_BACKUP_${currentUdise})
+      const rawSafe = localStorage.getItem('MDM_SAFE_BACKUP_' + currentUdise);
+      if (rawSafe) {
         try {
-          const schoolBackup = JSON.parse(rawSchoolBackup);
-          if (schoolBackup && schoolBackup.records && Object.keys(schoolBackup.records).length > 0) {
-            recoveredRecords = schoolBackup.records;
-            sourceName = `शाळा (${currentUdise}) स्थानिक सुरक्षित बॅकअप`;
-            if (schoolBackup.initialStock) this.data.initialStock = schoolBackup.initialStock;
-            if (schoolBackup.tasteRecords) this.data.tasteRecords = schoolBackup.tasteRecords;
-            if (schoolBackup.settings) this.data.settings = Object.assign({}, this.data.settings, schoolBackup.settings);
+          const safeData = JSON.parse(rawSafe);
+          if (safeData && ((safeData.records && Object.keys(safeData.records).length > 0) || (safeData.recordsUpper && Object.keys(safeData.recordsUpper).length > 0))) {
+            recoveredRecords = safeData.records || {};
+            sourceName = `शाळा (${currentUdise}) सुरक्षित व्हॉल्ट (Safe Vault)`;
+            if (safeData.recordsUpper) this.data.recordsUpper = Object.assign({}, this.data.recordsUpper, safeData.recordsUpper);
+            if (safeData.initialStock) this.data.initialStock = safeData.initialStock;
+            if (safeData.initialStockUpper) this.data.initialStockUpper = safeData.initialStockUpper;
+            if (safeData.tasteRecords) this.data.tasteRecords = safeData.tasteRecords;
+            if (safeData.tasteRecordsUpper) this.data.tasteRecordsUpper = safeData.tasteRecordsUpper;
+            if (safeData.settings) this.data.settings = Object.assign({}, this.data.settings, safeData.settings);
+            if (safeData.stockReceipts) this.data.stockReceipts = safeData.stockReceipts;
+            if (safeData.stockReceiptsUpper) this.data.stockReceiptsUpper = safeData.stockReceiptsUpper;
+            if (safeData.damagedStock) this.data.damagedStock = safeData.damagedStock;
+            if (safeData.damagedStockUpper) this.data.damagedStockUpper = safeData.damagedStockUpper;
+            if (safeData.menus) this.data.menus = safeData.menus;
+            if (safeData.ingredients) this.data.ingredients = safeData.ingredients;
           }
         } catch(e) {}
+      }
+
+      // 1. Try school-specific backup vault
+      if (!recoveredRecords || Object.keys(recoveredRecords).length === 0) {
+        const schoolBackupKey = this.getSchoolBackupKey(currentUdise);
+        const rawSchoolBackup = localStorage.getItem(schoolBackupKey);
+        if (rawSchoolBackup) {
+          try {
+            const schoolBackup = JSON.parse(rawSchoolBackup);
+            if (schoolBackup && schoolBackup.records && Object.keys(schoolBackup.records).length > 0) {
+              recoveredRecords = schoolBackup.records;
+              sourceName = `शाळा (${currentUdise}) स्थानिक सुरक्षित बॅकअप`;
+              if (schoolBackup.initialStock) this.data.initialStock = schoolBackup.initialStock;
+              if (schoolBackup.tasteRecords) this.data.tasteRecords = schoolBackup.tasteRecords;
+              if (schoolBackup.settings) this.data.settings = Object.assign({}, this.data.settings, schoolBackup.settings);
+            }
+          } catch(e) {}
+        }
       }
 
       // 2. Try MDM_LAST_KNOWN_GOOD_BACKUP (if default school or not yet recovered)
@@ -3650,50 +3843,10 @@ const app = {
   },
 
   /**
-   * Auto-save school & officer metadata quietly to prevent data loss
+   * Auto-save school & officer metadata quietly to prevent data loss (Delegates to unified handler)
    */
   autoSaveSchoolSettings() {
-    const sName = document.getElementById('setSchoolName');
-    if (sName && sName.value.trim()) this.data.settings.schoolName = sName.value.trim();
-
-    const u = document.getElementById('setUdise');
-    if (u && u.value.trim()) this.data.settings.udise = u.value.trim();
-
-    const c = document.getElementById('setCentre');
-    if (c && c.value.trim()) this.data.settings.centre = c.value.trim();
-
-    const t = document.getElementById('setTaluka');
-    if (t && t.value.trim()) this.data.settings.taluka = t.value.trim();
-
-    const d = document.getElementById('setDistrict');
-    if (d && d.value.trim()) this.data.settings.district = d.value.trim();
-
-    const p = document.getElementById('setPat');
-    if (p && parseInt(p.value)) this.data.settings.pat = parseInt(p.value);
-
-    const hm = document.getElementById('setHeadmaster');
-    if (hm && hm.value.trim()) this.data.settings.headmaster = hm.value.trim();
-
-    const pres = document.getElementById('setPresident');
-    if (pres && pres.value.trim()) this.data.settings.president = pres.value.trim();
-
-    const asst = document.getElementById('setAssistantTeacher');
-    if (asst && asst.value.trim()) this.data.settings.assistantTeacher = asst.value.trim();
-
-    const cook = document.getElementById('setCookName');
-    if (cook && cook.value.trim()) this.data.settings.cookName = cook.value.trim();
-
-    const fr = document.getElementById('setFuelRate');
-    if (fr && parseFloat(fr.value)) this.data.settings.fuelRate = parseFloat(fr.value);
-
-    const ch = document.getElementById('setCookHonorarium');
-    if (ch && parseInt(ch.value)) this.data.settings.cookHonorarium = parseInt(ch.value);
-
-    const cc = document.getElementById('setCookCount');
-    if (cc && parseInt(cc.value)) this.data.settings.cookCount = parseInt(cc.value);
-
-    this.saveState();
-    this.updateHeaderMeta();
+    this.saveSchoolSettingsFromDOM();
   },
 
   /**
@@ -8673,14 +8826,12 @@ const app = {
         window.MDM_CONFIG.schoolName = trimmedName;
       }
     }
-    if (uDise && uDise.value.trim()) {
-      const cleanU = uDise.value.trim();
-      this.data.settings.udise = cleanU;
-      if (cleanU.length === 11) {
-        localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, cleanU);
-        if (typeof window !== 'undefined' && window.MDM_CONFIG) {
-          window.MDM_CONFIG.schoolUdise = cleanU;
-        }
+    // Guarantee active school UDISE cannot be mutated through standard input typing
+    const activeU = this.getActiveUdise();
+    if (activeU && activeU.length === 11) {
+      this.data.settings.udise = activeU;
+      if (uDise && uDise.value !== activeU) {
+        uDise.value = activeU;
       }
     }
     if (sCentre && sCentre.value.trim()) this.data.settings.centre = sCentre.value.trim();
@@ -8751,6 +8902,10 @@ const app = {
     this.renderMonthlyExcelSheet();
     this.renderFormB();
     this.renderYearlyReport();
+  },
+
+  saveSchoolSettingsFromDOM() {
+    this.autoSaveSchoolSettings();
   },
 
   openAddIngredientModal() {

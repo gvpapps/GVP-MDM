@@ -258,6 +258,87 @@ const cloudSync = {
   },
 
   /**
+   * Smart Conflict-Free Merge for a single day record
+   * Never allows an empty/stale record to overwrite a populated record
+   */
+  mergeDayRecord(recA, recB) {
+    if (!recA && !recB) return null;
+    if (!recA) return Object.assign({}, recB);
+    if (!recB) return Object.assign({}, recA);
+
+    const aHasData = (!recA.isHoliday && ((parseInt(recA.children) || 0) > 0 || (recA.quantities && Object.values(recA.quantities).some(v => parseFloat(v) > 0))));
+    const bHasData = (!recB.isHoliday && ((parseInt(recB.children) || 0) > 0 || (recB.quantities && Object.values(recB.quantities).some(v => parseFloat(v) > 0))));
+
+    // If one has attendance/meal data and the other does not, populated record wins
+    if (aHasData && !bHasData) return Object.assign({}, recB, recA);
+    if (!aHasData && bHasData) return Object.assign({}, recA, recB);
+
+    // If both have data or both empty, compare timestamp (newer wins)
+    const timeA = new Date(recA.updatedAt || recA.savedAt || 0).getTime();
+    const timeB = new Date(recB.updatedAt || recB.savedAt || 0).getTime();
+
+    if (timeA >= timeB) {
+      return Object.assign({}, recB, recA);
+    } else {
+      return Object.assign({}, recA, recB);
+    }
+  },
+
+  /**
+   * Smart Conflict-Free Merge for daily records dictionary
+   */
+  mergeDayRecordsMap(mapA, mapB) {
+    const result = {};
+    const keysA = Object.keys(mapA || {});
+    const keysB = Object.keys(mapB || {});
+    const allKeys = new Set([...keysA, ...keysB]);
+
+    allKeys.forEach(k => {
+      const recA = mapA ? mapA[k] : null;
+      const recB = mapB ? mapB[k] : null;
+      const merged = this.mergeDayRecord(recA, recB);
+      if (merged) result[k] = merged;
+    });
+
+    return result;
+  },
+
+  /**
+   * Smart Merge for Initial Stock balances (1 April stock)
+   * Never overwrites positive balances with 0 or undefined
+   */
+  mergeStockBalances(stockA, stockB) {
+    const merged = Object.assign({}, stockA || {});
+    const b = stockB || {};
+    Object.keys(b).forEach(item => {
+      const valA = parseFloat(merged[item] || 0);
+      const valB = parseFloat(b[item] || 0);
+      if (valB > 0 && valA === 0) {
+        merged[item] = valB;
+      } else if (valA > 0 && valB > 0) {
+        merged[item] = valA;
+      }
+    });
+    return merged;
+  },
+
+  /**
+   * Smart Merge for School Settings
+   * Preserves non-empty strings and valid numbers
+   */
+  mergeSettings(localSett, remoteSett) {
+    const res = Object.assign({}, remoteSett || {}, localSett || {});
+    const r = remoteSett || {};
+    const l = localSett || {};
+    Object.keys(r).forEach(k => {
+      if ((l[k] === undefined || l[k] === '' || l[k] === null) && r[k] !== undefined && r[k] !== '' && r[k] !== null) {
+        res[k] = r[k];
+      }
+    });
+    return res;
+  },
+
+  /**
    * Push local data to Google Firebase Realtime Database
    */
   async pushToCloud(isSilent = false) {
@@ -311,9 +392,10 @@ const cloudSync = {
         console.warn("Pre-check remote bucket notice:", checkErr);
       }
 
-      const localRecCount = Object.keys((typeof app !== 'undefined' && app.data && app.data.records) || {}).length;
-      const remoteRecCount = (existingRemote && existingRemote.appData && existingRemote.appData.records)
-        ? Object.keys(existingRemote.appData.records).length : 0;
+      const localRecCount = Object.keys((typeof app !== 'undefined' && app.data && app.data.records) || {}).length +
+                            Object.keys((typeof app !== 'undefined' && app.data && app.data.recordsUpper) || {}).length;
+      const remoteRecCount = (existingRemote && existingRemote.appData)
+        ? (Object.keys(existingRemote.appData.records || {}).length + Object.keys(existingRemote.appData.recordsUpper || {}).length) : 0;
 
       // GUARD 1: Prevent Blank Device from destroying remote cloud database
       if (localRecCount === 0 && remoteRecCount > 0) {
@@ -325,15 +407,18 @@ const cloudSync = {
         return false;
       }
 
-      // GUARD 2: Smart Merge before push so any missing remote dates/receipts are combined
+      // GUARD 2: Smart Conflict-Free Merge before push so any missing remote dates/receipts are combined
       let dataToPush = (typeof app !== 'undefined' && app.data) ? app.data : {};
 
       if (existingRemote && existingRemote.appData && remoteRecCount > 0) {
         const remoteData = existingRemote.appData;
-        const mergedRecords = Object.assign({}, remoteData.records || {}, dataToPush.records || {});
-        const mergedRecordsUpper = Object.assign({}, remoteData.recordsUpper || {}, dataToPush.recordsUpper || {});
+        const mergedRecords = this.mergeDayRecordsMap(dataToPush.records, remoteData.records);
+        const mergedRecordsUpper = this.mergeDayRecordsMap(dataToPush.recordsUpper, remoteData.recordsUpper);
         const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, dataToPush.tasteRecords || {});
         const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, dataToPush.tasteRecordsUpper || {});
+        const mergedStock = this.mergeStockBalances(dataToPush.initialStock, remoteData.initialStock);
+        const mergedStockUpper = this.mergeStockBalances(dataToPush.initialStockUpper, remoteData.initialStockUpper);
+        const mergedSettings = this.mergeSettings(dataToPush.settings, remoteData.settings);
         
         // Stock receipts union (Primary)
         const mergedReceipts = [...(remoteData.stockReceipts || [])];
@@ -380,6 +465,9 @@ const cloudSync = {
           recordsUpper: mergedRecordsUpper,
           tasteRecords: mergedTaste,
           tasteRecordsUpper: mergedTasteUpper,
+          initialStock: mergedStock,
+          initialStockUpper: mergedStockUpper,
+          settings: mergedSettings,
           stockReceipts: mergedReceipts,
           stockReceiptsUpper: mergedReceiptsUpper,
           damagedStock: mergedDamaged,
@@ -392,6 +480,9 @@ const cloudSync = {
           app.data.recordsUpper = mergedRecordsUpper;
           app.data.tasteRecords = mergedTaste;
           app.data.tasteRecordsUpper = mergedTasteUpper;
+          app.data.initialStock = mergedStock;
+          app.data.initialStockUpper = mergedStockUpper;
+          app.data.settings = mergedSettings;
           app.data.stockReceipts = mergedReceipts;
           app.data.stockReceiptsUpper = mergedReceiptsUpper;
           app.data.damagedStock = mergedDamaged;
@@ -539,11 +630,14 @@ const cloudSync = {
           const recordCount = Object.keys(remoteRecords).length;
 
           if (typeof app !== 'undefined' && app.data) {
-            // Smart Merge: Local + Remote
-            const mergedRecords = Object.assign({}, app.data.records || {}, remoteRecords);
-            const mergedRecordsUpper = Object.assign({}, app.data.recordsUpper || {}, remoteData.recordsUpper || {});
-            const mergedTaste = Object.assign({}, app.data.tasteRecords || {}, remoteData.tasteRecords || {});
-            const mergedTasteUpper = Object.assign({}, app.data.tasteRecordsUpper || {}, remoteData.tasteRecordsUpper || {});
+            // Smart Conflict-Free Merge: Local + Remote (Protects local populated data from being wiped)
+            const mergedRecords = this.mergeDayRecordsMap(app.data.records, remoteRecords);
+            const mergedRecordsUpper = this.mergeDayRecordsMap(app.data.recordsUpper, remoteData.recordsUpper || {});
+            const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, app.data.tasteRecords || {});
+            const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, app.data.tasteRecordsUpper || {});
+            const mergedStock = this.mergeStockBalances(app.data.initialStock, remoteData.initialStock);
+            const mergedStockUpper = this.mergeStockBalances(app.data.initialStockUpper, remoteData.initialStockUpper);
+            const mergedSettings = this.mergeSettings(app.data.settings, remoteData.settings);
 
             // Stock receipts union (Primary)
             const mergedReceipts = [...(remoteData.stockReceipts || [])];
@@ -589,21 +683,15 @@ const cloudSync = {
             app.data.recordsUpper = mergedRecordsUpper;
             app.data.tasteRecords = mergedTaste;
             app.data.tasteRecordsUpper = mergedTasteUpper;
+            app.data.initialStock = mergedStock;
+            app.data.initialStockUpper = mergedStockUpper;
+            app.data.settings = mergedSettings;
             app.data.stockReceipts = mergedReceipts;
             app.data.stockReceiptsUpper = mergedReceiptsUpper;
             app.data.damagedStock = mergedDamaged;
             app.data.damagedStockUpper = mergedDamagedUpper;
             app.data.stockTransfers = mergedTransfers;
 
-            if (remoteData.settings) {
-              app.data.settings = Object.assign({}, app.data.settings, remoteData.settings);
-            }
-            if (remoteData.initialStock) {
-              app.data.initialStock = Object.assign({}, app.data.initialStock, remoteData.initialStock);
-            }
-            if (remoteData.initialStockUpper) {
-              app.data.initialStockUpper = Object.assign({}, app.data.initialStockUpper || {}, remoteData.initialStockUpper);
-            }
             if (remoteData.customDemands) {
               app.data.customDemands = Object.assign({}, app.data.customDemands, remoteData.customDemands);
             }
@@ -1007,17 +1095,75 @@ const cloudSync = {
   },
 
   /**
+   * Pull all deleted school tombstones from Firebase
+   */
+  async pullTombstones() {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl) return {};
+    const endpoint = `${cleanBaseUrl}/mdm_tombstones.json?t=${Date.now()}`;
+    try {
+      const res = await this.fetchWithTimeout(endpoint, { cache: 'no-store' }, 6000);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+          const map = {};
+          Object.keys(data).forEach(k => {
+            const u = k.replace(/^mdm_/, '').trim();
+            if (/^\d{11}$/.test(u)) {
+              map[u] = data[k] || { deletedAt: new Date().toISOString() };
+            }
+          });
+          return map;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not pull tombstones:", e);
+    }
+    return {};
+  },
+
+  /**
+   * Clear tombstone if a school is explicitly re-registered
+   */
+  async clearTombstone(udise) {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl || !udise) return false;
+    const cleanUdise = String(udise).trim();
+    try {
+      await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_tombstones/mdm_${cleanUdise}.json`, { method: 'DELETE' }, 6000);
+      return true;
+    } catch (e) {
+      console.warn("Could not clear tombstone:", e);
+      return false;
+    }
+  },
+
+  /**
    * Pull all registered schools from lightweight central registry in Firebase
+   * Automatically excludes any tombstoned/deleted schools
    */
   async pullSchoolRegistry() {
     const cleanBaseUrl = this.getEffectiveFirebaseUrl();
     if (!cleanBaseUrl) return null;
     const endpoint = `${cleanBaseUrl}/mdm_registry.json?t=${Date.now()}`;
     try {
-      const res = await this.fetchWithTimeout(endpoint, { cache: 'no-store' }, 8000);
+      const [res, tombstones] = await Promise.all([
+        this.fetchWithTimeout(endpoint, { cache: 'no-store' }, 8000),
+        this.pullTombstones()
+      ]);
       if (res.ok) {
         const data = await res.json();
-        return (data && typeof data === 'object') ? data : {};
+        if (data && typeof data === 'object') {
+          const filtered = {};
+          Object.keys(data).forEach(k => {
+            const u = k.replace(/^mdm_/, '').trim();
+            if (!tombstones[u]) {
+              filtered[k] = data[k];
+            }
+          });
+          return filtered;
+        }
+        return {};
       }
     } catch(e) {
       console.warn("Could not pull school registry:", e);
@@ -1033,6 +1179,17 @@ const cloudSync = {
     if (!cleanBaseUrl || !udise) return { exists: false };
     const cleanUdise = String(udise).trim();
     if (cleanUdise.length !== 11) return { exists: false };
+
+    // 0. Check tombstone first
+    try {
+      const tombRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_tombstones/mdm_${cleanUdise}.json?t=${Date.now()}`, {}, 4000);
+      if (tombRes.ok) {
+        const tomb = await tombRes.json();
+        if (tomb && tomb.deletedAt) {
+          return { exists: false, isTombstoned: true };
+        }
+      }
+    } catch(e) {}
 
     // 1. Check central registry first (fastest)
     try {
@@ -1071,7 +1228,7 @@ const cloudSync = {
   },
 
   /**
-   * Delete school from cloud entirely (both from data bucket and central registry)
+   * Delete school from cloud entirely (both from data bucket, registry, backups + write tombstone)
    */
   async deleteSchoolFromCloud(udise) {
     const cleanBaseUrl = this.getEffectiveFirebaseUrl();
@@ -1080,7 +1237,13 @@ const cloudSync = {
     try {
       await Promise.allSettled([
         this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}.json`, { method: 'DELETE' }, 7000),
-        this.fetchWithTimeout(`${cleanBaseUrl}/mdm_registry/mdm_${cleanUdise}.json`, { method: 'DELETE' }, 7000)
+        this.fetchWithTimeout(`${cleanBaseUrl}/mdm_registry/mdm_${cleanUdise}.json`, { method: 'DELETE' }, 7000),
+        this.fetchWithTimeout(`${cleanBaseUrl}/mdm_backups/mdm_${cleanUdise}_safety_backup.json`, { method: 'DELETE' }, 7000),
+        this.fetchWithTimeout(`${cleanBaseUrl}/mdm_tombstones/mdm_${cleanUdise}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ udise: cleanUdise, deletedAt: new Date().toISOString() })
+        }, 7000)
       ]);
       return true;
     } catch(e) {
