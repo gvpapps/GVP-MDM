@@ -420,12 +420,27 @@ const cloudSync = {
       };
 
       const res = await this.fetchWithTimeout(endpoint, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       }, 15000);
 
       if (res.ok) {
+        // Also ensure school is saved to central registry (/mdm_registry)
+        if (dataToPush && dataToPush.settings) {
+          this.pushSchoolToRegistry(currentUdise, {
+            udise: currentUdise,
+            schoolName: dataToPush.settings.schoolName || '',
+            centre: dataToPush.settings.centre || '',
+            taluka: dataToPush.settings.taluka || '',
+            district: dataToPush.settings.district || '',
+            pat: dataToPush.settings.pat || 9,
+            patPrimary: dataToPush.settings.patPrimary || 9,
+            patUpper: dataToPush.settings.patUpper || 15,
+            schoolLevel: dataToPush.settings.schoolLevel || 'both',
+            lastActive: new Date().toISOString()
+          });
+        }
         // Also permanently store root school_info so database root always has latest school identity
         if (dataToPush && dataToPush.settings) {
           try {
@@ -877,6 +892,7 @@ const cloudSync = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(authData)
       }, 8000);
+      this.pushSchoolToRegistry(cleanUdise, authData);
       return true;
     } catch(e) {
       console.warn("Could not push auth to cloud:", e);
@@ -953,7 +969,124 @@ const cloudSync = {
     } catch(e) {
       console.warn("Could not pull remote license:", e);
     }
+  },
+
+  /**
+   * Push school metadata to lightweight central registry in Firebase
+   * Enables 100% matched school lists across Localhost, GitHub Pages & Mobile devices
+   */
+  async pushSchoolToRegistry(udise, schoolInfo) {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl || !udise || !schoolInfo) return false;
+    const cleanUdise = String(udise).trim();
+    const endpoint = `${cleanBaseUrl}/mdm_registry/mdm_${cleanUdise}.json`;
+    const payload = {
+      udise: cleanUdise,
+      schoolName: schoolInfo.schoolName || `शाळा (${cleanUdise})`,
+      centre: schoolInfo.centre || 'खांडस',
+      taluka: schoolInfo.taluka || 'कर्जत',
+      district: schoolInfo.district || 'रायगड',
+      pat: parseInt(schoolInfo.pat) || 9,
+      patPrimary: parseInt(schoolInfo.patPrimary || schoolInfo.pat) || 9,
+      patUpper: parseInt(schoolInfo.patUpper) || 15,
+      schoolLevel: schoolInfo.schoolLevel || 'both',
+      lastActive: schoolInfo.lastActive || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      await this.fetchWithTimeout(endpoint, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }, 7000);
+      return true;
+    } catch(e) {
+      console.warn("Could not push school to registry:", e);
+      return false;
+    }
+  },
+
+  /**
+   * Pull all registered schools from lightweight central registry in Firebase
+   */
+  async pullSchoolRegistry() {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl) return null;
+    const endpoint = `${cleanBaseUrl}/mdm_registry.json?t=${Date.now()}`;
+    try {
+      const res = await this.fetchWithTimeout(endpoint, { cache: 'no-store' }, 8000);
+      if (res.ok) {
+        const data = await res.json();
+        return (data && typeof data === 'object') ? data : {};
+      }
+    } catch(e) {
+      console.warn("Could not pull school registry:", e);
+    }
     return null;
+  },
+
+  /**
+   * Check if a school UDISE already exists in Firebase (prevents duplicate registrations)
+   */
+  async checkSchoolExists(udise) {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl || !udise) return { exists: false };
+    const cleanUdise = String(udise).trim();
+    if (cleanUdise.length !== 11) return { exists: false };
+
+    // 1. Check central registry first (fastest)
+    try {
+      const regRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_registry/mdm_${cleanUdise}.json?t=${Date.now()}`, {}, 6000);
+      if (regRes.ok) {
+        const regData = await regRes.json();
+        if (regData && (regData.udise || regData.schoolName)) {
+          return { exists: true, schoolName: regData.schoolName || `शाळा (${cleanUdise})` };
+        }
+      }
+    } catch(e) {}
+
+    // 2. Check auth node
+    try {
+      const authRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/auth.json?t=${Date.now()}`, {}, 6000);
+      if (authRes.ok) {
+        const authData = await authRes.json();
+        if (authData && authData.passwordHash) {
+          return { exists: true, schoolName: authData.schoolName || `शाळा (${cleanUdise})` };
+        }
+      }
+    } catch(e) {}
+
+    // 3. Check shallow school existence
+    try {
+      const schRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/schoolCode.json?t=${Date.now()}`, {}, 6000);
+      if (schRes.ok) {
+        const code = await schRes.json();
+        if (code && String(code).trim() === cleanUdise) {
+          return { exists: true, schoolName: `शाळा (${cleanUdise})` };
+        }
+      }
+    } catch(e) {}
+
+    return { exists: false };
+  },
+
+  /**
+   * Delete school from cloud entirely (both from data bucket and central registry)
+   */
+  async deleteSchoolFromCloud(udise) {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl || !udise) return false;
+    const cleanUdise = String(udise).trim();
+    try {
+      await Promise.allSettled([
+        this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}.json`, { method: 'DELETE' }, 7000),
+        this.fetchWithTimeout(`${cleanBaseUrl}/mdm_registry/mdm_${cleanUdise}.json`, { method: 'DELETE' }, 7000)
+      ]);
+      return true;
+    } catch(e) {
+      console.warn("Could not delete school from cloud:", e);
+      return false;
+    }
   }
 };
 

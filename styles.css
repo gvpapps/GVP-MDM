@@ -5339,4 +5339,107 @@ body.level-mode-upper .section-switcher-control {
   display: none !important;
 }
 
+/* Printable Stock Management Sheets (शिल्लक, आवक धान्य व खराब धान्य प्रिंट) */
+.stock-print-doc {
+  font-family: 'Noto Sans Devanagari', 'Mangal', 'Segoe UI', Arial, sans-serif;
+  color: #000;
+  background: #fff;
+  padding: 12px 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.stock-print-doc * {
+  box-sizing: border-box;
+}
+
+.stock-print-header {
+  text-align: center;
+  border-bottom: 2px solid #000;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.stock-print-gov {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+
+.stock-print-title {
+  font-size: 17px;
+  font-weight: 800;
+  margin: 3px 0;
+  color: #000;
+}
+
+.stock-print-meta {
+  font-size: 12px;
+  margin: 4px 0 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.stock-print-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 11.5px;
+}
+
+.stock-print-table th,
+.stock-print-table td {
+  border: 1px solid #000;
+  padding: 5px 6px;
+  text-align: left;
+}
+
+.stock-print-table th {
+  background: #f1f5f9;
+  font-weight: 700;
+  text-align: center;
+}
+
+.stock-print-table tr {
+  page-break-inside: avoid;
+}
+
+.stock-print-summary {
+  margin-top: 10px;
+  padding: 8px;
+  border: 1px solid #000;
+  font-size: 11.5px;
+  background: #f8fafc;
+}
+
+.stock-print-signatures {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 35px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  page-break-inside: avoid;
+}
+
+.stock-print-sig-col {
+  text-align: center;
+  min-width: 140px;
+}
+
+.stock-print-sig-col .sig-space {
+  height: 35px;
+}
+
+@media print {
+  body.print-slip #printSlipContainer .stock-print-doc {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
+
 

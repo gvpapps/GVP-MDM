@@ -221,6 +221,8 @@ const app = {
     // Initialize Real-time Cloud Synchronization
     if (typeof cloudSync !== 'undefined') {
       cloudSync.init();
+      // Background 2-way sync of registered schools list
+      this.syncCloudSchoolRegistry();
     }
 
     // Auto-populate all Firebase URL inputs across the application
@@ -665,6 +667,11 @@ const app = {
     let updatedList = list.filter(s => s.udise !== cleanUdise);
     localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(updatedList));
 
+    // Also delete from cloud if configured
+    if (typeof cloudSync !== 'undefined' && cloudSync.deleteSchoolFromCloud) {
+      cloudSync.deleteSchoolFromCloud(cleanUdise);
+    }
+
     this.showToast(`🗑️ '${name}' शाळा यशस्वीरित्या डिलीट केली.`, 'info');
 
     // 3. If currently active school was deleted
@@ -881,6 +888,14 @@ const app = {
       list.unshift(schoolEntry);
     }
     localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(list));
+
+    // Sync edited school to cloud registry
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+      cloudSync.pushSchoolToRegistry(newUdise, schoolEntry);
+      if (newUdise !== originalUdise) {
+        cloudSync.deleteSchoolFromCloud(originalUdise);
+      }
+    }
 
     // Re-render UI
     this.renderRegisteredSchoolsList();
@@ -1585,7 +1600,7 @@ const app = {
   /**
    * Handle New School Registration
    */
-  handleSchoolRegister() {
+  async handleSchoolRegister() {
     const udiseInp = document.getElementById('regSchoolUdise');
     const nameInp = document.getElementById('regSchoolName');
     const pwdInp = document.getElementById('regPassword');
@@ -1607,6 +1622,7 @@ const app = {
 
     if (!/^\d{11}$/.test(udise)) {
       if (alertBox) {
+        alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
         alertBox.textContent = '❌ शाळेचा UDISE कोड अचूक 11 अंकी असावा.';
         alertBox.classList.remove('d-none');
       }
@@ -1614,8 +1630,61 @@ const app = {
       return false;
     }
 
+    // 🔒 GUARD 1: Check Local Duplicate Registration
+    const localList = this.getRegisteredSchools();
+    const existingLocal = localList.find(s => s.udise === udise) || 
+                          this.getSchoolAuth(udise) || 
+                          (localStorage.getItem(this.getSchoolStorageKey(udise)) ? { schoolName: name || `शाळा (${udise})` } : null);
+    if (existingLocal) {
+      const existName = (typeof existingLocal === 'object' && existingLocal.schoolName) ? existingLocal.schoolName : (name || `शाळा (${udise})`);
+      if (alertBox) {
+        alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
+        alertBox.innerHTML = `⚠️ <strong>UDISE ${udise}</strong> ('${existName}') ची आधीच नोंदणी झालेली आहे!<br>एका UDISE साठी दुबार नोंदणी करता येत नाही. कृपया 'शाळा लॉगिन' टॅबवरून पासवर्ड टाकून लॉगिन करा.`;
+        alertBox.classList.remove('d-none');
+      }
+      setTimeout(() => {
+        this.switchPortalTab('login');
+        const uInp = document.getElementById('schoolUdiseInput');
+        const pInp = document.getElementById('schoolPasswordInput');
+        if (uInp) uInp.value = udise;
+        if (pInp) pInp.focus();
+      }, 2000);
+      return false;
+    }
+
+    // 🔒 GUARD 2: Check Cloud Duplicate Registration (cross-device duplicate protection)
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+      if (alertBox) {
+        alertBox.className = 'alert alert-info py-2 px-3 mb-3 small';
+        alertBox.innerHTML = `🔄 <strong>UDISE ${udise}</strong> ची ऑनलाईन पडताळणी करत आहे...`;
+        alertBox.classList.remove('d-none');
+      }
+      try {
+        const cloudCheck = await cloudSync.checkSchoolExists(udise);
+        if (cloudCheck && cloudCheck.exists) {
+          const cloudName = cloudCheck.schoolName || name || `शाळा (${udise})`;
+          if (alertBox) {
+            alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
+            alertBox.innerHTML = `⚠️ <strong>UDISE ${udise}</strong> ('${cloudName}') आधीच ऑनलाईन नोंदणीकृत आहे!<br>एका UDISE साठी दुबार नोंदणी करता येत नाही. कृपया 'शाळा लॉगिन' टॅबवरून पासवर्ड टाकून लॉगिन करा.`;
+            alertBox.classList.remove('d-none');
+          }
+          setTimeout(() => {
+            this.switchPortalTab('login');
+            const uInp = document.getElementById('schoolUdiseInput');
+            const pInp = document.getElementById('schoolPasswordInput');
+            if (uInp) uInp.value = udise;
+            if (pInp) pInp.focus();
+          }, 2000);
+          return false;
+        }
+      } catch (chkErr) {
+        console.warn("Cloud duplicate check notice:", chkErr);
+      }
+    }
+
     if (!name) {
       if (alertBox) {
+        alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
         alertBox.textContent = '❌ कृपया शाळेचे पूर्ण नाव प्रविष्ट करा.';
         alertBox.classList.remove('d-none');
       }
@@ -1625,7 +1694,8 @@ const app = {
 
     if (!pwd || pwd.length < 4) {
       if (alertBox) {
-        alertBox.textContent = '❌ पासवर्ड किमान 4 अक्षरे किंवा अंकांंचा असावा.';
+        alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
+        alertBox.textContent = '❌ पासवर्ड किमान 4 अक्षरे किंवा अंकांचा असावा.';
         alertBox.classList.remove('d-none');
       }
       if (pwdInp) pwdInp.focus();
@@ -1634,6 +1704,7 @@ const app = {
 
     if (pwd !== confPwd) {
       if (alertBox) {
+        alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
         alertBox.textContent = '❌ दोन्ही पासवर्ड जुळत नाहीत! कृपया पुन्हा तपासा.';
         alertBox.classList.remove('d-none');
       }
@@ -1703,6 +1774,7 @@ const app = {
     // Push new registration to Cloud if configured
     if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
       cloudSync.onSchoolSwitched(udise);
+      cloudSync.pushSchoolToRegistry(udise, authData);
       cloudSync.pushAuthToCloud(udise, authData);
       cloudSync.pushLicenseToCloud(udise, trialData);
       cloudSync.pushToCloud(true);
@@ -1848,17 +1920,21 @@ const app = {
     const btnGen = document.getElementById('adminTabBtnGen');
     const btnSchools = document.getElementById('adminTabBtnSchools');
     const btnCloud = document.getElementById('adminTabBtnCloud');
+    const btnBackup = document.getElementById('adminTabBtnBackup');
     const viewGen = document.getElementById('adminViewGenerator');
     const viewSchools = document.getElementById('adminViewSchools');
     const viewCloud = document.getElementById('adminViewCloud');
+    const viewBackup = document.getElementById('adminViewBackup');
 
     if (btnGen) btnGen.classList.toggle('active', tab === 'generator');
     if (btnSchools) btnSchools.classList.toggle('active', tab === 'schools');
     if (btnCloud) btnCloud.classList.toggle('active', tab === 'cloud');
+    if (btnBackup) btnBackup.classList.toggle('active', tab === 'backup');
 
     if (viewGen) viewGen.style.display = (tab === 'generator') ? 'block' : 'none';
     if (viewSchools) viewSchools.style.display = (tab === 'schools') ? 'block' : 'none';
     if (viewCloud) viewCloud.style.display = (tab === 'cloud') ? 'block' : 'none';
+    if (viewBackup) viewBackup.style.display = (tab === 'backup') ? 'block' : 'none';
 
     if (tab === 'schools') {
       this.renderAdminSchoolsList();
@@ -1869,6 +1945,31 @@ const app = {
           ? cloudSync.getEffectiveFirebaseUrl() 
           : 'https://gvp-pm-poshan-f390e-default-rtdb.firebaseio.com';
       }
+    } else if (tab === 'backup') {
+      this.populateAdminBackupSchoolSelect();
+    }
+  },
+
+  async populateAdminBackupSchoolSelect() {
+    const sel = document.getElementById('adminBackupSchoolSelect');
+    if (!sel) return;
+    const schools = await this.getAllSchoolsRegistry();
+    const curVal = sel.value;
+    sel.innerHTML = '<option value="">-- शाळा निवडा --</option>' +
+      schools.map(s => `<option value="${s.udise}">${s.udise} - ${s.schoolName || 'शाळा'}</option>`).join('');
+    if (curVal) sel.value = curVal;
+  },
+
+  /**
+   * Two-way background synchronization of School Registry between Local & Cloud
+   * Guarantees 100% matching school list across Localhost, GitHub Pages & Mobile devices
+   */
+  async syncCloudSchoolRegistry() {
+    if (typeof cloudSync === 'undefined' || !cloudSync.getEffectiveFirebaseUrl()) return;
+    try {
+      await this.getAllSchoolsRegistry(true);
+    } catch(e) {
+      console.warn("Background cloud school registry sync notice:", e);
     }
   },
 
@@ -1877,7 +1978,7 @@ const app = {
     const map = {};
     const baseList = this.getRegisteredSchools();
     baseList.forEach(s => {
-      if (s && s.udise) {
+      if (s && s.udise && /^\d{11}$/.test(String(s.udise).trim())) {
         map[String(s.udise).trim()] = Object.assign({}, s);
       }
     });
@@ -1932,55 +2033,284 @@ const app = {
       console.warn("Error scanning local schools:", e);
     }
 
-    // 3. Fetch from Google Firebase Cloud if configured
+    // 3. Fetch from Google Firebase Central Lightweight Registry (/mdm_registry.json)
     if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
       const cleanBaseUrl = cloudSync.getEffectiveFirebaseUrl();
       if (cleanBaseUrl) {
+        // A. Fetch lightweight registry (very fast!)
         try {
-          const res = await cloudSync.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools.json?t=${Date.now()}`, { cache: 'no-store' }, 7000);
-          if (res.ok) {
-            const cloudData = await res.json();
-            if (cloudData && typeof cloudData === 'object') {
-              Object.keys(cloudData).forEach(k => {
-                if (!k || k === 'test_ping') return;
+          const regRes = await cloudSync.fetchWithTimeout(`${cleanBaseUrl}/mdm_registry.json?t=${Date.now()}`, { cache: 'no-store' }, 6000);
+          if (regRes.ok) {
+            const regData = await regRes.json();
+            if (regData && typeof regData === 'object') {
+              Object.keys(regData).forEach(k => {
+                if (!k) return;
                 const u = k.replace(/^mdm_/, '').trim();
                 if (!/^\d{11}$/.test(u)) return;
-                const item = cloudData[k] || {};
-                const sett = (item.appData && item.appData.settings) || {};
-                const auth = item.auth || {};
-                const lic = item.license || {};
-
+                const item = regData[k] || {};
                 if (!map[u]) {
                   map[u] = { udise: u };
                 }
-                map[u].schoolName = sett.schoolName || auth.schoolName || map[u].schoolName || `शाळा (${u})`;
-                map[u].centre = sett.centre || auth.centre || map[u].centre || 'खांडस';
-                map[u].taluka = sett.taluka || auth.taluka || map[u].taluka || 'कर्जत';
-                map[u].district = sett.district || auth.district || map[u].district || 'रायगड';
-                map[u].pat = sett.pat || auth.pat || map[u].pat || 9;
-                map[u].patPrimary = sett.patPrimary || map[u].patPrimary || 9;
-                map[u].patUpper = sett.patUpper || map[u].patUpper || 15;
-                map[u].schoolLevel = sett.schoolLevel || auth.schoolLevel || map[u].schoolLevel || 'both';
-
-                if (lic && lic.status) {
-                  this.saveSchoolLicense(u, lic);
-                }
-                if (auth && auth.passwordHash) {
-                  this.saveSchoolAuth(u, auth);
-                }
+                map[u].schoolName = item.schoolName || map[u].schoolName || `शाळा (${u})`;
+                map[u].centre = item.centre || map[u].centre || 'खांडस';
+                map[u].taluka = item.taluka || map[u].taluka || 'कर्जत';
+                map[u].district = item.district || map[u].district || 'रायगड';
+                map[u].pat = item.pat || map[u].pat || 9;
+                map[u].patPrimary = item.patPrimary || map[u].patPrimary || 9;
+                map[u].patUpper = item.patUpper || map[u].patUpper || 15;
+                map[u].schoolLevel = item.schoolLevel || map[u].schoolLevel || 'both';
+                map[u].lastActive = item.lastActive || map[u].lastActive || new Date().toISOString();
               });
             }
           }
-        } catch (cloudErr) {
-          console.warn("Could not fetch remote schools from Firebase:", cloudErr);
+        } catch (regErr) {
+          console.warn("Could not fetch remote registry:", regErr);
         }
+
+        // B. Also scan shallow /mdm_schools.json?shallow=true to catch legacy schools not yet in registry
+        try {
+          const shallowRes = await cloudSync.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools.json?shallow=true&t=${Date.now()}`, { cache: 'no-store' }, 5000);
+          if (shallowRes.ok) {
+            const shallowKeys = await shallowRes.json();
+            if (shallowKeys && typeof shallowKeys === 'object') {
+              const missingUdises = Object.keys(shallowKeys)
+                .map(k => k.replace(/^mdm_/, '').trim())
+                .filter(u => /^\d{11}$/.test(u) && (!map[u] || !map[u].schoolName || map[u].schoolName.includes('(')));
+
+              await Promise.allSettled(missingUdises.slice(0, 15).map(async (u) => {
+                try {
+                  const sRes = await cloudSync.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${u}/appData/settings.json`, {}, 4000);
+                  if (sRes.ok) {
+                    const sett = await sRes.json();
+                    if (sett) {
+                      if (!map[u]) map[u] = { udise: u };
+                      map[u].schoolName = sett.schoolName || map[u].schoolName || `शाळा (${u})`;
+                      map[u].centre = sett.centre || map[u].centre || 'खांडस';
+                      map[u].taluka = sett.taluka || map[u].taluka || 'कर्जत';
+                      map[u].district = sett.district || map[u].district || 'रायगड';
+                      map[u].pat = sett.pat || map[u].pat || 9;
+                      map[u].schoolLevel = sett.schoolLevel || map[u].schoolLevel || 'both';
+                      // Push to central registry
+                      cloudSync.pushSchoolToRegistry(u, map[u]);
+                    }
+                  }
+                } catch(e) {}
+              }));
+            }
+          }
+        } catch(shErr) {}
       }
     }
 
     const schoolsArray = Object.values(map);
-    // Sort so active school or most recently registered is on top
+    // Sort so Mengalwadi or active school or alphabetically
     schoolsArray.sort((a, b) => (a.udise === '27240304501' ? -1 : (b.udise === '27240304501' ? 1 : a.udise.localeCompare(b.udise))));
+
+    // Persist full unified registry to localStorage so Local & GitHub always match
+    try {
+      localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(schoolsArray));
+    } catch(e) {}
+
+    // Auto-sync any local schools up to cloud registry if not yet pushed
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+      schoolsArray.forEach(s => {
+        cloudSync.pushSchoolToRegistry(s.udise, s);
+      });
+    }
+
     return schoolsArray;
+  },
+
+  /**
+   * Option 1: Export Combined JSON Backup of All Registered Schools
+   * File format: ALL_SCHOOLS_YYYY-MM-DD.json
+   */
+  async exportAllSchoolsJsonBackup() {
+    this.showToast('⏳ सर्व शाळांचा डेटा संकलित करत आहे...', 'info');
+    const schools = await this.getAllSchoolsRegistry(true);
+    const cleanBaseUrl = (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) 
+      ? cloudSync.getEffectiveFirebaseUrl() : '';
+
+    const schoolBackups = [];
+
+    for (const sch of schools) {
+      const u = sch.udise;
+      let sData = null;
+
+      // 1. Try local storage
+      const localRaw = localStorage.getItem(this.getSchoolStorageKey(u));
+      if (localRaw) {
+        try { sData = JSON.parse(localRaw); } catch(e) {}
+      }
+
+      // 2. If empty or missing, fetch from cloud
+      if ((!sData || !sData.records || Object.keys(sData.records).length === 0) && cleanBaseUrl) {
+        try {
+          const res = await cloudSync.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${u}.json`, {}, 8000);
+          if (res.ok) {
+            const remoteObj = await res.json();
+            if (remoteObj && remoteObj.appData) {
+              sData = remoteObj.appData;
+            }
+          }
+        } catch(e) {}
+      }
+
+      const auth = this.getSchoolAuth(u) || {};
+      const license = this.getSchoolLicense(u) || {};
+
+      schoolBackups.push({
+        udise: u,
+        schoolName: sch.schoolName,
+        centre: sch.centre,
+        taluka: sch.taluka,
+        district: sch.district,
+        schoolLevel: sch.schoolLevel || auth.schoolLevel || 'both',
+        pat: sch.pat || 9,
+        patPrimary: sch.patPrimary || 9,
+        patUpper: sch.patUpper || 15,
+        auth: {
+          schoolLevel: auth.schoolLevel || sch.schoolLevel || 'both',
+          registeredAt: auth.registeredAt || null
+        },
+        license: {
+          status: license.status || 'active',
+          plan: license.plan || 'trial30',
+          expiryDate: license.expiryDate || null
+        },
+        appData: sData || this.createDefaultSchoolData(u, sch.schoolName)
+      });
+    }
+
+    const today = new Date().toISOString().substring(0, 10);
+    const combinedPayload = {
+      backupType: "ALL_SCHOOLS_COMBINED",
+      generatedAt: new Date().toISOString(),
+      exportDate: today,
+      totalSchools: schoolBackups.length,
+      schools: schoolBackups
+    };
+
+    const jsonStr = JSON.stringify(combinedPayload, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ALL_SCHOOLS_${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    this.showToast(`✅ सर्व (${schoolBackups.length}) शाळांचा एकत्रित JSON बॅकअप डाऊनलोड झाला: ALL_SCHOOLS_${today}.json`, 'success');
+  },
+
+  /**
+   * Option 2: Export JSON Backup of Selected School
+   * File format: <UDISE>_YYYY-MM-DD.json
+   */
+  async exportSelectedSchoolJsonBackup(targetUdise = null) {
+    let udise = targetUdise;
+    if (!udise) {
+      const sel = document.getElementById('adminBackupSchoolSelect');
+      udise = sel ? sel.value : '';
+    }
+    udise = String(udise || '').trim();
+    if (!/^\d{11}$/.test(udise)) {
+      alert('❌ कृपया बॅकअपसाठी वैध 11-अंकी UDISE असलेली शाळा निवडा.');
+      return;
+    }
+
+    this.showToast(`⏳ शाळा (${udise}) चा डेटा संकलित करत आहे...`, 'info');
+    let sData = null;
+
+    // 1. Try local storage
+    const localRaw = localStorage.getItem(this.getSchoolStorageKey(udise));
+    if (localRaw) {
+      try { sData = JSON.parse(localRaw); } catch(e) {}
+    }
+
+    // 2. If empty or missing, fetch from cloud
+    const cleanBaseUrl = (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) 
+      ? cloudSync.getEffectiveFirebaseUrl() : '';
+    if ((!sData || !sData.records || Object.keys(sData.records).length === 0) && cleanBaseUrl) {
+      try {
+        const res = await cloudSync.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${udise}.json`, {}, 8000);
+        if (res.ok) {
+          const remoteObj = await res.json();
+          if (remoteObj && remoteObj.appData) {
+            sData = remoteObj.appData;
+          }
+        }
+      } catch(e) {}
+    }
+
+    if (!sData) {
+      const list = this.getRegisteredSchools();
+      const sch = list.find(s => s.udise === udise);
+      sData = this.createDefaultSchoolData(udise, sch ? sch.schoolName : '');
+    }
+
+    if (udise === this.getActiveUdise()) {
+      if (typeof this.autoSaveSchoolSettings === 'function') {
+        this.autoSaveSchoolSettings();
+      }
+      sData = Object.assign({}, sData, {
+        settings: this.data.settings,
+        initialStock: this.data.initialStock,
+        initialStockUpper: this.data.initialStockUpper || {},
+        menus: this.data.menus,
+        ingredients: this.data.ingredients,
+        stockReceipts: this.data.stockReceipts,
+        stockReceiptsUpper: this.data.stockReceiptsUpper || [],
+        damagedStock: this.data.damagedStock,
+        damagedStockUpper: this.data.damagedStockUpper || [],
+        stockTransfers: this.data.stockTransfers || [],
+        records: this.data.records,
+        recordsUpper: this.data.recordsUpper || {},
+        tasteRecords: this.data.tasteRecords,
+        tasteRecordsUpper: this.data.tasteRecordsUpper || {},
+        customDemands: this.data.customDemands,
+        customDemandsUpper: this.data.customDemandsUpper || {}
+      });
+    }
+
+    const today = new Date().toISOString().substring(0, 10);
+    const payload = {
+      backupVersion: "2.0",
+      backupType: "MDM_SCHOOL_FULL_BACKUP",
+      exportedAt: new Date().toISOString(),
+      exportDate: today,
+      schoolUdise: udise,
+      schoolName: (sData.settings && sData.settings.schoolName) || '',
+      settings: sData.settings || {},
+      initialStock: sData.initialStock || {},
+      initialStockUpper: sData.initialStockUpper || {},
+      menus: sData.menus || [],
+      ingredients: sData.ingredients || {},
+      stockReceipts: sData.stockReceipts || [],
+      stockReceiptsUpper: sData.stockReceiptsUpper || [],
+      damagedStock: sData.damagedStock || [],
+      damagedStockUpper: sData.damagedStockUpper || [],
+      stockTransfers: sData.stockTransfers || [],
+      records: sData.records || {},
+      recordsUpper: sData.recordsUpper || {},
+      tasteRecords: sData.tasteRecords || {},
+      tasteRecordsUpper: sData.tasteRecordsUpper || {},
+      customDemands: sData.customDemands || {},
+      customDemandsUpper: sData.customDemandsUpper || {}
+    };
+
+    const jsonStr = JSON.stringify(payload, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${udise}_${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    this.showToast(`✅ शाळा (${udise}) चा JSON बॅकअप डाऊनलोड झाला: ${udise}_${today}.json`, 'success');
   },
 
   async renderAdminSchoolsList(forceRefresh = false) {
@@ -2052,6 +2382,9 @@ const app = {
               <button type="button" class="btn btn-sm btn-primary" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminOpenSchool('${udise}')" title="या शाळेचा संपूर्ण डेटा उघडा">
                 📂 उघडा
               </button>
+              <button type="button" class="btn btn-sm btn-outline-success" style="padding: 3px 7px; font-size: 0.75rem; font-weight: 700;" onclick="app.exportSelectedSchoolJsonBackup('${udise}')" title="या शाळेचा स्वतंत्र JSON बॅकअप डाऊनलोड करा">
+                📥 बॅकअप
+              </button>
               ${isAct ? 
                 `<button type="button" class="btn btn-sm btn-danger" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminToggleLicense('${udise}')" title="परवाना बंद करा">🔴 बंद करा</button>` :
                 `<button type="button" class="btn btn-sm btn-success" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminToggleLicense('${udise}')" title="१ वर्ष थेट सक्रिय करा">⚡ सक्रिय करा</button>`
@@ -2084,6 +2417,9 @@ const app = {
     if (statActive) statActive.textContent = countActive;
     if (statTrial) statTrial.textContent = countTrial;
     if (statExpired) statExpired.textContent = countExpired;
+
+    // Keep Backup School Select in sync
+    this.populateAdminBackupSchoolSelect();
 
     // Apply active filter if user was typing in search box
     const searchInp = document.getElementById('adminSchoolSearchInput');
@@ -2222,14 +2558,9 @@ const app = {
     const list = this.getRegisteredSchools().filter(s => s.udise !== udise);
     localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(list));
 
-    // 2. Delete from cloud if configured
-    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
-      const cleanBaseUrl = cloudSync.getEffectiveFirebaseUrl();
-      if (cleanBaseUrl) {
-        try {
-          await cloudSync.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${udise}.json`, { method: 'DELETE' }, 7000);
-        } catch(e) {}
-      }
+    // 2. Delete from cloud if configured (both from school data and central registry)
+    if (typeof cloudSync !== 'undefined' && cloudSync.deleteSchoolFromCloud) {
+      cloudSync.deleteSchoolFromCloud(udise);
     }
 
     // 3. Remove row optimistically
@@ -3326,31 +3657,31 @@ const app = {
     if (sName && sName.value.trim()) this.data.settings.schoolName = sName.value.trim();
 
     const u = document.getElementById('setUdise');
-    if (u) this.data.settings.udise = u.value.trim();
+    if (u && u.value.trim()) this.data.settings.udise = u.value.trim();
 
     const c = document.getElementById('setCentre');
-    if (c) this.data.settings.centre = c.value.trim();
+    if (c && c.value.trim()) this.data.settings.centre = c.value.trim();
 
     const t = document.getElementById('setTaluka');
-    if (t) this.data.settings.taluka = t.value.trim();
+    if (t && t.value.trim()) this.data.settings.taluka = t.value.trim();
 
     const d = document.getElementById('setDistrict');
-    if (d) this.data.settings.district = d.value.trim();
+    if (d && d.value.trim()) this.data.settings.district = d.value.trim();
 
     const p = document.getElementById('setPat');
     if (p && parseInt(p.value)) this.data.settings.pat = parseInt(p.value);
 
     const hm = document.getElementById('setHeadmaster');
-    if (hm) this.data.settings.headmaster = hm.value.trim();
+    if (hm && hm.value.trim()) this.data.settings.headmaster = hm.value.trim();
 
     const pres = document.getElementById('setPresident');
-    if (pres) this.data.settings.president = pres.value.trim();
+    if (pres && pres.value.trim()) this.data.settings.president = pres.value.trim();
 
     const asst = document.getElementById('setAssistantTeacher');
-    if (asst) this.data.settings.assistantTeacher = asst.value.trim();
+    if (asst && asst.value.trim()) this.data.settings.assistantTeacher = asst.value.trim();
 
     const cook = document.getElementById('setCookName');
-    if (cook) this.data.settings.cookName = cook.value.trim();
+    if (cook && cook.value.trim()) this.data.settings.cookName = cook.value.trim();
 
     const fr = document.getElementById('setFuelRate');
     if (fr && parseFloat(fr.value)) this.data.settings.fuelRate = parseFloat(fr.value);
@@ -4502,6 +4833,39 @@ const app = {
   },
 
   /**
+   * Helper: Get Marathi name of Month from year-month string (YYYY-MM)
+   */
+  getMonthNameMarathi(yearMonth) {
+    if (!yearMonth) return '';
+    const parts = String(yearMonth).split('-');
+    if (parts.length < 2) return '';
+    const month = parseInt(parts[1], 10);
+    const monthNames = [
+      '', 'जानेवारी', 'फेब्रुवारी', 'मार्च', 'एप्रिल', 'मे', 'जून',
+      'जुलै', 'ऑगस्ट', 'सप्टेंबर', 'ऑक्टोबर', 'नोव्हेंबर', 'डिसेंबर'
+    ];
+    return monthNames[month] || '';
+  },
+
+  /**
+   * Helper: Dynamically set document.title with Month and Report Name for Browser Print / Save as PDF
+   * Browser automatically suggests this as the PDF filename and prints it at header!
+   */
+  preparePrintReportTitle(reportName, periodStr, udise = null) {
+    const cleanUdise = udise || (this.data && this.data.settings && this.data.settings.udise) || this.getActiveUdise() || '';
+    const safeReport = String(reportName || 'अहवाल').replace(/\s+/g, '_');
+    const safePeriod = String(periodStr || '').replace(/\s+/g, '_');
+    const newTitle = safePeriod ? `${safePeriod}_${safeReport}_${cleanUdise}` : `${safeReport}_${cleanUdise}`;
+    const originalTitle = document.title;
+    document.title = newTitle;
+    const restore = () => {
+      document.title = originalTitle;
+    };
+    window.addEventListener('afterprint', restore, { once: true });
+    setTimeout(restore, 4000);
+  },
+
+  /**
    * Print Daily Kitchen Slip
    */
   printDailySlip() {
@@ -4513,10 +4877,12 @@ const app = {
     const printContainer = document.getElementById('printSlipContainer');
     if (!printContainer) return;
 
+    this.preparePrintReportTitle('दैनिक_किचन_स्लिप', dateStr);
+
     printContainer.innerHTML = `
       <div style="padding: 20px; font-family: sans-serif; border: 1px dashed #000; max-width: 400px; margin: 0 auto;">
         <h3 style="text-align: center; margin-bottom: 5px;">${this.data.settings.schoolName}</h3>
-        <p style="text-align: center; font-size: 13px; margin: 0;">दैनिक पोषण आहार स्लिप</p>
+        <p style="text-align: center; font-size: 13px; margin: 0; font-weight: bold;">दैनिक पोषण आहार स्लिप - दिनांक: ${rec.date}</p>
         <hr style="margin: 10px 0;">
         <p><strong>दिनांक:</strong> ${rec.date} (${rec.dayName})</p>
         <p><strong>आजचा मेन्यू:</strong> ${rec.menuName}</p>
@@ -5006,6 +5372,12 @@ const app = {
 
   printDailyRegister() {
     this.switchTab('register');
+    const ymInp = document.getElementById('registerMonthSelect') || document.getElementById('monthlyExcelPicker');
+    const ym = (ymInp && ymInp.value) ? ymInp.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
+    const [yrS] = ym.split('-');
+    const mName = this.getMonthNameMarathi(ym);
+    this.preparePrintReportTitle('दैनिक_नोंदवही', `${mName}_${yrS}`);
+
     this.setPrintPageOrientation('landscape');
     document.body.classList.remove('print-portrait', 'print-formb', 'print-yearly', 'print-monthly');
     document.body.classList.add('print-register', 'print-landscape');
@@ -5307,6 +5679,12 @@ const app = {
 
   printMonthlyReport() {
     this.switchTab('monthly');
+    const picker = document.getElementById('monthlyExcelPicker');
+    const ym = (picker && picker.value) ? picker.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
+    const [yrS] = ym.split('-');
+    const mName = this.getMonthNameMarathi(ym);
+    this.preparePrintReportTitle('मासिक_अहवाल', `${mName}_${yrS}`);
+
     this.setPrintPageOrientation('landscape', 'A4', '6mm 10mm 6mm 10mm');
     document.body.classList.remove('print-portrait', 'print-formb', 'print-yearly', 'print-register', 'print-taste');
     document.body.classList.add('print-monthly', 'print-landscape');
@@ -5556,6 +5934,12 @@ const app = {
     const printContainer = document.getElementById('printSlipContainer');
     if (printContainer) printContainer.innerHTML = '';
     this.switchTab('formb');
+    const picker = document.getElementById('formbMonthPicker');
+    const ym = (picker && picker.value) ? picker.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
+    const [yrS] = ym.split('-');
+    const mName = this.getMonthNameMarathi(ym);
+    this.preparePrintReportTitle('प्रपत्र_ब', `${mName}_${yrS}`);
+
     this.setPrintPageOrientation('portrait', 'A4');
     document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-legal', 'print-slip');
     document.body.classList.add('print-formb', 'print-portrait');
@@ -5902,6 +6286,10 @@ const app = {
 
   printYearlyReport() {
     this.switchTab('yearly');
+    const yearSelect = document.getElementById('yearlyYearSelect');
+    const finYear = yearSelect ? yearSelect.value : '2024-2025';
+    this.preparePrintReportTitle('वार्षिक_अहवाल', finYear);
+
     this.setPrintPageOrientation('landscape', 'legal');
     document.body.classList.remove('print-portrait', 'print-formb', 'print-monthly', 'print-register');
     document.body.classList.add('print-yearly', 'print-landscape', 'print-legal');
@@ -6518,6 +6906,12 @@ const app = {
     const printContainer = document.getElementById('printSlipContainer');
     if (printContainer) printContainer.innerHTML = '';
     this.switchTab('taste');
+    const sel = document.getElementById('tasteMonthSelect');
+    const ym = (sel && sel.value) ? sel.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
+    const [yrS] = ym.split('-');
+    const mName = this.getMonthNameMarathi(ym);
+    this.preparePrintReportTitle('चव_नोंदवही', `${mName}_${yrS}`);
+
     this.setPrintPageOrientation('portrait', 'A4', '8mm 10mm 8mm 10mm');
     document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-legal', 'print-slip', 'print-formb');
     document.body.classList.add('print-taste', 'print-portrait');
@@ -6632,6 +7026,11 @@ const app = {
       ]);
     }
 
+    const [yrS] = monthKey.split('-');
+    const mName = this.getMonthNameMarathi(monthKey);
+    const cleanUdise = (this.data && this.data.settings && this.data.settings.udise) || this.getActiveUdise() || '';
+    const fileBase = `${mName}_${yrS}_चव_नोंदवही_${cleanUdise}`;
+
     if (typeof XLSX !== 'undefined') {
       const wb = XLSX.utils.book_new();
       const wsData = [
@@ -6644,7 +7043,7 @@ const app = {
       ];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       XLSX.utils.book_append_sheet(wb, ws, "चव नोंदवही");
-      XLSX.writeFile(wb, `MDM_Taste_Register_${monthKey}.xlsx`);
+      XLSX.writeFile(wb, `${fileBase}.xlsx`);
     } else {
       let csvContent = "\uFEFF";
       csvContent += `"${this.data.settings.schoolName || 'शाळेचे नाव'}"\n`;
@@ -6657,7 +7056,7 @@ const app = {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `MDM_Taste_Register_${monthKey}.csv`;
+      a.download = `${fileBase}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -6823,6 +7222,461 @@ const app = {
         });
       }
     }
+  },
+
+  /**
+   * Print Current Stock Inventory (शिल्लक साठा अहवाल / नोंदवही)
+   */
+  printCurrentStock() {
+    const filter = this.stockViewFilter || this.activeSection || 'primary';
+    const cleanUdise = (this.data && this.data.settings && this.data.settings.udise) || this.getActiveUdise() || '27240304501';
+    const today = new Date().toISOString().substring(0, 10);
+    const todayFormatted = today.split('-').reverse().join('/');
+    const s = this.data.settings || {};
+    const schoolName = s.schoolName || 'शाळा';
+    const centre = s.centre || '';
+    const taluka = s.taluka || '';
+    const district = s.district || '';
+
+    const filterName = filter === 'combined' ? 'एकत्रित साठा (इ. १ ते ८)' : (filter === 'upper' ? 'उच्च प्राथमिक (इ. ६ ते ८)' : 'प्राथमिक (इ. १ ते ५)');
+
+    // 1. Live Available Balances
+    const balances = this.computeCurrentLiveStock(filter);
+
+    // 2. Initial Stock (1st April)
+    let initStock = {};
+    if (filter === 'combined') {
+      const pInit = this.getActiveInitialStock('primary');
+      const uInit = this.getActiveInitialStock('upper');
+      Object.keys(this.data.ingredients || {}).forEach(k => {
+        initStock[k] = +((pInit[k] || 0) + (uInit[k] || 0)).toFixed(4);
+      });
+    } else {
+      initStock = this.getActiveInitialStock(filter) || {};
+    }
+
+    // 3. Total Received per ingredient
+    const receipts = (filter === 'combined') 
+      ? [...(this.data.stockReceipts || []), ...(this.data.stockReceiptsUpper || [])]
+      : this.getActiveReceipts(filter);
+    const totalReceived = {};
+    (receipts || []).forEach(r => {
+      Object.keys(r.items || {}).forEach(k => {
+        totalReceived[k] = (totalReceived[k] || 0) + (parseFloat(r.items[k]) || 0);
+      });
+    });
+
+    // 4. Total Consumed per ingredient
+    const records = (filter === 'combined')
+      ? { ...(this.data.records || {}), ...(this.data.recordsUpper || {}) }
+      : this.getActiveRecords(filter);
+    const totalConsumed = {};
+    Object.keys(records || {}).forEach(d => {
+      const rec = records[d];
+      if (rec && rec.quantities) {
+        Object.keys(rec.quantities).forEach(k => {
+          totalConsumed[k] = (totalConsumed[k] || 0) + (parseFloat(rec.quantities[k]) || 0);
+        });
+      }
+    });
+
+    // 5. Total Damaged per ingredient
+    const damaged = (filter === 'combined')
+      ? [...(this.data.damagedStock || []), ...(this.data.damagedStockUpper || [])]
+      : this.getActiveDamaged(filter);
+    const totalDamaged = {};
+    (damaged || []).forEach(d => {
+      Object.keys(d.items || {}).forEach(k => {
+        totalDamaged[k] = (totalDamaged[k] || 0) + (parseFloat(d.items[k]) || 0);
+      });
+    });
+
+    this.preparePrintReportTitle('शिल्लक_साठा', today, cleanUdise);
+
+    const printContainer = document.getElementById('printSlipContainer');
+    if (!printContainer) return;
+
+    let rowsHtml = '';
+    let serial = 1;
+    let lowCount = 0;
+    let negCount = 0;
+
+    Object.keys(this.data.ingredients || {}).forEach(key => {
+      const ing = this.data.ingredients[key];
+      const bal = balances[key] !== undefined ? balances[key] : 0;
+      const op = initStock[key] !== undefined ? initStock[key] : 0;
+      const rec = totalReceived[key] || 0;
+      const cons = totalConsumed[key] || 0;
+      const dmg = totalDamaged[key] || 0;
+
+      const pat = (filter === 'upper') ? (s.patUpper || 15) : (s.patPrimary || s.pat || 9);
+      const rate = (filter === 'upper') ? (ing.rateUpper || +(ing.defaultRate * 1.5).toFixed(5)) : (ing.ratePrimary || ing.defaultRate);
+      const dailyReq = rate * pat;
+      const isNeg = bal < -0.001;
+      const isLow = !isNeg && dailyReq > 0 && bal < (dailyReq * 3);
+
+      if (isNeg) negCount++;
+      if (isLow) lowCount++;
+
+      const statusBadge = isNeg ? '⚠️ ऋण (मायनस)' : (isLow ? 'कमी साठा' : 'पुरेसा साठा');
+      const catLabel = ing.category === 'spice' ? 'मसाले/किराणा' : (ing.category === 'grain' ? 'मुख्य धान्य' : (ing.category === 'pulse' ? 'कडधान्य/डाळ' : 'पूरक'));
+
+      rowsHtml += `
+        <tr>
+          <td style="text-align: center;">${serial++}</td>
+          <td><strong>${ing.name}</strong></td>
+          <td style="text-align: center;">${catLabel}</td>
+          <td style="text-align: right;">${op.toFixed(ing.category === 'spice' ? 3 : 2)}</td>
+          <td style="text-align: right;">${rec.toFixed(ing.category === 'spice' ? 3 : 2)}</td>
+          <td style="text-align: right;">${cons.toFixed(ing.category === 'spice' ? 3 : 2)}</td>
+          <td style="text-align: right;">${dmg > 0 ? dmg.toFixed(ing.category === 'spice' ? 3 : 2) : '—'}</td>
+          <td style="text-align: right; font-weight: 800; ${isNeg ? 'color: red;' : ''}">${bal.toFixed(ing.category === 'spice' ? 3 : 2)} ${ing.unit}</td>
+          <td style="text-align: right;">${rate.toFixed(ing.category === 'spice' ? 5 : 3)}</td>
+          <td style="text-align: center;">${statusBadge}</td>
+        </tr>
+      `;
+    });
+
+    printContainer.innerHTML = `
+      <div class="stock-print-doc">
+        <div class="stock-print-header">
+          <p class="stock-print-gov">महाराष्ट्र शासन • शालेय पोषण आहार योजना (PM POSHAN)</p>
+          <h2 class="stock-print-title">धान्य व किराणा शिल्लक साठा नोंदवही</h2>
+          <div class="stock-print-meta">
+            <span><strong>शाळा:</strong> ${schoolName}</span>
+            <span><strong>UDISE:</strong> ${cleanUdise}</span>
+            <span><strong>केंद्र:</strong> ${centre}</span>
+            <span><strong>तालुका:</strong> ${taluka}</span>
+            <span><strong>जिल्हा:</strong> ${district}</span>
+            <span><strong>विभाग:</strong> ${filterName}</span>
+            <span><strong>दिनांक:</strong> ${todayFormatted}</span>
+          </div>
+        </div>
+
+        <table class="stock-print-table">
+          <thead>
+            <tr>
+              <th style="width: 5%;">अ.क्र.</th>
+              <th style="width: 20%;">धान्य / साहित्य नाव</th>
+              <th style="width: 12%;">प्रवर्ग</th>
+              <th style="width: 10%;">१ एप्रिल शिल्लक</th>
+              <th style="width: 9%;">चालू आवक</th>
+              <th style="width: 9%;">चालू वापर</th>
+              <th style="width: 8%;">खराब</th>
+              <th style="width: 12%;">आज अखेर शिल्लक</th>
+              <th style="width: 7%;">प्रमाण दर</th>
+              <th style="width: 8%;">स्थिती</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="stock-print-summary">
+          <strong>गोषवारा / टिप्पणी:</strong> एकूण साहित्य प्रकार: <strong>${Object.keys(this.data.ingredients || {}).length}</strong> | 
+          कमी साठा असलेल्या वस्तू: <strong>${lowCount}</strong> | ऋण (मायनस) साठा: <strong>${negCount}</strong>.
+          शाळेकडील भौतिक साठा व नोंदवहीतील साठ्याची प्रत्यक्ष पडताळणी करण्यात आली असून नोंद अचूक आहे.
+        </div>
+
+        <div class="stock-print-signatures">
+          <div class="stock-print-sig-col">
+            <div class="sig-space"></div>
+            <div>स्वाक्षरी: ${s.cookName || 'स्वयंपाकी / मदतनीस'}</div>
+            <div style="font-size: 11px; font-weight: normal;">स्वयंपाकी / मदतनीस</div>
+          </div>
+          <div class="stock-print-sig-col">
+            <div class="sig-space"></div>
+            <div>स्वाक्षरी: ${s.president || 'अध्यक्ष'}</div>
+            <div style="font-size: 11px; font-weight: normal;">अध्यक्ष, शाळा व्यवस्थापन समिती</div>
+          </div>
+          <div class="stock-print-sig-col">
+            <div class="sig-space"></div>
+            <div>स्वाक्षरी: ${s.headmaster || 'मुख्याध्यापक'}</div>
+            <div style="font-size: 11px; font-weight: normal;">मुख्याध्यापक / सचिव (शा.व्य.स.) व शिक्का</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    if (typeof this.setPrintPageOrientation === 'function') {
+      this.setPrintPageOrientation('portrait', 'A4', '8mm 10mm 8mm 10mm');
+    }
+    document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
+    document.body.classList.add('print-slip', 'print-portrait');
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  },
+
+  /**
+   * Print Stock Receipts Register (आलेले धान्य पावती नोंदवही)
+   */
+  printStockReceipts() {
+    const filter = this.stockViewFilter || this.activeSection || 'primary';
+    const cleanUdise = (this.data && this.data.settings && this.data.settings.udise) || this.getActiveUdise() || '27240304501';
+    const s = this.data.settings || {};
+    const schoolName = s.schoolName || 'शाळा';
+    const centre = s.centre || '';
+    const taluka = s.taluka || '';
+    const district = s.district || '';
+    const ym = this.currentMonth || new Date().toISOString().substring(0, 7);
+    const [yrS] = ym.split('-');
+    const mName = (typeof this.getMonthNameMarathi === 'function') ? this.getMonthNameMarathi(ym) : ym;
+
+    const filterName = filter === 'combined' ? 'एकत्रित (इ. १ ते ८)' : (filter === 'upper' ? 'उच्च प्राथमिक (इ. ६ ते ८)' : 'प्राथमिक (इ. १ ते ५)');
+
+    const receipts = (filter === 'combined') 
+      ? [...(this.data.stockReceipts || []), ...(this.data.stockReceiptsUpper || [])]
+      : this.getActiveReceipts(filter);
+
+    this.preparePrintReportTitle('आवक_धान्य_नोंदवही', `${mName}_${yrS}`, cleanUdise);
+
+    const printContainer = document.getElementById('printSlipContainer');
+    if (!printContainer) return;
+
+    let rowsHtml = '';
+    const totalByIng = {};
+
+    if (!receipts || receipts.length === 0) {
+      rowsHtml = `<tr><td colspan="6" style="text-align: center; padding: 20px;">कोणतीही आवक धान्य नोंद उपलब्ध नाही.</td></tr>`;
+    } else {
+      receipts.forEach((r, idx) => {
+        let itemsDesc = [];
+        let rowTotalWeight = 0;
+        Object.keys(r.items || {}).forEach(k => {
+          const qty = parseFloat(r.items[k]) || 0;
+          if (qty > 0) {
+            const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
+            const ingUnit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
+            itemsDesc.push(`${ingName}: <strong>${qty}</strong> ${ingUnit}`);
+            rowTotalWeight += qty;
+            totalByIng[k] = (totalByIng[k] || 0) + qty;
+          }
+        });
+
+        const rDate = r.date ? r.date.split('-').reverse().join('/') : '—';
+        rowsHtml += `
+          <tr>
+            <td style="text-align: center;">${idx + 1}</td>
+            <td style="text-align: center;">${rDate}</td>
+            <td style="text-align: center; font-weight: 600;">${r.billNo || '—'}</td>
+            <td>${itemsDesc.join(', ') || '—'}</td>
+            <td style="text-align: right; font-weight: 700;">${rowTotalWeight.toFixed(2)} kg</td>
+            <td style="text-align: center;">${r.recordedBy || 'मुख्याध्यापक'}</td>
+          </tr>
+        `;
+      });
+    }
+
+    let summaryBadges = Object.keys(totalByIng).map(k => {
+      const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
+      const unit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
+      return `<strong>${ingName}:</strong> ${totalByIng[k].toFixed(2)} ${unit}`;
+    }).join(' | ');
+
+    printContainer.innerHTML = `
+      <div class="stock-print-doc">
+        <div class="stock-print-header">
+          <p class="stock-print-gov">महाराष्ट्र शासन • शालेय पोषण आहार योजना (PM POSHAN)</p>
+          <h2 class="stock-print-title">आवक धान्य पावती नोंदवही (Stock Receipts Log)</h2>
+          <div class="stock-print-meta">
+            <span><strong>शाळा:</strong> ${schoolName}</span>
+            <span><strong>UDISE:</strong> ${cleanUdise}</span>
+            <span><strong>केंद्र:</strong> ${centre}</span>
+            <span><strong>तालुका:</strong> ${taluka}</span>
+            <span><strong>जिल्हा:</strong> ${district}</span>
+            <span><strong>विभाग:</strong> ${filterName}</span>
+            <span><strong>एकूण नोंदी:</strong> ${receipts ? receipts.length : 0}</span>
+          </div>
+        </div>
+
+        <table class="stock-print-table">
+          <thead>
+            <tr>
+              <th style="width: 6%;">अ.क्र.</th>
+              <th style="width: 14%;">पावती / नोंद दिनांक</th>
+              <th style="width: 15%;">पावती / चलन क्र.</th>
+              <th style="width: 43%;">प्राप्त धान्य व साहित्य तपशील</th>
+              <th style="width: 11%;">एकूण वजन</th>
+              <th style="width: 11%;">नोंदवणार</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="stock-print-summary">
+          <strong>एकूण प्राप्त धान्य गोषवारा:</strong> ${summaryBadges || 'नोंद नाही'}
+        </div>
+
+        <div class="stock-print-signatures">
+          <div class="stock-print-sig-col">
+            <div class="sig-space"></div>
+            <div>स्वाक्षरी: ${s.cookName || 'स्वयंपाकी / मदतनीस'}</div>
+            <div style="font-size: 11px; font-weight: normal;">स्वयंपाकी / मदतनीस</div>
+          </div>
+          <div class="stock-print-sig-col">
+            <div class="sig-space"></div>
+            <div>स्वाक्षरी: ${s.president || 'अध्यक्ष'}</div>
+            <div style="font-size: 11px; font-weight: normal;">अध्यक्ष, शाळा व्यवस्थापन समिती</div>
+          </div>
+          <div class="stock-print-sig-col">
+            <div class="sig-space"></div>
+            <div>स्वाक्षरी: ${s.headmaster || 'मुख्याध्यापक'}</div>
+            <div style="font-size: 11px; font-weight: normal;">मुख्याध्यापक / सचिव (शा.व्य.स.) व शिक्का</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    if (typeof this.setPrintPageOrientation === 'function') {
+      this.setPrintPageOrientation('portrait', 'A4', '8mm 10mm 8mm 10mm');
+    }
+    document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
+    document.body.classList.add('print-slip', 'print-portrait');
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  },
+
+  /**
+   * Print Damaged Stock Register / Panchanama (खराब धान्य नोंदवही व पंचनामा)
+   */
+  printDamagedStock() {
+    const filter = this.stockViewFilter || this.activeSection || 'primary';
+    const cleanUdise = (this.data && this.data.settings && this.data.settings.udise) || this.getActiveUdise() || '27240304501';
+    const s = this.data.settings || {};
+    const schoolName = s.schoolName || 'शाळा';
+    const centre = s.centre || '';
+    const taluka = s.taluka || '';
+    const district = s.district || '';
+    const ym = this.currentMonth || new Date().toISOString().substring(0, 7);
+    const [yrS] = ym.split('-');
+    const mName = (typeof this.getMonthNameMarathi === 'function') ? this.getMonthNameMarathi(ym) : ym;
+
+    const filterName = filter === 'combined' ? 'एकत्रित (इ. १ ते ८)' : (filter === 'upper' ? 'उच्च प्राथमिक (इ. ६ ते ८)' : 'प्राथमिक (इ. १ ते ५)');
+
+    const damaged = (filter === 'combined') 
+      ? [...(this.data.damagedStock || []), ...(this.data.damagedStockUpper || [])]
+      : this.getActiveDamaged(filter);
+
+    this.preparePrintReportTitle('खराब_धान्य_नोंदवही', `${mName}_${yrS}`, cleanUdise);
+
+    const printContainer = document.getElementById('printSlipContainer');
+    if (!printContainer) return;
+
+    let rowsHtml = '';
+    const totalDmgByIng = {};
+
+    if (!damaged || damaged.length === 0) {
+      rowsHtml = `<tr><td colspan="5" style="text-align: center; padding: 20px;">कोणतीही खराब किंवा नासाडी धान्य नोंद उपलब्ध नाही. (निल / शून्य नुकसान)</td></tr>`;
+    } else {
+      damaged.forEach((d, idx) => {
+        let itemsDesc = [];
+        let rowTotalWeight = 0;
+        Object.keys(d.items || {}).forEach(k => {
+          const qty = parseFloat(d.items[k]) || 0;
+          if (qty > 0) {
+            const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
+            const ingUnit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
+            itemsDesc.push(`${ingName}: <strong>${qty}</strong> ${ingUnit}`);
+            rowTotalWeight += qty;
+            totalDmgByIng[k] = (totalDmgByIng[k] || 0) + qty;
+          }
+        });
+
+        const dDate = d.date ? d.date.split('-').reverse().join('/') : '—';
+        rowsHtml += `
+          <tr>
+            <td style="text-align: center;">${idx + 1}</td>
+            <td style="text-align: center;">${dDate}</td>
+            <td>${d.reason || 'कीड लागणे / मुदत संपणे / सांडणे'}</td>
+            <td>${itemsDesc.join(', ') || '—'}</td>
+            <td style="text-align: center;">${d.recordedBy || 'मुख्याध्यापक'}</td>
+          </tr>
+        `;
+      });
+    }
+
+    let summaryBadges = Object.keys(totalDmgByIng).map(k => {
+      const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
+      const unit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
+      return `<strong>${ingName}:</strong> ${totalDmgByIng[k].toFixed(2)} ${unit}`;
+    }).join(' | ');
+
+    printContainer.innerHTML = `
+      <div class="stock-print-doc">
+        <div class="stock-print-header">
+          <p class="stock-print-gov">महाराष्ट्र शासन • शालेय पोषण आहार योजना (PM POSHAN)</p>
+          <h2 class="stock-print-title">खराब / मुदत संपलेले धान्य निर्लेखन व पंचनामा नोंदवही</h2>
+          <div class="stock-print-meta">
+            <span><strong>शाळा:</strong> ${schoolName}</span>
+            <span><strong>UDISE:</strong> ${cleanUdise}</span>
+            <span><strong>केंद्र:</strong> ${centre}</span>
+            <span><strong>तालुका:</strong> ${taluka}</span>
+            <span><strong>जिल्हा:</strong> ${district}</span>
+            <span><strong>विभाग:</strong> ${filterName}</span>
+            <span><strong>नोंदी संख्या:</strong> ${damaged ? damaged.length : 0}</span>
+          </div>
+        </div>
+
+        <table class="stock-print-table">
+          <thead>
+            <tr>
+              <th style="width: 6%;">अ.क्र.</th>
+              <th style="width: 14%;">नोंद दिनांक</th>
+              <th style="width: 32%;">कारण / पंचनामा तपशील / शेरा</th>
+              <th style="width: 33%;">खराब झालेले धान्य व प्रमाण</th>
+              <th style="width: 15%;">नोंदवणार / साक्षीदार</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="stock-print-summary">
+          <strong>एकूण निर्लेखित / खराब धान्य गोषवारा:</strong> ${summaryBadges || 'निल (कोणतेही नुकसान नाही)'}
+          <div style="margin-top: 4px; font-size: 11px; color: #475569;">
+            * सदर खराब झालेले धान्य खाण्यास अयोग्य झाल्याची खात्री करून समिती समक्ष निर्लेखित (write-off) करण्यात आले आहे.
+          </div>
+        </div>
+
+        <div class="stock-print-signatures">
+          <div class="stock-print-sig-col">
+            <div class="sig-space"></div>
+            <div>स्वाक्षरी: ${s.cookName || 'स्वयंपाकी / मदतनीस'}</div>
+            <div style="font-size: 11px; font-weight: normal;">स्वयंपाकी / मदतनीस</div>
+          </div>
+          <div class="stock-print-sig-col">
+            <div class="sig-space"></div>
+            <div>स्वाक्षरी: ग्रामपंचायत / स्थानिक प्रतिनिधी</div>
+            <div style="font-size: 11px; font-weight: normal;">पंच / ग्रामपंचायत सदस्य</div>
+          </div>
+          <div class="stock-print-sig-col">
+            <div class="sig-space"></div>
+            <div>स्वाक्षरी: ${s.president || 'अध्यक्ष'}</div>
+            <div style="font-size: 11px; font-weight: normal;">अध्यक्ष, शाळा व्यवस्थापन समिती</div>
+          </div>
+          <div class="stock-print-sig-col">
+            <div class="sig-space"></div>
+            <div>स्वाक्षरी: ${s.headmaster || 'मुख्याध्यापक'}</div>
+            <div style="font-size: 11px; font-weight: normal;">मुख्याध्यापक / सचिव (शा.व्य.स.) व शिक्का</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    if (typeof this.setPrintPageOrientation === 'function') {
+      this.setPrintPageOrientation('portrait', 'A4', '8mm 10mm 8mm 10mm');
+    }
+    document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
+    document.body.classList.add('print-slip', 'print-portrait');
+    setTimeout(() => {
+      window.print();
+    }, 150);
   },
 
   // -------------------------------------------------------------------------
@@ -7125,7 +7979,7 @@ const app = {
     this.saveState();
     this.closeEditOldStockModal();
     this.refreshAllViews();
-    this.showToast(`✅ मागील शिल्लक धान्य साठा (${sec === 'upper' ? 'इ. ६ ते ८' : 'इ. १ ते ५'}) यशस्वीरित्या जतन झाला!`, 'success');
+    this.showToast(`✅ १ एप्रिल रोजी शिल्लक धान्य साठा (${sec === 'upper' ? 'इ. ६ ते ८' : 'इ. १ ते ५'}) यशस्वीरित्या जतन झाला!`, 'success');
   },
 
   // -------------------------------------------------------------------------
@@ -7303,7 +8157,7 @@ const app = {
 
     this.saveState();
     this.refreshAllViews();
-    this.showToast('✅ सेटिंग्जमधून मागील शिल्लक साठा सर्व पानांवर यशस्वीरित्या जतन झाला!', 'success');
+    this.showToast('✅ सेटिंग्जमधून १ एप्रिल रोजी शिल्लक साठा सर्व पानांवर यशस्वीरित्या जतन झाला!', 'success');
   },
 
   // =========================================================================
@@ -7354,38 +8208,189 @@ const app = {
   },
 
   exportJsonBackup() {
-    const jsonStr = JSON.stringify(this.data, null, 2);
+    const cleanUdise = (this.data && this.data.settings && this.data.settings.udise) || this.getActiveUdise() || '27240304501';
+    const today = new Date().toISOString().substring(0, 10);
+
+    // Auto-save current screen inputs quietly to guarantee 100% data fidelity
+    if (typeof this.autoSaveSchoolSettings === 'function') {
+      this.autoSaveSchoolSettings();
+    }
+
+    const backupPayload = {
+      backupVersion: "2.0",
+      backupType: "MDM_SCHOOL_FULL_BACKUP",
+      exportedAt: new Date().toISOString(),
+      exportDate: today,
+      schoolUdise: cleanUdise,
+      schoolName: (this.data && this.data.settings && this.data.settings.schoolName) || '',
+      settings: this.data.settings || {},
+      initialStock: this.data.initialStock || {},
+      initialStockUpper: this.data.initialStockUpper || {},
+      menus: this.data.menus || [],
+      ingredients: this.data.ingredients || {},
+      stockReceipts: this.data.stockReceipts || [],
+      stockReceiptsUpper: this.data.stockReceiptsUpper || [],
+      damagedStock: this.data.damagedStock || [],
+      damagedStockUpper: this.data.damagedStockUpper || [],
+      stockTransfers: this.data.stockTransfers || [],
+      records: this.data.records || {},
+      recordsUpper: this.data.recordsUpper || {},
+      tasteRecords: this.data.tasteRecords || {},
+      tasteRecordsUpper: this.data.tasteRecordsUpper || {},
+      customDemands: this.data.customDemands || {},
+      customDemandsUpper: this.data.customDemandsUpper || {}
+    };
+
+    const jsonStr = JSON.stringify(backupPayload, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `MDM_Backup_${this.data.settings.schoolName.replace(/\s+/g, '_')}_${new Date().toISOString().substring(0, 10)}.json`;
+    a.download = `${cleanUdise}_${today}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    this.showToast('डेटा बॅकअप फाईल सेव्ह झाली.', 'success');
+    this.showToast(`डेटा बॅकअप फाईल सेव्ह झाली: ${cleanUdise}_${today}.json`, 'success');
   },
 
   handleJsonRestore(event) {
-    const file = event.target.files[0];
+    const file = event.target.files && event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const parsed = JSON.parse(e.target.result);
-        if (parsed.settings && parsed.records) {
-          this.data = parsed;
-          this.saveState();
-          this.showToast('✅ बॅकअप फाईल यशस्वीरित्या रिस्टोअर झाली!', 'success');
-          this.init();
-        } else {
+        if (!parsed) {
           alert('अवैध बॅकअप फाईल फॉरमॅट.');
+          return;
         }
+
+        // Case A: All Schools Combined Backup
+        if (parsed.backupType === 'ALL_SCHOOLS_COMBINED' && Array.isArray(parsed.schools)) {
+          let count = 0;
+          for (const sch of parsed.schools) {
+            const u = sch.udise;
+            const sData = sch.appData || sch;
+            if (u && sData) {
+              const storageKey = this.getSchoolStorageKey(u);
+              const backupKey = this.getSchoolBackupKey(u);
+              localStorage.setItem(storageKey, JSON.stringify(sData));
+              localStorage.setItem(backupKey, JSON.stringify(sData));
+
+              if (sch.auth) {
+                const existingAuth = this.getSchoolAuth(u) || {};
+                localStorage.setItem(`MDM_SCHOOL_AUTH_${u}`, JSON.stringify(Object.assign({}, existingAuth, sch.auth)));
+              }
+              if (sch.license) {
+                localStorage.setItem(`MDM_SCHOOL_LICENSE_${u}`, JSON.stringify(sch.license));
+              }
+
+              this.registerSchool({
+                udise: u,
+                schoolName: sch.schoolName || (sData.settings && sData.settings.schoolName) || '',
+                centre: sch.centre || (sData.settings && sData.settings.centre) || '',
+                taluka: sch.taluka || (sData.settings && sData.settings.taluka) || '',
+                district: sch.district || (sData.settings && sData.settings.district) || '',
+                pat: sch.pat || (sData.settings && sData.settings.pat) || 9
+              });
+
+              if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+                cloudSync.pushSchoolToRegistry(u, sData.settings || {});
+              }
+              count++;
+            }
+          }
+
+          const curU = this.getActiveUdise();
+          this.loadState(curU);
+          this.showToast(`✅ एकत्रित बॅकअपमधून सर्व ${count} शाळांचा संपूर्ण डेटा यशस्वीरित्या रिस्टोअर झाला!`, 'success');
+          this.refreshAllViews();
+          if (typeof this.renderAdminSchoolsList === 'function') {
+            this.renderAdminSchoolsList(true);
+          }
+          return;
+        }
+
+        // Case B: Single School Backup
+        const dataToRestore = parsed.appData || parsed;
+        const targetSettings = dataToRestore.settings || {};
+        const targetUdise = targetSettings.udise || parsed.schoolUdise || parsed.udise || this.getActiveUdise();
+
+        if (!targetUdise) {
+          alert('अवैध बॅकअप फाईल: UDISE किंवा शाळा माहिती सापडली नाही.');
+          return;
+        }
+
+        // 1. Settings (School, HM, Cook, President, Pat, Fuel rates, etc.)
+        this.data.settings = Object.assign({}, this.data.settings, targetSettings);
+        if (targetUdise) this.data.settings.udise = targetUdise;
+
+        // 2. 1st April Initial Stock (१ एप्रिल रोजी शिल्लक साठा)
+        if (dataToRestore.initialStock) {
+          this.data.initialStock = Object.assign({}, dataToRestore.initialStock);
+        }
+        if (dataToRestore.initialStockUpper) {
+          this.data.initialStockUpper = Object.assign({}, dataToRestore.initialStockUpper);
+        }
+
+        // 3. Menus (मेन्यू यादी व रचना)
+        if (dataToRestore.menus && Array.isArray(dataToRestore.menus) && dataToRestore.menus.length > 0) {
+          this.data.menus = dataToRestore.menus;
+        }
+
+        // 4. Menu Praman / Ingredients (घटक दर व प्रमाण)
+        if (dataToRestore.ingredients && typeof dataToRestore.ingredients === 'object') {
+          this.data.ingredients = Object.assign({}, this.data.ingredients, dataToRestore.ingredients);
+        }
+
+        // 5. Stock Receipts, Damaged Stock & Transfers (आलेले धान्य व खराब धान्य)
+        this.data.stockReceipts = dataToRestore.stockReceipts || [];
+        this.data.stockReceiptsUpper = dataToRestore.stockReceiptsUpper || [];
+        this.data.damagedStock = dataToRestore.damagedStock || [];
+        this.data.damagedStockUpper = dataToRestore.damagedStockUpper || [];
+        this.data.stockTransfers = dataToRestore.stockTransfers || [];
+
+        // 6. Daily Entries (दैनिक नोंदी)
+        this.data.records = dataToRestore.records || {};
+        this.data.recordsUpper = dataToRestore.recordsUpper || {};
+
+        // 7. Taste Records & Custom Demands
+        this.data.tasteRecords = dataToRestore.tasteRecords || {};
+        this.data.tasteRecordsUpper = dataToRestore.tasteRecordsUpper || {};
+        this.data.customDemands = dataToRestore.customDemands || {};
+        this.data.customDemandsUpper = dataToRestore.customDemandsUpper || {};
+
+        // Update active UDISE
+        localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, targetUdise);
+
+        // Save state locally
+        this.saveState();
+
+        // Push to Cloud
+        if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+          cloudSync.pushToCloud(true);
+          cloudSync.pushSchoolToRegistry(targetUdise, this.data.settings);
+        }
+
+        this.showToast('✅ सर्व माहिती (दैनिक नोंदी, १ एप्रिल शिल्लक, मेन्यू, प्रमाण दर व शाळा तपशील) यशस्वीरित्या रिस्टोअर झाली!', 'success');
+
+        // Re-initialize and refresh all views
+        this.init();
+        this.populateMenuDropdown();
+        this.renderSettingsView();
+        this.renderStockView();
+        this.renderDailyRegister();
+        this.renderMonthlyExcelSheet();
+        this.renderFormB();
+        this.renderYearlyReport();
       } catch (err) {
         alert('JSON फाईल वाचताना त्रुटी: ' + err.message);
       }
     };
     reader.readAsText(file);
+    if (event.target) event.target.value = '';
   },
 
   /**
@@ -7661,14 +8666,14 @@ const app = {
     const sCookH = document.getElementById('setCookHonorarium');
     const sCookC = document.getElementById('setCookCount');
 
-    if (sName) {
+    if (sName && sName.value.trim()) {
       const trimmedName = sName.value.trim();
       this.data.settings.schoolName = trimmedName;
       if (typeof window !== 'undefined' && window.MDM_CONFIG) {
         window.MDM_CONFIG.schoolName = trimmedName;
       }
     }
-    if (uDise) {
+    if (uDise && uDise.value.trim()) {
       const cleanU = uDise.value.trim();
       this.data.settings.udise = cleanU;
       if (cleanU.length === 11) {
@@ -7678,41 +8683,57 @@ const app = {
         }
       }
     }
-    if (sCentre) this.data.settings.centre = sCentre.value.trim();
-    if (sTaluka) this.data.settings.taluka = sTaluka.value.trim();
-    if (sDist) this.data.settings.district = sDist.value.trim();
-    if (sPatPrimary) {
+    if (sCentre && sCentre.value.trim()) this.data.settings.centre = sCentre.value.trim();
+    if (sTaluka && sTaluka.value.trim()) this.data.settings.taluka = sTaluka.value.trim();
+    if (sDist && sDist.value.trim()) this.data.settings.district = sDist.value.trim();
+    if (sPatPrimary && sPatPrimary.value.trim()) {
       const val = parseInt(sPatPrimary.value) || 0;
-      this.data.settings.patPrimary = val;
-      if (this.activeSection === 'primary') this.data.settings.pat = val;
+      if (val > 0) {
+        this.data.settings.patPrimary = val;
+        if (this.activeSection === 'primary') this.data.settings.pat = val;
+      }
     }
-    if (sPatUpper) {
+    if (sPatUpper && sPatUpper.value.trim()) {
       const val = parseInt(sPatUpper.value) || 0;
-      this.data.settings.patUpper = val;
-      if (this.activeSection === 'upper') this.data.settings.pat = val;
+      if (val > 0) {
+        this.data.settings.patUpper = val;
+        if (this.activeSection === 'upper') this.data.settings.pat = val;
+      }
     }
-    if (sPat && !sPatPrimary) {
-      this.data.settings.pat = parseInt(sPat.value) || 9;
+    if (sPat && !sPatPrimary && sPat.value.trim()) {
+      const val = parseInt(sPat.value) || 0;
+      if (val > 0) this.data.settings.pat = val;
     }
-    if (sHead) this.data.settings.headmaster = sHead.value.trim();
-    if (sPres) this.data.settings.president = sPres.value.trim();
-    if (sAsst) this.data.settings.assistantTeacher = sAsst.value.trim();
-    if (sCook) this.data.settings.cookName = sCook.value.trim();
-    if (sFuelPrimary) {
-      const val = parseFloat(sFuelPrimary.value) || 1.51;
-      this.data.settings.fuelRatePrimary = val;
-      if (this.activeSection === 'primary') this.data.settings.fuelRate = val;
+    if (sHead && sHead.value.trim()) this.data.settings.headmaster = sHead.value.trim();
+    if (sPres && sPres.value.trim()) this.data.settings.president = sPres.value.trim();
+    if (sAsst && sAsst.value.trim()) this.data.settings.assistantTeacher = sAsst.value.trim();
+    if (sCook && sCook.value.trim()) this.data.settings.cookName = sCook.value.trim();
+    if (sFuelPrimary && sFuelPrimary.value.trim()) {
+      const val = parseFloat(sFuelPrimary.value);
+      if (!isNaN(val) && val > 0) {
+        this.data.settings.fuelRatePrimary = val;
+        if (this.activeSection === 'primary') this.data.settings.fuelRate = val;
+      }
     }
-    if (sFuelUpper) {
-      const val = parseFloat(sFuelUpper.value) || 2.17;
-      this.data.settings.fuelRateUpper = val;
-      if (this.activeSection === 'upper') this.data.settings.fuelRate = val;
+    if (sFuelUpper && sFuelUpper.value.trim()) {
+      const val = parseFloat(sFuelUpper.value);
+      if (!isNaN(val) && val > 0) {
+        this.data.settings.fuelRateUpper = val;
+        if (this.activeSection === 'upper') this.data.settings.fuelRate = val;
+      }
     }
-    if (sFuel && !sFuelPrimary) {
-      this.data.settings.fuelRate = parseFloat(sFuel.value) || 1.51;
+    if (sFuel && !sFuelPrimary && sFuel.value.trim()) {
+      const val = parseFloat(sFuel.value);
+      if (!isNaN(val) && val > 0) this.data.settings.fuelRate = val;
     }
-    if (sCookH) this.data.settings.cookHonorarium = parseInt(sCookH.value) || 2500;
-    if (sCookC) this.data.settings.cookCount = parseInt(sCookC.value) || 1;
+    if (sCookH && sCookH.value.trim()) {
+      const val = parseInt(sCookH.value);
+      if (!isNaN(val) && val > 0) this.data.settings.cookHonorarium = val;
+    }
+    if (sCookC && sCookC.value.trim()) {
+      const val = parseInt(sCookC.value);
+      if (!isNaN(val) && val > 0) this.data.settings.cookCount = val;
+    }
 
     // Save School Level ('both' | 'primary' | 'upper')
     const rBoth = document.getElementById('levelBoth');
@@ -8102,7 +9123,7 @@ const app = {
       cloudSync.pushToCloud(true);
     }
 
-    this.showToast('✅ सर्व शाळा सेटिंग्ज, नियम व मागील साठा सर्व पानांवर व डेटाबेसवर यशस्वीरित्या सेव्ह झाले!', 'success');
+    this.showToast('✅ सर्व शाळा सेटिंग्ज, नियम व १ एप्रिल रोजी शिल्लक साठा सर्व पानांवर व डेटाबेसवर यशस्वीरित्या सेव्ह झाले!', 'success');
   },
 
   // =========================================================================

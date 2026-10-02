@@ -686,8 +686,13 @@ const excelEngine = {
     ws3['!pageSetup'] = { orientation: 'portrait', paperSize: 9 };
     XLSX.utils.book_append_sheet(wb, ws3, "मेन्यू व प्रमाण नियम");
 
-    // Write file and trigger download
-    const fileName = `MDM_Report_${appData.settings.schoolName.replace(/\s+/g, '_')}_${yearMonth}.xlsx`;
+    // Write file and trigger download with Month and Report Name
+    const [yrS, moS] = yearMonth.split('-');
+    const mNum = parseInt(moS, 10);
+    const mNames = ['', 'जानेवारी', 'फेब्रुवारी', 'मार्च', 'एप्रिल', 'मे', 'जून', 'जुलै', 'ऑगस्ट', 'सप्टेंबर', 'ऑक्टोबर', 'नोव्हेंबर', 'डिसेंबर'];
+    const mName = mNames[mNum] || moS;
+    const cleanUdise = (appData.settings && appData.settings.udise) || '';
+    const fileName = `${mName}_${yrS}_मासिक_अहवाल_${cleanUdise}.xlsx`;
     XLSX.writeFile(wb, fileName);
     if (typeof app !== 'undefined' && app.showToast) {
       app.showToast(`✅ A4 फॉरमॅट Excel फाईल डाऊनलोड झाली: ${fileName}`, 'success');
@@ -842,7 +847,8 @@ const excelEngine = {
     this.applyWorksheetStyles(ws, { type: 'form_b' });
     XLSX.utils.book_append_sheet(wb, ws, "प्रपत्र ब");
 
-    const filename = `MDM_Form_B_${monthNamesMarathi[month]}_${year}_${appData.settings.schoolName.replace(/\s+/g, '_')}.xlsx`;
+    const cleanUdise = (appData.settings && appData.settings.udise) || '';
+    const filename = `${monthNamesMarathi[month]}_${year}_प्रपत्र_ब_${cleanUdise}.xlsx`;
     XLSX.writeFile(wb, filename);
     app.showToast(`✅ प्रपत्र ब Excel फाईल '${filename}' डाऊनलोड झाली!`, 'success');
   },
@@ -1022,7 +1028,8 @@ const excelEngine = {
     this.applyWorksheetStyles(ws, { type: 'yearly_matrix' });
     XLSX.utils.book_append_sheet(wb, ws, `सन ${data.startYear}-${String(data.endYear).slice(-2)}`);
 
-    const filename = `MDM_Yearly_Report_${data.startYear}-${data.endYear}_${settings.schoolName.replace(/\s+/g, '_')}.xlsx`;
+    const cleanUdise = (settings && settings.udise) || '';
+    const filename = `${data.startYear}-${data.endYear}_वार्षिक_अहवाल_${cleanUdise}.xlsx`;
     XLSX.writeFile(wb, filename);
     app.showToast(`✅ A4 फॉरमॅट वार्षिक अहवाल Excel फाईल '${filename}' डाऊनलोड झाली!`, 'success');
   },

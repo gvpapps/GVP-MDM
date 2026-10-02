@@ -310,6 +310,9 @@
           <button type="button" class="portal-tab-btn" id="adminTabBtnCloud" onclick="app.switchAdminTab('cloud')">
             ☁️ क्लाऊड सिंक नियंत्रण
           </button>
+          <button type="button" class="portal-tab-btn" id="adminTabBtnBackup" onclick="app.switchAdminTab('backup')">
+            💾 JSON बॅकअप केंद्र
+          </button>
         </div>
       </div>
 
@@ -433,6 +436,92 @@
               <button type="button" class="btn btn-outline-success btn-sm fw-bold" onclick="app.testAdminFirebaseConnection()">
                 🔄 कनेक्शन तपासा
               </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB 4: JSON BACKUP CENTER ================= -->
+        <div id="adminViewBackup" style="display: none;">
+          <div class="row g-3">
+            <!-- Option 1: All Schools Combined Backup -->
+            <div class="col-md-6 mb-3">
+              <div class="card p-3 h-100" style="background: #eff6ff; border: 1.5px solid #93c5fd; border-radius: 8px;">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <span style="font-size: 1.5rem;">📦</span>
+                  <div>
+                    <h5 style="margin: 0; color: #1e3a8a; font-size: 1rem; font-weight: 800;">
+                      १. सर्व शाळांचा एकत्रित JSON बॅकअप
+                    </h5>
+                    <small class="text-muted">All Schools Combined Backup</small>
+                  </div>
+                </div>
+                <p class="small text-muted mb-3" style="line-height: 1.5;">
+                  नोंदणीकृत सर्व शाळांचा संपूर्ण पोषण आहार डेटा (मासिक हिशोब, साठा, मेन्यू, परवाना व लॉगिन माहिती) एकाच एकत्रित JSON फाईलमध्ये सुरक्षितरीत्या डाऊनलोड करा.
+                </p>
+                <div class="mt-auto">
+                  <div class="mb-2 p-2 bg-white rounded border small text-muted font-monospace">
+                    📁 फाईल नाव: <strong>ALL_SCHOOLS_YYYY-MM-DD.json</strong>
+                  </div>
+                  <button type="button" class="btn btn-primary w-100 fw-bold shadow-sm" onclick="app.exportAllSchoolsJsonBackup()">
+                    📥 सर्व शाळांचा एकत्रित बॅकअप डाऊनलोड करा (.json)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Option 2: Selected School Backup -->
+            <div class="col-md-6 mb-3">
+              <div class="card p-3 h-100" style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px;">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <span style="font-size: 1.5rem;">🏫</span>
+                  <div>
+                    <h5 style="margin: 0; color: #166534; font-size: 1rem; font-weight: 800;">
+                      २. निवडलेल्या शाळेचा JSON बॅकअप
+                    </h5>
+                    <small class="text-muted">Selected School Backup</small>
+                  </div>
+                </div>
+                <p class="small text-muted mb-2" style="line-height: 1.5;">
+                  खालील यादीतून ज्या शाळेचा स्वतंत्र बॅकअप हवा आहे ती शाळा निवडा आणि डाऊनलोड करा:
+                </p>
+                <div class="mb-3">
+                  <label for="adminBackupSchoolSelect" class="form-label small fw-bold text-dark mb-1">शाळा निवडा:</label>
+                  <select id="adminBackupSchoolSelect" class="form-select form-select-sm fw-bold">
+                    <option value="">-- शाळा निवडा --</option>
+                  </select>
+                </div>
+                <div class="mt-auto">
+                  <div class="mb-2 p-2 bg-white rounded border small text-muted font-monospace">
+                    📁 फाईल नाव: <strong>&lt;UDISE&gt;_YYYY-MM-DD.json</strong>
+                  </div>
+                  <button type="button" class="btn btn-success w-100 fw-bold shadow-sm" onclick="app.exportSelectedSchoolJsonBackup()">
+                    📥 निवडलेल्या शाळेचा बॅकअप डाऊनलोड करा (.json)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Option 3: Restore Backup -->
+            <div class="col-md-12 mt-2">
+              <div class="card p-3" style="background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 8px;">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                  <div class="d-flex align-items-center gap-2">
+                    <span style="font-size: 1.5rem;">📂</span>
+                    <div>
+                      <h5 style="margin: 0; color: #92400e; font-size: 1rem; font-weight: 800;">
+                        ३. JSON बॅकअप फाईल रिस्टोअर करा
+                      </h5>
+                      <small class="text-muted">एकत्रित किंवा निवडलेल्या शाळेची बॅकअप फाईल अपलोड करून डेटा पूर्ववत करा</small>
+                    </div>
+                  </div>
+                  <div>
+                    <input type="file" id="adminJsonRestoreInput" accept=".json" style="display: none;" onchange="app.handleJsonRestore(event)">
+                    <button type="button" class="btn btn-warning fw-bold shadow-sm" onclick="document.getElementById('adminJsonRestoreInput').click()">
+                      📂 बॅकअप फाईल निवडून रिस्टोअर करा (.json)
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1825,8 +1914,11 @@
                   📦 एकत्रित (१ ते ८)
                 </button>
               </div>
+              <button class="btn btn-outline-success" onclick="app.printCurrentStock()" title="चालू शिल्लक साठा अधिकृत नोंदवही प्रिंट करा" style="font-weight: 700;">
+                <span>🖨️ शिल्लक साठा प्रिंट करा</span>
+              </button>
               <button class="btn btn-outline-primary" onclick="app.openEditOldStockModal()">
-                <span>✏️ मागील शिल्लक बदला (Edit Old Stock)</span>
+                <span>✏️ १ एप्रिल रोजी शिल्लक साठा बदला</span>
               </button>
               <button class="btn btn-warning" onclick="app.openAddDamagedStockModal()" style="font-weight: 700;">
                 <span>⚠️ खराब / नासाडी धान्य नोंद (Damaged / Expired Stock)</span>
@@ -1844,12 +1936,17 @@
           <div class="card mb-3 opening-stock-banner-card">
             <div class="card-body flex-between flex-wrap gap-2">
               <div>
-                <h4 style="font-weight: 700; color: #1e293b; margin-bottom: 0.2rem;">📦 सुरुवातीची मागील शिल्लक (Opening / Old Stock)</h4>
-                <p class="form-hint" style="margin: 0;">शाळेचा मूळ सुरुवातीचा साठा तपासण्यासाठी व बदलण्यासाठी पुढील बटण वापरा.</p>
+                <h4 style="font-weight: 700; color: #1e293b; margin-bottom: 0.2rem;">📦 १ एप्रिल रोजी शिल्लक साठा (Opening Stock as on 1st April)</h4>
+                <p class="form-hint" style="margin: 0;">शाळेचा १ एप्रिल रोजीचा मूळ शिल्लक साठा तपासण्यासाठी व बदलण्यासाठी पुढील बटण वापरा.</p>
               </div>
-              <button class="btn btn-sm btn-outline-primary" onclick="app.openEditOldStockModal()">
-                <span>✏️ मागील शिल्लक संपादित करा (Edit)</span>
-              </button>
+              <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-outline-success" onclick="app.printCurrentStock()" title="चालू शिल्लक साठा अधिकृत नोंदवही प्रिंट करा" style="font-weight: 700;">
+                  <span>🖨️ शिल्लक साठा प्रिंट</span>
+                </button>
+                <button class="btn btn-sm btn-outline-primary" onclick="app.openEditOldStockModal()">
+                  <span>✏️ १ एप्रिल रोजी शिल्लक साठा संपादित करा</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1860,9 +1957,17 @@
 
           <!-- Stock Receipts History -->
           <div class="card mt-4">
-            <div class="card-header flex-between">
-              <h3 class="card-title">प्राप्त धान्याच्या नोंदींचा इतिहास (Stock Receipt History)</h3>
-              <span class="badge badge-info" id="receiptCountBadge">0 नोंदी</span>
+            <div class="card-header flex-between flex-wrap gap-2">
+              <div>
+                <h3 class="card-title">प्राप्त धान्याच्या नोंदींचा इतिहास (आलेले धान्य नोंदवही)</h3>
+                <p class="form-hint mb-0" style="font-size: 0.8rem; color: #64748b;">शाळेकडे प्राप्त झालेल्या धान्याच्या पावत्या व आवक नोंदी</p>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge badge-info" id="receiptCountBadge">0 नोंदी</span>
+                <button class="btn btn-sm btn-outline-primary" onclick="app.printStockReceipts()" title="आलेले धान्य पावती नोंदवही प्रिंट करा" style="font-weight: 700;">
+                  <span>🖨️ आलेले धान्य प्रिंट करा</span>
+                </button>
+              </div>
             </div>
             <div class="card-body p-0">
               <div class="mobile-scroll-hint no-print">
@@ -1890,12 +1995,17 @@
 
           <!-- Damaged / Expired Stock History -->
           <div class="card mt-4" style="border-left: 4px solid #f59e0b;">
-            <div class="card-header flex-between" style="background: #fffbeb;">
+            <div class="card-header flex-between flex-wrap gap-2" style="background: #fffbeb;">
               <div>
                 <h3 class="card-title" style="color: #92400e;">⚠️ खराब / मुदत संपलेले / नासाडी धान्य नोंदी (Damaged & Expired Stock Log)</h3>
                 <p class="form-hint mb-0" style="color: #b45309; font-size: 0.8rem;">खराब झालेले धान्य संबंधित महिन्यातील एकूण वापर / शिजवलेल्या धान्यात आपोआप समाविष्ट केले जाते.</p>
               </div>
-              <span class="badge badge-warning" id="damagedCountBadge">0 नोंदी</span>
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge badge-warning" id="damagedCountBadge">0 नोंदी</span>
+                <button class="btn btn-sm btn-outline-warning" onclick="app.printDamagedStock()" title="खराब धान्य नोंदवही / पंचनामा प्रिंट करा" style="color: #92400e; border-color: #d97706; font-weight: 700; background: #fff;">
+                  <span>🖨️ खराब धान्य प्रिंट करा</span>
+                </button>
+              </div>
             </div>
             <div class="card-body p-0">
               <div class="table-responsive">
@@ -2299,19 +2409,19 @@
             <!-- Opening / Old Stock Settings Card -->
             <div class="card settings-card">
               <div class="card-header flex-between">
-                <h3 class="card-title">📦 4. मागील शिल्लक धान्य / सुरुवातीचा साठा (Opening / Old Stock Settings)</h3>
+                <h3 class="card-title">📦 4. १ एप्रिल रोजी शिल्लक साठा (Opening Stock as on 1st April)</h3>
                 <button class="btn btn-sm btn-primary" onclick="app.saveOldStockFromSettings()">
-                  <span>💾 मागील साठा जतन करा</span>
+                  <span>💾 १ एप्रिल रोजी शिल्लक साठा जतन करा</span>
                 </button>
               </div>
               <div class="card-body">
-                <p class="form-hint mb-3" style="font-size: 0.85rem; color: #475569;">शाळेकडील सुरुवातीची मूळ मागील शिल्लक (Opening Balance) येथे भरा किंवा संपादित करा. ही सर्व महिन्यांच्या हिशोबासाठी मूळ साठा म्हणून वापरली जाईल:</p>
+                <p class="form-hint mb-3" style="font-size: 0.85rem; color: #475569;">शाळेकडील १ एप्रिल रोजीचा मूळ शिल्लक साठा (Opening Balance on 1st April) येथे भरा किंवा संपादित करा. हा सर्व महिन्यांच्या हिशोबासाठी मूळ पाया म्हणून वापरला जाईल:</p>
                 <div class="stock-inputs-grid" id="oldStockSettingsGrid">
                   <!-- Dynamic Inputs Injected via JS -->
                 </div>
                 <div class="mt-3 text-right">
                   <button class="btn btn-primary" onclick="app.saveOldStockFromSettings()">
-                    <span>💾 मागील शिल्लक साठा जतन करा (Save Old Stock)</span>
+                    <span>💾 १ एप्रिल रोजी शिल्लक साठा जतन करा (Save 1st April Stock)</span>
                   </button>
                 </div>
               </div>
@@ -2689,7 +2799,7 @@
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h3 class="modal-title">✏️ मागील शिल्लक धान्य साठा संपादन (Edit Old Stock)</h3>
+            <h3 class="modal-title">✏️ १ एप्रिल रोजी शिल्लक साठा संपादन (Edit 1st April Stock)</h3>
             <button class="modal-close-btn" onclick="app.closeEditOldStockModal()">&times;</button>
           </div>
           <div class="modal-body">
@@ -2697,7 +2807,7 @@
               
               <!-- Section Selection -->
               <div class="mb-3 d-flex align-items-center justify-content-between p-2 rounded dual-only" style="background: #f1f5f9; border: 1px solid #e2e8f0;">
-                <span class="fw-bold text-dark font-sm">कोणत्या विभागाची मागील शिल्लक?</span>
+                <span class="fw-bold text-dark font-sm">कोणत्या विभागाचा १ एप्रिल रोजी शिल्लक साठा?</span>
                 <div class="section-segmented-group" role="group">
                   <button type="button" class="btn-section-toggle active" id="modalOldStockSecPrimary" onclick="app.switchOldStockModalSection('primary')">
                     🎒 इ. १ ते ५
@@ -2708,7 +2818,7 @@
                 </div>
               </div>
 
-              <p class="form-hint mb-3" style="font-size: 0.88rem; color: #334155;">शाळेकडील सुरुवातीचा शिल्लक माल (Opening Stock) कि.ग्रॅ. मध्ये भरा:</p>
+              <p class="form-hint mb-3" style="font-size: 0.88rem; color: #334155;">शाळेकडील १ एप्रिल रोजीचा शिल्लक माल (1st April Opening Stock) कि.ग्रॅ. मध्ये भरा:</p>
               
               <div class="stock-inputs-grid" id="oldStockInputsGrid">
                 <!-- Injected by JS -->
@@ -2716,7 +2826,7 @@
 
               <div class="modal-footer mt-4">
                 <button type="submit" class="btn btn-primary">
-                  <span>💾 मागील शिल्लक साठा जतन करा</span>
+                  <span>💾 १ एप्रिल रोजी शिल्लक साठा जतन करा</span>
                 </button>
                 <button type="button" class="btn btn-outline-secondary" onclick="app.closeEditOldStockModal()">
                   <span>रद्द करा</span>
@@ -2775,9 +2885,9 @@
                 </div>
 
                 <div class="form-group flex-1">
-                  <label for="newIngOpeningStock" class="form-label font-bold">सुरुवातीचा शिल्लक साठा (Opening Stock kg)</label>
+                  <label for="newIngOpeningStock" class="form-label font-bold">१ एप्रिल रोजी शिल्लक साठा (Opening Stock on 1st April kg)</label>
                   <input type="number" step="0.001" id="newIngOpeningStock" class="form-control" placeholder="0.00 (ऋण / मायनस नोंदही शक्य)" value="0">
-                  <small class="form-hint">मागील शिल्लक साठा (मायनस असल्यास - टाका)</small>
+                  <small class="form-hint">१ एप्रिल रोजी शिल्लक साठा (मायनस असल्यास - टाका)</small>
                 </div>
               </div>
 
