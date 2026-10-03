@@ -207,6 +207,25 @@ const app = {
     this.populateMenuDropdown();
     this.bindEvents();
 
+    // Self-healing: Cleanse any stale tombstones for active or registered schools
+    try {
+      const activeStored = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY);
+      if (activeStored && /^\d{11}$/.test(activeStored.trim())) {
+        this.removeLocalTombstone(activeStored.trim());
+      }
+      const rawReg = localStorage.getItem(this.REGISTERED_SCHOOLS_KEY);
+      if (rawReg) {
+        const parsedReg = JSON.parse(rawReg);
+        if (Array.isArray(parsedReg)) {
+          parsedReg.forEach(s => {
+            if (s && s.udise && /^\d{11}$/.test(String(s.udise).trim())) {
+              this.removeLocalTombstone(String(s.udise).trim());
+            }
+          });
+        }
+      }
+    } catch(e) {}
+
     const activeUdise = this.getActiveUdise();
     if (activeUdise && activeUdise.length === 11) {
       this.loadState(activeUdise);
@@ -530,12 +549,32 @@ const app = {
   },
 
   /**
+   * Clear tombstone (alias for removeLocalTombstone)
+   */
+  clearTombstone(udise) {
+    return this.removeLocalTombstone(udise);
+  },
+
+  /**
    * Check if school UDISE is tombstoned (permanently deleted)
    */
   isSchoolTombstoned(udise) {
     if (!udise) return false;
     const clean = String(udise).trim();
     if (clean === '27240304501') return false; // Default reference school is never tombstoned
+
+    // An active logged in school is NEVER tombstoned
+    try {
+      const active = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY);
+      if (active && active.trim() === clean) {
+        const t = this.getLocalTombstones();
+        if (t && t[clean]) {
+          this.removeLocalTombstone(clean);
+        }
+        return false;
+      }
+    } catch(e) {}
+
     const tombstones = this.getLocalTombstones();
     return !!tombstones[clean];
   },
@@ -548,9 +587,12 @@ const app = {
     const active = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY);
     if (active && /^\d{11}$/.test(active.trim())) {
       const clean = active.trim();
-      if (!this.isSchoolTombstoned(clean)) {
-        return clean;
+      // Ensure active school cannot be blocked by a stale tombstone
+      const t = this.getLocalTombstones();
+      if (t && t[clean]) {
+        this.removeLocalTombstone(clean);
       }
+      return clean;
     }
     return '';
   },
@@ -1602,31 +1644,51 @@ const app = {
       return false;
     }
 
-    // 1. Check local Auth first
-    let auth = this.getSchoolAuth(udise);
+    // 1. Authoritative Cloud Verification (cross-device sync & deletion check)
+    let auth = null;
+    let isDeletedOnCloud = false;
 
-    // 2. If not found locally, check Google Firebase Realtime Database for cross-device registration!
-    if (!auth && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
       if (alertBox) {
         alertBox.className = 'alert alert-info py-2 px-3 mb-3 small';
         alertBox.innerHTML = `🔄 <strong>UDISE ${udise}</strong> ची माहिती क्लाऊडवरून शोधत आहे...`;
         alertBox.classList.remove('d-none');
       }
       try {
-        const remoteAuth = await cloudSync.pullAuthFromCloud(udise);
-        if (remoteAuth) {
-          auth = remoteAuth;
-          this.saveSchoolAuth(udise, remoteAuth);
+        const cloudCheck = await cloudSync.checkSchoolExists(udise);
+        if (cloudCheck && !cloudCheck.exists) {
+          isDeletedOnCloud = true;
+          // School does NOT exist on cloud (it was deleted by admin or never registered)!
+          // Purge stale local auth/data so old login is blocked!
+          localStorage.removeItem(this.getSchoolStorageKey(udise));
+          localStorage.removeItem(this.getSchoolBackupKey(udise));
+          localStorage.removeItem(this.AUTH_STORAGE_PREFIX + udise);
+          localStorage.removeItem(this.LICENSE_STORAGE_PREFIX + udise);
+          localStorage.removeItem('MDM_SAFE_BACKUP_' + udise);
+          const list = this.getRegisteredSchools().filter(s => s.udise !== udise);
+          localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(list));
+        } else {
+          // School is alive on cloud! Fetch authoritative cloud auth
+          const remoteAuth = await cloudSync.pullAuthFromCloud(udise);
+          if (remoteAuth) {
+            auth = remoteAuth;
+            this.saveSchoolAuth(udise, remoteAuth);
+          }
         }
       } catch(e) {
         console.warn("Cloud auth check error:", e);
       }
     }
 
+    // 2. Fallback to local auth ONLY if not confirmed deleted on cloud
+    if (!auth && !isDeletedOnCloud) {
+      auth = this.getSchoolAuth(udise);
+    }
+
     if (!auth) {
       if (alertBox) {
         alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
-        alertBox.innerHTML = `⚠️ <strong>UDISE ${udise}</strong> ची अजून नोंदणी झालेली नाही!<br>कृपया वरील 'नवीन शाळा नोंदणी' टॅबवर जाऊन नोंदणी करा.`;
+        alertBox.innerHTML = `⚠️ <strong>UDISE ${udise}</strong> ची नोंदणी आढळली नाही (किंवा ही शाळा ॲडमिनद्वारे हटवण्यात आली आहे)!<br>कृपया वरील 'नवीन शाळा नोंदणी' टॅबवर जाऊन नव्याने नोंदणी करा.`;
         alertBox.classList.remove('d-none');
       }
       // Prefill register tab
@@ -1653,6 +1715,12 @@ const app = {
     if (pwdInput) pwdInput.value = '';
     if (alertBox) alertBox.classList.add('d-none');
     localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, udise);
+
+    // Self-heal: Ensure no stale tombstone can block active school
+    this.removeLocalTombstone(udise);
+
+    // Pre-load local state so memory and UI structures are ready
+    this.loadState(udise);
 
     this.showToast(`🔄 शाळा (${udise}) चा डेटा क्लाऊडवरून लोड होत आहे...`, 'info');
 
@@ -1712,11 +1780,56 @@ const app = {
       return false;
     }
 
-    // 🔒 GUARD 1: Check Local Duplicate Registration
+    // 🔒 GUARD: Check Duplicate Registration
+    // Step A: Check Cloud Registry first (the authoritative source of truth across all devices)
+    let isCloudRegistered = false;
+    let cloudSchoolName = '';
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+      if (alertBox) {
+        alertBox.className = 'alert alert-info py-2 px-3 mb-3 small';
+        alertBox.innerHTML = `🔄 <strong>UDISE ${udise}</strong> ची ऑनलाईन पडताळणी करत आहे...`;
+        alertBox.classList.remove('d-none');
+      }
+      try {
+        const cloudCheck = await cloudSync.checkSchoolExists(udise);
+        if (cloudCheck && cloudCheck.exists) {
+          isCloudRegistered = true;
+          cloudSchoolName = cloudCheck.schoolName || name || `शाळा (${udise})`;
+        } else {
+          // School does NOT exist on cloud (it was deleted by admin or never registered)!
+          // Cleanse any residual stale local keys on this device so registration proceeds cleanly!
+          localStorage.removeItem(this.getSchoolStorageKey(udise));
+          localStorage.removeItem(this.getSchoolBackupKey(udise));
+          localStorage.removeItem(this.AUTH_STORAGE_PREFIX + udise);
+          localStorage.removeItem(this.LICENSE_STORAGE_PREFIX + udise);
+          localStorage.removeItem('MDM_SAFE_BACKUP_' + udise);
+          const list = this.getRegisteredSchools().filter(s => s.udise !== udise);
+          localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(list));
+        }
+      } catch (chkErr) {
+        console.warn("Cloud duplicate check notice:", chkErr);
+      }
+    }
+
+    if (isCloudRegistered) {
+      if (alertBox) {
+        alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
+        alertBox.innerHTML = `⚠️ <strong>UDISE ${udise}</strong> ('${cloudSchoolName}') आधीच ऑनलाईन नोंदणीकृत आहे!<br>एका UDISE साठी दुबार नोंदणी करता येत नाही. कृपया 'शाळा लॉगिन' टॅबवरून पासवर्ड टाकून लॉगिन करा.`;
+        alertBox.classList.remove('d-none');
+      }
+      setTimeout(() => {
+        this.switchPortalTab('login');
+        const uInp = document.getElementById('schoolUdiseInput');
+        const pInp = document.getElementById('schoolPasswordInput');
+        if (uInp) uInp.value = udise;
+        if (pInp) pInp.focus();
+      }, 2000);
+      return false;
+    }
+
+    // Step B: Check Local Registered Schools list (for offline mode or when cloud check didn't reject)
     const localList = this.getRegisteredSchools();
-    const existingLocal = localList.find(s => s.udise === udise) || 
-                          this.getSchoolAuth(udise) || 
-                          (localStorage.getItem(this.getSchoolStorageKey(udise)) ? { schoolName: name || `शाळा (${udise})` } : null);
+    const existingLocal = localList.find(s => s.udise === udise) || this.getSchoolAuth(udise);
     if (existingLocal) {
       const existName = (typeof existingLocal === 'object' && existingLocal.schoolName) ? existingLocal.schoolName : (name || `शाळा (${udise})`);
       if (alertBox) {
@@ -1732,36 +1845,6 @@ const app = {
         if (pInp) pInp.focus();
       }, 2000);
       return false;
-    }
-
-    // 🔒 GUARD 2: Check Cloud Duplicate Registration (cross-device duplicate protection)
-    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
-      if (alertBox) {
-        alertBox.className = 'alert alert-info py-2 px-3 mb-3 small';
-        alertBox.innerHTML = `🔄 <strong>UDISE ${udise}</strong> ची ऑनलाईन पडताळणी करत आहे...`;
-        alertBox.classList.remove('d-none');
-      }
-      try {
-        const cloudCheck = await cloudSync.checkSchoolExists(udise);
-        if (cloudCheck && cloudCheck.exists) {
-          const cloudName = cloudCheck.schoolName || name || `शाळा (${udise})`;
-          if (alertBox) {
-            alertBox.className = 'alert alert-danger py-2 px-3 mb-3 small';
-            alertBox.innerHTML = `⚠️ <strong>UDISE ${udise}</strong> ('${cloudName}') आधीच ऑनलाईन नोंदणीकृत आहे!<br>एका UDISE साठी दुबार नोंदणी करता येत नाही. कृपया 'शाळा लॉगिन' टॅबवरून पासवर्ड टाकून लॉगिन करा.`;
-            alertBox.classList.remove('d-none');
-          }
-          setTimeout(() => {
-            this.switchPortalTab('login');
-            const uInp = document.getElementById('schoolUdiseInput');
-            const pInp = document.getElementById('schoolPasswordInput');
-            if (uInp) uInp.value = udise;
-            if (pInp) pInp.focus();
-          }, 2000);
-          return false;
-        }
-      } catch (chkErr) {
-        console.warn("Cloud duplicate check notice:", chkErr);
-      }
     }
 
     if (!name) {
@@ -1856,10 +1939,11 @@ const app = {
     // Push new registration to Cloud if configured
     if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
       cloudSync.onSchoolSwitched(udise);
+      if (cloudSync.clearTombstone) cloudSync.clearTombstone(udise);
       cloudSync.pushSchoolToRegistry(udise, authData);
       cloudSync.pushAuthToCloud(udise, authData);
       cloudSync.pushLicenseToCloud(udise, trialData);
-      cloudSync.pushToCloud(true);
+      cloudSync.pushToCloud(true, udise);
     }
     return true;
   },
@@ -2061,9 +2145,17 @@ const app = {
       try {
         const remoteTombstones = await cloudSync.pullTombstones();
         if (remoteTombstones && typeof remoteTombstones === 'object') {
-          const localTombstones = this.getLocalTombstones();
-          const mergedTombstones = Object.assign({}, localTombstones, remoteTombstones);
-          localStorage.setItem(this.TOMBSTONES_STORAGE_KEY, JSON.stringify(mergedTombstones));
+          // Authoritative sync: Remote tombstones from Firebase are the source of truth for cloud deletions.
+          // BUT: Never allow active logged-in school, default school (27240304501), or schools in local registry to be tombstoned!
+          const activeU = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY) || '';
+          const cleanedTombstones = {};
+          Object.keys(remoteTombstones).forEach(k => {
+            const u = k.replace(/^mdm_/, '').trim();
+            if (/^\d{11}$/.test(u) && u !== activeU && u !== '27240304501') {
+              cleanedTombstones[u] = remoteTombstones[k];
+            }
+          });
+          localStorage.setItem(this.TOMBSTONES_STORAGE_KEY, JSON.stringify(cleanedTombstones));
         }
       } catch(e) {}
     }
@@ -2097,15 +2189,20 @@ const app = {
         }
 
         if (u && /^\d{11}$/.test(u)) {
-          if (tombstones[u]) {
-            // Tombstone active: aggressively purge residual local keys!
+          const activeStored = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY);
+          // Only purge if school is genuinely tombstoned AND is neither active nor registered
+          if (tombstones[u] && u !== activeStored && !map[u] && u !== '27240304501') {
             localStorage.removeItem(`MDM_SCHOOL_DATA_${u}`);
             localStorage.removeItem(`MDM_SCHOOL_BACKUP_${u}`);
             localStorage.removeItem(this.AUTH_STORAGE_PREFIX + u);
             localStorage.removeItem(this.LICENSE_STORAGE_PREFIX + u);
-            localStorage.removeItem(`MDM_SAFE_BACKUP_${u}`);
-            localStorage.removeItem(`MDM_PERMANENT_BACKUP_${u}`);
+            // CRITICAL: NEVER delete MDM_SAFE_BACKUP_${u} so emergency disaster recovery is always preserved!
             continue;
+          }
+          if (tombstones[u] && (u === activeStored || map[u])) {
+            // Self-heal: It's active or registered, lift tombstone!
+            delete tombstones[u];
+            this.removeLocalTombstone(u);
           }
           if (!map[u]) {
             map[u] = { udise: u, schoolName: `शाळा (${u})` };
@@ -2220,15 +2317,6 @@ const app = {
     try {
       localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(schoolsArray));
     } catch(e) {}
-
-    // Auto-sync any non-tombstoned local schools up to cloud registry if not yet pushed
-    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
-      schoolsArray.forEach(s => {
-        if (!tombstones[s.udise]) {
-          cloudSync.pushSchoolToRegistry(s.udise, s);
-        }
-      });
-    }
 
     return schoolsArray;
   },
@@ -2875,7 +2963,7 @@ const app = {
       }
       const cleanUdise = String(udise).trim();
       if (this.isSchoolTombstoned(cleanUdise)) {
-        return;
+        this.removeLocalTombstone(cleanUdise);
       }
       const schoolStorageKey = this.getSchoolStorageKey(cleanUdise);
       const schoolBackupKey = this.getSchoolBackupKey(cleanUdise);
@@ -3169,9 +3257,9 @@ const app = {
         ? udiseVal
         : (this.getActiveUdise() || '27240304501');
 
-      // Never write data for a tombstoned school
+      // Self-heal: If school is currently being saved, remove tombstone
       if (this.isSchoolTombstoned(currentUdise)) {
-        return;
+        this.removeLocalTombstone(currentUdise);
       }
 
       const schoolStorageKey = this.getSchoolStorageKey(currentUdise);
@@ -3263,9 +3351,7 @@ const app = {
 
       // 6. Trigger Cloud Auto-Sync in background if enabled (debounced or immediate, never if skipCloud is true)
       if (!skipCloud && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl() && cloudSync.config && cloudSync.config.autoSync) {
-        if (!cloudSync.isSyncing) {
-          cloudSync.scheduleDebouncedPush(immediateCloud, currentUdise);
-        }
+        cloudSync.scheduleDebouncedPush(immediateCloud, currentUdise);
       }
     } catch (e) {
       console.error("Failed to save state:", e);

@@ -233,6 +233,17 @@ const cloudSync = {
         this.pullFromCloud(true, activeU);
       }
     });
+
+    // Multi-device periodic sync: every 60s, automatically pull fresh changes from other devices if tab is visible
+    if (this.backgroundSyncInterval) clearInterval(this.backgroundSyncInterval);
+    this.backgroundSyncInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (this.isSyncing) return;
+      const activeU = this.getSchoolUdise();
+      if (this.config.enabled && this.getEffectiveFirebaseUrl() && activeU && activeU.length === 11) {
+        this.pullFromCloud(true, activeU);
+      }
+    }, 60000);
   },
 
   /**
@@ -1277,9 +1288,11 @@ const cloudSync = {
         const data = await res.json();
         if (data && typeof data === 'object') {
           const filtered = {};
+          const activeU = (typeof app !== 'undefined' && typeof app.getActiveUdise === 'function') ? app.getActiveUdise() : '';
           Object.keys(data).forEach(k => {
             const u = k.replace(/^mdm_/, '').trim();
-            if (!tombstones[u]) {
+            // Never filter out active school or default school
+            if (!tombstones[u] || u === '27240304501' || u === activeU) {
               filtered[k] = data[k];
             }
           });
@@ -1302,24 +1315,26 @@ const cloudSync = {
     const cleanUdise = String(udise).trim();
     if (cleanUdise.length !== 11) return { exists: false };
 
-    // 0. Check tombstone first
+    // 0. Check central registry first (authoritative for live active schools)
+    try {
+      const regRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_registry/mdm_${cleanUdise}.json?t=${Date.now()}`, {}, 6000);
+      if (regRes.ok) {
+        const regData = await regRes.json();
+        if (regData && (regData.udise || regData.schoolName)) {
+          // School is alive in registry! If there was a stale tombstone, clear it!
+          this.clearTombstone(cleanUdise);
+          return { exists: true, schoolName: regData.schoolName || `शाळा (${cleanUdise})` };
+        }
+      }
+    } catch(e) {}
+
+    // 1. Check tombstone only if not active in registry
     try {
       const tombRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_tombstones/mdm_${cleanUdise}.json?t=${Date.now()}`, {}, 4000);
       if (tombRes.ok) {
         const tomb = await tombRes.json();
         if (tomb && tomb.deletedAt) {
           return { exists: false, isTombstoned: true };
-        }
-      }
-    } catch(e) {}
-
-    // 1. Check central registry first (fastest)
-    try {
-      const regRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_registry/mdm_${cleanUdise}.json?t=${Date.now()}`, {}, 6000);
-      if (regRes.ok) {
-        const regData = await regRes.json();
-        if (regData && (regData.udise || regData.schoolName)) {
-          return { exists: true, schoolName: regData.schoolName || `शाळा (${cleanUdise})` };
         }
       }
     } catch(e) {}
