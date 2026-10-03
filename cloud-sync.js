@@ -198,13 +198,40 @@ const cloudSync = {
       this.config.lastError = '';
       this.updateUIStatus();
       if (this.config.enabled && this.getEffectiveFirebaseUrl() && this.config.autoSync && this.getSchoolUdise()) {
-        this.scheduleDebouncedPush();
+        this.scheduleDebouncedPush(true);
       }
     });
 
     window.addEventListener('offline', () => {
       this.config.status = 'offline';
       this.updateUIStatus();
+    });
+
+    // Mobile backgrounding & screen lock protection
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          this.flushPendingPush();
+        } else if (document.visibilityState === 'visible') {
+          // User returned to tab / unlocked phone: pull fresh changes from other devices
+          const activeU = this.getSchoolUdise();
+          if (this.config.enabled && this.getEffectiveFirebaseUrl() && activeU && activeU.length === 11) {
+            this.pullFromCloud(true, activeU);
+          }
+        }
+      });
+    }
+
+    window.addEventListener('pagehide', () => {
+      this.flushPendingPush();
+    });
+
+    // Multi-device focus pull: auto sync when user clicks into the PM Poshan window/tab
+    window.addEventListener('focus', () => {
+      const activeU = this.getSchoolUdise();
+      if (this.config.enabled && this.getEffectiveFirebaseUrl() && activeU && activeU.length === 11) {
+        this.pullFromCloud(true, activeU);
+      }
     });
   },
 
@@ -227,8 +254,8 @@ const cloudSync = {
     return (/^\d{11}$/.test(udise)) ? udise : '';
   },
 
-  getCloudKey() {
-    const udise = this.getSchoolUdise().replace(/[^a-zA-Z0-9_-]/g, '_');
+  getCloudKey(targetUdise = null) {
+    const udise = (targetUdise || this.getSchoolUdise() || '').replace(/[^a-zA-Z0-9_-]/g, '_');
     return `mdm_${udise}`;
   },
 
@@ -242,19 +269,44 @@ const cloudSync = {
     }
   },
 
-  scheduleDebouncedPush() {
+  scheduleDebouncedPush(immediate = false, targetUdise = null) {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
+
+    const udiseToPush = targetUdise || this.getSchoolUdise();
+    this.pendingPushUdise = udiseToPush;
 
     if (this.isSyncing) {
       this.hasPendingPush = true;
       return;
     }
 
-    this.debounceTimer = setTimeout(() => {
-      if (this.config.enabled && this.getEffectiveFirebaseUrl() && this.config.autoSync) {
-        this.pushToCloud(true);
+    if (immediate) {
+      this.debounceTimer = null;
+      if (this.config.enabled && this.getEffectiveFirebaseUrl() && this.config.autoSync && udiseToPush) {
+        this.pushToCloud(true, udiseToPush);
       }
-    }, 2500);
+      return;
+    }
+
+    // Responsive 400ms debounce instead of old 2500ms lag
+    this.debounceTimer = setTimeout(() => {
+      if (this.config.enabled && this.getEffectiveFirebaseUrl() && this.config.autoSync && udiseToPush) {
+        this.pushToCloud(true, udiseToPush);
+      }
+    }, 400);
+  },
+
+  flushPendingPush() {
+    if (this.debounceTimer || this.hasPendingPush) {
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+        this.debounceTimer = null;
+      }
+      const activeU = this.pendingPushUdise || this.getSchoolUdise();
+      if (this.config.enabled && this.getEffectiveFirebaseUrl() && this.config.autoSync && activeU) {
+        this.pushToCloud(true, activeU);
+      }
+    }
   },
 
   /**
@@ -326,7 +378,7 @@ const cloudSync = {
    * Smart Merge for School Settings
    * Preserves non-empty strings and valid numbers
    */
-  mergeSettings(localSett, remoteSett) {
+  mergeSettings(localSett, remoteSett, targetUdise = null) {
     const res = Object.assign({}, remoteSett || {}, localSett || {});
     const r = remoteSett || {};
     const l = localSett || {};
@@ -335,14 +387,30 @@ const cloudSync = {
         res[k] = r[k];
       }
     });
+    // Critical: If remote has a real, non-placeholder school name, and local is empty/placeholder or has mismatched UDISE, preserve remote name
+    if (r.schoolName && !r.schoolName.includes('(UDISE:') && (
+        !l.schoolName || 
+        l.schoolName.includes('(UDISE:') || 
+        (l.udise && r.udise && l.udise !== r.udise)
+    )) {
+      res.schoolName = r.schoolName;
+    }
+    // Critical: Guarantee UDISE matches targetUdise / current school
+    if (targetUdise) {
+      res.udise = String(targetUdise).trim();
+    } else if (r.udise && /^\d{11}$/.test(r.udise)) {
+      res.udise = String(r.udise).trim();
+    } else if (l.udise && /^\d{11}$/.test(l.udise)) {
+      res.udise = String(l.udise).trim();
+    }
     return res;
   },
 
   /**
    * Push local data to Google Firebase Realtime Database
    */
-  async pushToCloud(isSilent = false) {
-    const currentUdise = this.getSchoolUdise();
+  async pushToCloud(isSilent = false, targetUdise = null) {
+    const currentUdise = targetUdise || this.getSchoolUdise();
     if (!currentUdise || currentUdise.length !== 11) {
       this.isSyncing = false;
       return false;
@@ -378,7 +446,7 @@ const cloudSync = {
     this.updateUIStatus();
 
     this.config.schoolCode = currentUdise;
-    const endpoint = `${cleanBaseUrl}/mdm_schools/${this.getCloudKey()}.json`;
+    const endpoint = `${cleanBaseUrl}/mdm_schools/${this.getCloudKey(currentUdise)}.json`;
 
     try {
       // 1. Safety Check: Fetch remote state to prevent wiping populated database with blank device
@@ -392,8 +460,35 @@ const cloudSync = {
         console.warn("Pre-check remote bucket notice:", checkErr);
       }
 
-      const localRecCount = Object.keys((typeof app !== 'undefined' && app.data && app.data.records) || {}).length +
-                            Object.keys((typeof app !== 'undefined' && app.data && app.data.recordsUpper) || {}).length;
+      // Resolve data to push: prioritize currentUdise specific storage if targetUdise differs from active memory
+      let dataToPush = null;
+      if (typeof app !== 'undefined') {
+        const activeU = (typeof app.getActiveUdise === 'function') ? app.getActiveUdise() : '';
+        if (activeU === currentUdise && app.data && app.data.settings && app.data.settings.udise === currentUdise) {
+          dataToPush = app.data;
+        } else {
+          const storageKey = app.getSchoolStorageKey ? app.getSchoolStorageKey(currentUdise) : `MDM_SCHOOL_DATA_${currentUdise}`;
+          const localRaw = (typeof localStorage !== 'undefined') ? localStorage.getItem(storageKey) : null;
+          if (localRaw) {
+            try { dataToPush = JSON.parse(localRaw); } catch(e) {}
+          }
+          if (!dataToPush && app.data && app.data.settings && app.data.settings.udise === currentUdise) {
+            dataToPush = app.data;
+          }
+        }
+      }
+      if (!dataToPush && typeof app !== 'undefined' && app.data && app.data.settings && app.data.settings.udise === currentUdise) {
+        dataToPush = app.data;
+      }
+      if (!dataToPush && typeof app !== 'undefined' && typeof app.createDefaultSchoolData === 'function') {
+        dataToPush = app.createDefaultSchoolData(currentUdise);
+      }
+      if (!dataToPush) dataToPush = {};
+      if (!dataToPush.settings) dataToPush.settings = {};
+      dataToPush.settings.udise = currentUdise;
+
+      const localRecCount = Object.keys(dataToPush.records || {}).length +
+                            Object.keys(dataToPush.recordsUpper || {}).length;
       const remoteRecCount = (existingRemote && existingRemote.appData)
         ? (Object.keys(existingRemote.appData.records || {}).length + Object.keys(existingRemote.appData.recordsUpper || {}).length) : 0;
 
@@ -408,8 +503,6 @@ const cloudSync = {
       }
 
       // GUARD 2: Smart Conflict-Free Merge before push so any missing remote dates/receipts are combined
-      let dataToPush = (typeof app !== 'undefined' && app.data) ? app.data : {};
-
       if (existingRemote && existingRemote.appData && remoteRecCount > 0) {
         const remoteData = existingRemote.appData;
         const mergedRecords = this.mergeDayRecordsMap(dataToPush.records, remoteData.records);
@@ -418,7 +511,7 @@ const cloudSync = {
         const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, dataToPush.tasteRecordsUpper || {});
         const mergedStock = this.mergeStockBalances(dataToPush.initialStock, remoteData.initialStock);
         const mergedStockUpper = this.mergeStockBalances(dataToPush.initialStockUpper, remoteData.initialStockUpper);
-        const mergedSettings = this.mergeSettings(dataToPush.settings, remoteData.settings);
+        const mergedSettings = this.mergeSettings(dataToPush.settings, remoteData.settings, currentUdise);
         
         // Stock receipts union (Primary)
         const mergedReceipts = [...(remoteData.stockReceipts || [])];
@@ -475,7 +568,7 @@ const cloudSync = {
           stockTransfers: mergedTransfers
         });
 
-        if (typeof app !== 'undefined' && app.data) {
+        if (typeof app !== 'undefined' && app.data && (typeof app.getActiveUdise === 'function' && app.getActiveUdise() === currentUdise)) {
           app.data.records = mergedRecords;
           app.data.recordsUpper = mergedRecordsUpper;
           app.data.tasteRecords = mergedTaste;
@@ -489,11 +582,16 @@ const cloudSync = {
           app.data.damagedStockUpper = mergedDamagedUpper;
           app.data.stockTransfers = mergedTransfers;
           if (typeof app.saveState === 'function') app.saveState(true);
+        } else if (typeof localStorage !== 'undefined') {
+          const sKey = (typeof app !== 'undefined' && app.getSchoolStorageKey) ? app.getSchoolStorageKey(currentUdise) : `MDM_SCHOOL_DATA_${currentUdise}`;
+          const bKey = (typeof app !== 'undefined' && app.getSchoolBackupKey) ? app.getSchoolBackupKey(currentUdise) : `MDM_SCHOOL_BACKUP_${currentUdise}`;
+          localStorage.setItem(sKey, JSON.stringify(dataToPush));
+          localStorage.setItem(bKey, JSON.stringify(dataToPush));
         }
 
         // Auto snapshot safety backup
         try {
-          const backupEndpoint = `${cleanBaseUrl}/mdm_backups/${this.getCloudKey()}_safety_backup.json`;
+          const backupEndpoint = `${cleanBaseUrl}/mdm_backups/${this.getCloudKey(currentUdise)}_safety_backup.json`;
           this.fetchWithTimeout(backupEndpoint, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -513,7 +611,8 @@ const cloudSync = {
       const res = await this.fetchWithTimeout(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        keepalive: true
       }, 15000);
 
       if (res.ok) {
@@ -558,6 +657,8 @@ const cloudSync = {
         if (!isSilent && typeof app !== 'undefined') {
           app.showToast(`☁️ डेटा यशस्वीरित्या Google Firebase वर सेव्ह झाला (${recCount} नोंदी)!`, 'success');
           alert(`☁️ कॉम्प्युटरवरील डेटा (${recCount} दैनंदिन नोंदी व साठा) Google Firebase वर यशस्वीरित्या सेव्ह झाला!\n\nशाळा UDISE: ${currentUdise}\n\nआता तुम्ही मोबाईलवर ॲप उघडून याच UDISE सह "📥 क्लाऊडवरून आणा" बटण दाबू शकता.`);
+        } else if (typeof app !== 'undefined' && typeof app.showToast === 'function') {
+          app.showToast(`☁️ क्लाऊडवर सेव्ह झाले (${recCount} नोंदी)`, 'success');
         }
         return true;
       } else {
@@ -580,7 +681,9 @@ const cloudSync = {
       this.isSyncing = false;
       if (this.hasPendingPush) {
         this.hasPendingPush = false;
-        this.scheduleDebouncedPush();
+        const nextU = this.pendingPushUdise || null;
+        this.pendingPushUdise = null;
+        this.scheduleDebouncedPush(true, nextU);
       }
     }
   },
@@ -588,8 +691,8 @@ const cloudSync = {
   /**
    * Pull data from Google Firebase Realtime Database
    */
-  async pullFromCloud(isSilent = false) {
-    const currentUdise = this.getSchoolUdise();
+  async pullFromCloud(isSilent = false, targetUdise = null) {
+    const currentUdise = targetUdise || this.getSchoolUdise();
     if (!currentUdise || currentUdise.length !== 11) {
       this.isSyncing = false;
       return false;
@@ -618,30 +721,51 @@ const cloudSync = {
     this.updateUIStatus();
 
     this.config.schoolCode = currentUdise;
-    const endpoint = `${cleanBaseUrl}/mdm_schools/${this.getCloudKey()}.json`;
+    const endpoint = `${cleanBaseUrl}/mdm_schools/${this.getCloudKey(currentUdise)}.json`;
 
     try {
       const res = await this.fetchWithTimeout(endpoint, {}, 15000);
       if (res.ok) {
         const json = await res.json();
-        if (json && json.appData && typeof json.appData === 'object') {
-          const remoteData = json.appData;
+        const remoteData = (json && json.appData && typeof json.appData === 'object') 
+          ? json.appData 
+          : ((json && (json.records || json.settings)) ? json : null);
+        if (remoteData) {
           const remoteRecords = remoteData.records || {};
           const recordCount = Object.keys(remoteRecords).length;
 
-          if (typeof app !== 'undefined' && app.data) {
+          if (typeof app !== 'undefined') {
+            const isActiveSchool = (typeof app.getActiveUdise === 'function' && app.getActiveUdise() === currentUdise);
+            
+            // Read target school base data (from memory ONLY if it strictly belongs to currentUdise, else from dedicated storage)
+            let baseData = null;
+            if (isActiveSchool && app.data && app.data.settings && app.data.settings.udise === currentUdise) {
+              baseData = app.data;
+            } else {
+              const storageKey = app.getSchoolStorageKey ? app.getSchoolStorageKey(currentUdise) : `MDM_SCHOOL_DATA_${currentUdise}`;
+              const localRaw = (typeof localStorage !== 'undefined') ? localStorage.getItem(storageKey) : null;
+              if (localRaw) {
+                try { baseData = JSON.parse(localRaw); } catch(e) {}
+              }
+              if (!baseData && typeof app.createDefaultSchoolData === 'function') {
+                baseData = app.createDefaultSchoolData(currentUdise);
+              } else if (!baseData) {
+                baseData = { records: {}, recordsUpper: {}, settings: {}, initialStock: {}, ingredients: {}, menus: [] };
+              }
+            }
+
             // Smart Conflict-Free Merge: Local + Remote (Protects local populated data from being wiped)
-            const mergedRecords = this.mergeDayRecordsMap(app.data.records, remoteRecords);
-            const mergedRecordsUpper = this.mergeDayRecordsMap(app.data.recordsUpper, remoteData.recordsUpper || {});
-            const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, app.data.tasteRecords || {});
-            const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, app.data.tasteRecordsUpper || {});
-            const mergedStock = this.mergeStockBalances(app.data.initialStock, remoteData.initialStock);
-            const mergedStockUpper = this.mergeStockBalances(app.data.initialStockUpper, remoteData.initialStockUpper);
-            const mergedSettings = this.mergeSettings(app.data.settings, remoteData.settings);
+            const mergedRecords = this.mergeDayRecordsMap(baseData.records, remoteRecords);
+            const mergedRecordsUpper = this.mergeDayRecordsMap(baseData.recordsUpper, remoteData.recordsUpper || {});
+            const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, baseData.tasteRecords || {});
+            const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, baseData.tasteRecordsUpper || {});
+            const mergedStock = this.mergeStockBalances(baseData.initialStock, remoteData.initialStock);
+            const mergedStockUpper = this.mergeStockBalances(baseData.initialStockUpper, remoteData.initialStockUpper);
+            const mergedSettings = this.mergeSettings(baseData.settings, remoteData.settings, currentUdise);
 
             // Stock receipts union (Primary)
             const mergedReceipts = [...(remoteData.stockReceipts || [])];
-            (app.data.stockReceipts || []).forEach(lr => {
+            (baseData.stockReceipts || []).forEach(lr => {
               if (!mergedReceipts.some(mr => mr.date === lr.date && mr.billNo === lr.billNo && JSON.stringify(mr.items) === JSON.stringify(lr.items))) {
                 mergedReceipts.push(lr);
               }
@@ -649,7 +773,7 @@ const cloudSync = {
 
             // Stock receipts union (Upper)
             const mergedReceiptsUpper = [...(remoteData.stockReceiptsUpper || [])];
-            (app.data.stockReceiptsUpper || []).forEach(lr => {
+            (baseData.stockReceiptsUpper || []).forEach(lr => {
               if (!mergedReceiptsUpper.some(mr => mr.date === lr.date && mr.billNo === lr.billNo && JSON.stringify(mr.items) === JSON.stringify(lr.items))) {
                 mergedReceiptsUpper.push(lr);
               }
@@ -657,7 +781,7 @@ const cloudSync = {
 
             // Damaged stock union (Primary)
             const mergedDamaged = [...(remoteData.damagedStock || [])];
-            (app.data.damagedStock || []).forEach(ld => {
+            (baseData.damagedStock || []).forEach(ld => {
               if (!mergedDamaged.some(md => md.date === ld.date && md.reason === ld.reason && JSON.stringify(md.items) === JSON.stringify(ld.items))) {
                 mergedDamaged.push(ld);
               }
@@ -665,7 +789,7 @@ const cloudSync = {
 
             // Damaged stock union (Upper)
             const mergedDamagedUpper = [...(remoteData.damagedStockUpper || [])];
-            (app.data.damagedStockUpper || []).forEach(ld => {
+            (baseData.damagedStockUpper || []).forEach(ld => {
               if (!mergedDamagedUpper.some(md => md.date === ld.date && md.reason === ld.reason && JSON.stringify(md.items) === JSON.stringify(ld.items))) {
                 mergedDamagedUpper.push(ld);
               }
@@ -673,47 +797,45 @@ const cloudSync = {
 
             // Stock transfers union (Inter-Section Loans)
             const mergedTransfers = [...(remoteData.stockTransfers || [])];
-            (app.data.stockTransfers || []).forEach(lt => {
+            (baseData.stockTransfers || []).forEach(lt => {
               if (!mergedTransfers.some(mt => mt.id === lt.id || (mt.date === lt.date && mt.direction === lt.direction && JSON.stringify(mt.items) === JSON.stringify(lt.items)))) {
                 mergedTransfers.push(lt);
               }
             });
 
-            app.data.records = mergedRecords;
-            app.data.recordsUpper = mergedRecordsUpper;
-            app.data.tasteRecords = mergedTaste;
-            app.data.tasteRecordsUpper = mergedTasteUpper;
-            app.data.initialStock = mergedStock;
-            app.data.initialStockUpper = mergedStockUpper;
-            app.data.settings = mergedSettings;
-            app.data.stockReceipts = mergedReceipts;
-            app.data.stockReceiptsUpper = mergedReceiptsUpper;
-            app.data.damagedStock = mergedDamaged;
-            app.data.damagedStockUpper = mergedDamagedUpper;
-            app.data.stockTransfers = mergedTransfers;
+            const mergedTarget = Object.assign({}, baseData, {
+              records: mergedRecords,
+              recordsUpper: mergedRecordsUpper,
+              tasteRecords: mergedTaste,
+              tasteRecordsUpper: mergedTasteUpper,
+              initialStock: mergedStock,
+              initialStockUpper: mergedStockUpper,
+              settings: mergedSettings,
+              stockReceipts: mergedReceipts,
+              stockReceiptsUpper: mergedReceiptsUpper,
+              damagedStock: mergedDamaged,
+              damagedStockUpper: mergedDamagedUpper,
+              stockTransfers: mergedTransfers,
+              customDemands: Object.assign({}, baseData.customDemands || {}, remoteData.customDemands || {}),
+              customDemandsUpper: Object.assign({}, baseData.customDemandsUpper || {}, remoteData.customDemandsUpper || {}),
+              formBRemarks: Object.assign({}, baseData.formBRemarks || {}, remoteData.formBRemarks || {})
+            });
 
-            if (remoteData.customDemands) {
-              app.data.customDemands = Object.assign({}, app.data.customDemands, remoteData.customDemands);
+            // Save to localStorage for this specific school
+            if (typeof localStorage !== 'undefined') {
+              const storageKey = app.getSchoolStorageKey ? app.getSchoolStorageKey(currentUdise) : `MDM_SCHOOL_DATA_${currentUdise}`;
+              const backupKey = app.getSchoolBackupKey ? app.getSchoolBackupKey(currentUdise) : `MDM_SCHOOL_BACKUP_${currentUdise}`;
+              localStorage.setItem(storageKey, JSON.stringify(mergedTarget));
+              localStorage.setItem(backupKey, JSON.stringify(mergedTarget));
+              if (recordCount > 0) {
+                localStorage.setItem('MDM_SAFE_BACKUP_' + currentUdise, JSON.stringify(mergedTarget));
+              }
             }
-            if (remoteData.customDemandsUpper) {
-              app.data.customDemandsUpper = Object.assign({}, app.data.customDemandsUpper || {}, remoteData.customDemandsUpper);
-            }
-            if (remoteData.formBRemarks) {
-              app.data.formBRemarks = Object.assign({}, app.data.formBRemarks, remoteData.formBRemarks);
-            }
 
-            // Save state skipping recursive cloud push
-            if (typeof app.saveState === 'function') app.saveState(true);
-            if (typeof app.updateHeaderMeta === 'function') app.updateHeaderMeta();
-
-            // Prevent UI blinking: only refresh views if user is NOT actively typing
-            const isUserInteracting = typeof document !== 'undefined' && document.activeElement && 
-              (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT' || document.activeElement.tagName === 'TEXTAREA');
-
-            if (!isSilent) {
+            if (isActiveSchool) {
+              app.data = mergedTarget;
+              if (typeof app.updateHeaderMeta === 'function') app.updateHeaderMeta();
               if (typeof app.refreshAllViews === 'function') app.refreshAllViews();
-              if (typeof app.renderCurrentTab === 'function') app.renderCurrentTab();
-            } else if (!isUserInteracting) {
               if (typeof app.renderCurrentTab === 'function') app.renderCurrentTab();
             }
           }

@@ -535,6 +535,7 @@ const app = {
   isSchoolTombstoned(udise) {
     if (!udise) return false;
     const clean = String(udise).trim();
+    if (clean === '27240304501') return false; // Default reference school is never tombstoned
     const tombstones = this.getLocalTombstones();
     return !!tombstones[clean];
   },
@@ -1549,9 +1550,12 @@ const app = {
           if (schools && schools.length > 0) {
             curUdise = schools[0].udise;
             localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, curUdise);
-            this.loadState(curUdise);
-            this.applySchoolLevelMode(this.data.settings.schoolLevel);
           }
+        }
+        if (curUdise && curUdise.length === 11) {
+          this.loadState(curUdise);
+          this.applySchoolLevelMode(this.data.settings.schoolLevel);
+          this.updateHeaderMeta();
         }
 
         const portal = document.getElementById('schoolLoginPortal');
@@ -1650,6 +1654,18 @@ const app = {
     if (alertBox) alertBox.classList.add('d-none');
     localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, udise);
 
+    this.showToast(`🔄 शाळा (${udise}) चा डेटा क्लाऊडवरून लोड होत आहे...`, 'info');
+
+    // 1. Seamlessly fetch latest records from Google Firebase BEFORE dashboard opens
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+      if (cloudSync.onSchoolSwitched) cloudSync.onSchoolSwitched(udise);
+      try {
+        await cloudSync.pullFromCloud(true, udise);
+      } catch (pullErr) {
+        console.warn("Auto-pull on login notice:", pullErr);
+      }
+    }
+
     this.loadState(udise);
     if (auth.schoolLevel) {
       this.data.settings.schoolLevel = auth.schoolLevel;
@@ -1660,16 +1676,6 @@ const app = {
     this.checkAccessControl();
     this.refreshAllViews();
     this.renderCurrentTab();
-
-    if (typeof cloudSync !== 'undefined') {
-      if (cloudSync.onSchoolSwitched) cloudSync.onSchoolSwitched(udise);
-      // Auto-pull latest records from Firebase seamlessly upon login
-      if (cloudSync.getEffectiveFirebaseUrl()) {
-        setTimeout(() => {
-          cloudSync.pullFromCloud(true);
-        }, 300);
-      }
-    }
     return true;
   },
 
@@ -2326,8 +2332,15 @@ const app = {
       return;
     }
 
-    this.showToast(`⏳ शाळा (${udise}) चा डेटा संकलित करत आहे...`, 'info');
+    this.showToast(`⏳ शाळा (${udise}) चा डेटा क्लाऊडवरून संकलित करत आहे...`, 'info');
     let sData = null;
+
+    // 0. Auto-pull latest records from Google Firebase first
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+      try {
+        await cloudSync.pullFromCloud(true, udise);
+      } catch(e) {}
+    }
 
     // 1. Try local storage
     const localRaw = localStorage.getItem(this.getSchoolStorageKey(udise));
@@ -2543,23 +2556,47 @@ const app = {
     });
   },
 
-  adminOpenSchool(udise) {
+  async adminOpenSchool(udise) {
     if (!/^\d{11}$/.test(udise)) return;
     sessionStorage.setItem('MDM_ADMIN_LOGGED_IN', 'true');
     this.isAdminLoggedIn = true;
     localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, udise);
+
+    this.showToast(`🔄 शाळा (${udise}) चा डेटा थेट उघडत आहे...`, 'info');
+
+    // 1. Load clean local state for this school FIRST so memory is immediately switched
     this.loadState(udise);
+    if (!this.data.settings) this.data.settings = {};
+    this.data.settings.udise = udise;
+
     const auth = this.getSchoolAuth(udise);
     if (auth && auth.schoolLevel) {
       this.data.settings.schoolLevel = auth.schoolLevel;
     }
     this.applySchoolLevelMode(this.data.settings.schoolLevel);
+
+    // 2. Switch cloud sync target to the new school and pull latest updates from Firebase
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
+      if (cloudSync.onSchoolSwitched) cloudSync.onSchoolSwitched(udise);
+      try {
+        await cloudSync.pullFromCloud(true, udise);
+      } catch (e) {
+        console.warn("Cloud pull on adminOpenSchool notice:", e);
+      }
+    }
+
+    // 3. Close Admin modal & refresh UI immediately
     this.closeMasterAdminModal();
     this.updateAdminVisibility();
-    this.showToast(`📂 शाळा '${this.data.settings.schoolName}' (UDISE: ${udise}) चे पोषण आहार पोर्टल उघडले!`, 'success');
+    this.updateHeaderMeta();
+    if (typeof this.renderSettingsView === 'function') {
+      this.renderSettingsView();
+    }
     this.checkAccessControl();
     this.refreshAllViews();
     this.renderCurrentTab();
+
+    this.showToast(`📂 शाळा '${this.data.settings.schoolName}' (UDISE: ${udise}) चा संपूर्ण डेटा थेट उघडला गेला!`, 'success');
   },
 
   adminToggleLicense(udise) {
@@ -2860,52 +2897,52 @@ const app = {
         }
       }
 
+      // Look up registered school info to seed clean defaults
+      const regList = (typeof this.getRegisteredSchools === 'function') ? this.getRegisteredSchools() : [];
+      const regSchool = regList.find(s => s && s.udise === cleanUdise);
+      const regSchoolName = regSchool ? regSchool.schoolName : '';
+
+      const defaultData = this.createDefaultSchoolData(cleanUdise, regSchoolName);
+      if (regSchool) {
+        if (regSchool.centre) defaultData.settings.centre = regSchool.centre;
+        if (regSchool.taluka) defaultData.settings.taluka = regSchool.taluka;
+        if (regSchool.district) defaultData.settings.district = regSchool.district;
+        if (regSchool.schoolLevel) defaultData.settings.schoolLevel = regSchool.schoolLevel;
+        if (regSchool.pat) defaultData.settings.pat = regSchool.pat;
+        if (regSchool.patPrimary) defaultData.settings.patPrimary = regSchool.patPrimary;
+        if (regSchool.patUpper) defaultData.settings.patUpper = regSchool.patUpper;
+      }
+
       if (saved) {
         const parsed = JSON.parse(saved);
-        this.data.settings = Object.assign({}, this.data.settings, parsed.settings);
-        this.data.initialStock = Object.assign({}, this.data.initialStock, parsed.initialStock);
-        if (parsed.initialStockUpper) {
-          this.data.initialStockUpper = Object.assign({}, this.data.initialStockUpper, parsed.initialStockUpper);
-        }
-        if (parsed.menus && Array.isArray(parsed.menus) && parsed.menus.length > 0) {
-          this.data.menus = parsed.menus;
-        }
-        if (parsed.ingredients) {
-          this.data.ingredients = Object.assign({}, this.data.ingredients, parsed.ingredients);
-        }
-        this.data.stockReceipts = parsed.stockReceipts || [];
-        this.data.stockReceiptsUpper = parsed.stockReceiptsUpper || [];
-        this.data.damagedStock = parsed.damagedStock || [];
-        this.data.damagedStockUpper = parsed.damagedStockUpper || [];
-        this.data.stockTransfers = parsed.stockTransfers || [];
-        this.data.records = parsed.records || {};
-        this.data.recordsUpper = parsed.recordsUpper || {};
-        this.data.tasteRecords = parsed.tasteRecords || {};
-        this.data.tasteRecordsUpper = parsed.tasteRecordsUpper || {};
-        this.data.customDemands = parsed.customDemands || {};
-        this.data.customDemandsUpper = parsed.customDemandsUpper || {};
-        this.data.initialSampleLoaded = (parsed.initialSampleLoaded === true);
+        this.data = {
+          settings: Object.assign({}, defaultData.settings, parsed.settings || {}),
+          initialStock: Object.assign({}, defaultData.initialStock, parsed.initialStock || {}),
+          initialStockUpper: Object.assign({}, defaultData.initialStockUpper || {}, parsed.initialStockUpper || {}),
+          menus: (parsed.menus && Array.isArray(parsed.menus) && parsed.menus.length > 0) ? parsed.menus : defaultData.menus,
+          ingredients: (parsed.ingredients && typeof parsed.ingredients === 'object') ? Object.assign({}, defaultData.ingredients, parsed.ingredients) : defaultData.ingredients,
+          stockReceipts: parsed.stockReceipts || [],
+          stockReceiptsUpper: parsed.stockReceiptsUpper || [],
+          damagedStock: parsed.damagedStock || [],
+          damagedStockUpper: parsed.damagedStockUpper || [],
+          stockTransfers: parsed.stockTransfers || [],
+          records: parsed.records || {},
+          recordsUpper: parsed.recordsUpper || {},
+          tasteRecords: parsed.tasteRecords || {},
+          tasteRecordsUpper: parsed.tasteRecordsUpper || {},
+          customDemands: parsed.customDemands || {},
+          customDemandsUpper: parsed.customDemandsUpper || {},
+          initialSampleLoaded: (parsed.initialSampleLoaded === true)
+        };
       } else {
-        // Brand new school with no local data yet!
-        const defaultData = this.createDefaultSchoolData(udise);
-        this.data.settings = defaultData.settings;
-        this.data.ingredients = defaultData.ingredients;
-        this.data.menus = defaultData.menus;
-        this.data.initialStock = defaultData.initialStock;
-        this.data.initialStockUpper = defaultData.initialStockUpper || {};
-        this.data.stockReceipts = defaultData.stockReceipts;
-        this.data.stockReceiptsUpper = defaultData.stockReceiptsUpper || [];
-        this.data.damagedStock = defaultData.damagedStock;
-        this.data.damagedStockUpper = defaultData.damagedStockUpper || [];
-        this.data.stockTransfers = defaultData.stockTransfers || [];
-        this.data.records = defaultData.records;
-        this.data.recordsUpper = defaultData.recordsUpper || {};
-        this.data.tasteRecords = defaultData.tasteRecords;
-        this.data.tasteRecordsUpper = defaultData.tasteRecordsUpper || {};
-        this.data.customDemands = defaultData.customDemands;
-        this.data.customDemandsUpper = defaultData.customDemandsUpper || {};
-        this.data.initialSampleLoaded = defaultData.initialSampleLoaded;
+        this.data = defaultData;
       }
+
+      // Sanity Check: If parsed schoolName was empty, a placeholder, or contaminated with another school's name
+      if (regSchoolName && (!this.data.settings.schoolName || this.data.settings.schoolName.includes('(UDISE:') || (this.data.settings.schoolName.includes('मुगाव') && cleanUdise !== '27211210902'))) {
+        this.data.settings.schoolName = regSchoolName;
+      }
+      this.data.settings.udise = cleanUdise;
 
       // Safeguard 1: Restore from dedicated Safe Vault (MDM_SAFE_BACKUP_${cleanUdise}) if records are empty
       const rawSafe = localStorage.getItem('MDM_SAFE_BACKUP_' + cleanUdise);
@@ -3125,7 +3162,7 @@ const app = {
   /**
    * Save state to localStorage with multi-school isolation and dedicated safety vault
    */
-  saveState(skipCloud = false) {
+  saveState(skipCloud = false, immediateCloud = false) {
     try {
       const udiseVal = (this.data && this.data.settings && (this.data.settings.udise || this.data.settings.uDise)) ? String(this.data.settings.udise || this.data.settings.uDise).trim() : '';
       const currentUdise = (/^\d{11}$/.test(udiseVal))
@@ -3224,10 +3261,10 @@ const app = {
         }
       }
 
-      // 6. Trigger Cloud Auto-Sync in background if enabled (debounced and never if skipCloud is true)
+      // 6. Trigger Cloud Auto-Sync in background if enabled (debounced or immediate, never if skipCloud is true)
       if (!skipCloud && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl() && cloudSync.config && cloudSync.config.autoSync) {
         if (!cloudSync.isSyncing) {
-          cloudSync.scheduleDebouncedPush();
+          cloudSync.scheduleDebouncedPush(immediateCloud, currentUdise);
         }
       }
     } catch (e) {
@@ -3491,7 +3528,7 @@ const app = {
       dayName: "विशेष मेन्यू"
     });
 
-    this.saveState();
+    this.saveState(false, true);
     this.refreshAllViews();
     const sel = document.getElementById('entryMenu');
     if (sel) sel.value = trimmedName;
@@ -3529,7 +3566,7 @@ const app = {
       menuObj.pulseKey = newPulse.trim();
     }
 
-    this.saveState();
+    this.saveState(false, true);
     this.refreshAllViews();
     menuSelect.value = menuObj.name;
     this.onMenuSelectChange();
@@ -3884,7 +3921,8 @@ const app = {
 
     const udiseBadge = document.getElementById('headerUdiseCode');
     if (udiseBadge) {
-      udiseBadge.textContent = this.data.settings.udise || '27240304501';
+      const activeU = (this.data && this.data.settings && this.data.settings.udise) || (typeof this.getActiveUdise === 'function' ? this.getActiveUdise() : '');
+      udiseBadge.textContent = activeU || '27240304501';
     }
   },
 
@@ -4768,7 +4806,7 @@ const app = {
       }
     }
 
-    this.saveState();
+    this.saveState(false, true);
 
     // Synchronize month pickers to the recorded month
     const yearMonth = dateStr.substring(0, 7);
@@ -4970,7 +5008,7 @@ const app = {
       }
     }
 
-    this.saveState();
+    this.saveState(false, true);
     this.closeDualEntryModal();
     this.showToast(`✅ दि. ${dateStr} ची १-५ (${pChildren} मुले) आणि ६-८ (${uChildren} मुले) दोन्ही नोंदी यशस्वीरित्या जतन झाल्या!`, 'success');
     this.refreshAllViews();
@@ -6071,12 +6109,12 @@ const app = {
     if (isUpper) {
       if (this.data.customDemandsUpper && this.data.customDemandsUpper[yearMonth]) {
         delete this.data.customDemandsUpper[yearMonth];
-        this.saveState();
+        this.saveState(false, true);
       }
     } else {
       if (this.data.customDemands && this.data.customDemands[yearMonth]) {
         delete this.data.customDemands[yearMonth];
-        this.saveState();
+        this.saveState(false, true);
       }
     }
     this.renderFormB();
@@ -6975,7 +7013,7 @@ const app = {
       tasteRemark: remark
     };
 
-    this.saveState();
+    this.saveState(false, true);
     this.closeTasteModal();
 
     const monthKey = dt.substring(0, 7);
@@ -7050,7 +7088,7 @@ const app = {
       addedCount++;
     }
 
-    this.saveState();
+    this.saveState(false, true);
     this.renderTasteRegister(monthKey);
     this.showToast(`🎉 दैनिक नोंद असलेल्या ${addedCount} दिवसांसाठी चव नोंदवही स्वयंचलित भरली (इतर दिवस कोरे ठेवले)!`, 'success');
   },
@@ -7930,7 +7968,7 @@ const app = {
       createdAt: new Date().toISOString()
     });
 
-    this.saveState();
+    this.saveState(false, true);
     this.closeAddDamagedStockModal();
     this.refreshAllViews();
     this.showToast(`✅ ${sec === 'upper' ? 'इ. ६ ते ८' : 'इ. १ ते ५'} खराब धान्य नोंदवले गेले व वापरात आपोआप जोडले गेले!`, 'success');
@@ -7941,7 +7979,7 @@ const app = {
       const targetDamaged = (section === 'upper') ? this.data.damagedStockUpper : this.data.damagedStock;
       if (targetDamaged && targetDamaged[idx]) {
         targetDamaged.splice(idx, 1);
-        this.saveState();
+        this.saveState(false, true);
         this.refreshAllViews();
         this.showToast('खराब धान्याची नोंद हटवण्यात आली.', 'warning');
       }
@@ -8039,7 +8077,7 @@ const app = {
       createdAt: new Date().toISOString()
     });
 
-    this.saveState();
+    this.saveState(false, true);
     this.closeAddStockModal();
     this.showToast(`✅ ${sec === 'upper' ? 'इ. ६ ते ८' : 'इ. १ ते ५'} धान्य प्राप्त नोंद यशस्वीरित्या जतन झाली!`, 'success');
     this.renderStockView();
@@ -8050,7 +8088,7 @@ const app = {
       const targetReceipts = (section === 'upper') ? this.data.stockReceiptsUpper : this.data.stockReceipts;
       if (targetReceipts && targetReceipts[idx]) {
         targetReceipts.splice(idx, 1);
-        this.saveState();
+        this.saveState(false, true);
         this.showToast('पावती नोंद हटवण्यात आली.', 'warning');
         this.renderStockView();
       }
@@ -8129,7 +8167,7 @@ const app = {
       }
     });
 
-    this.saveState();
+    this.saveState(false, true);
     this.closeEditOldStockModal();
     this.refreshAllViews();
     this.showToast(`✅ १ एप्रिल रोजी शिल्लक धान्य साठा (${sec === 'upper' ? 'इ. ६ ते ८' : 'इ. १ ते ५'}) यशस्वीरित्या जतन झाला!`, 'success');
@@ -8264,7 +8302,7 @@ const app = {
       createdAt: new Date().toISOString()
     });
 
-    this.saveState();
+    this.saveState(false, true);
     this.closeStockTransferModal();
     this.refreshAllViews();
     this.showToast('✅ धान्य उचल/उसनवारी यशस्वीरित्या नोंदवली गेली व दोन्ही साठ्यांमध्ये समायोजित झाली!', 'success');
@@ -8274,7 +8312,7 @@ const app = {
     if (confirm('ही धान्य उचल / उसनवारी नोंद हटवायची आहे का? नोंद हटवल्यास दोन्ही वर्गांचा साठा पूर्ववत होईल.')) {
       if (this.data.stockTransfers && this.data.stockTransfers[idx]) {
         this.data.stockTransfers.splice(idx, 1);
-        this.saveState();
+        this.saveState(false, true);
         this.refreshAllViews();
         this.showToast('उचल/उसनवारी नोंद हटवण्यात आली व साठा पूर्ववत झाला.', 'warning');
       }
@@ -8308,7 +8346,7 @@ const app = {
       }
     });
 
-    this.saveState();
+    this.saveState(false, true);
     this.refreshAllViews();
     this.showToast('✅ सेटिंग्जमधून १ एप्रिल रोजी शिल्लक साठा सर्व पानांवर यशस्वीरित्या जतन झाला!', 'success');
   },
@@ -8346,7 +8384,7 @@ const app = {
 
       // Merge imported records
       Object.assign(this.data.records, res.records);
-      this.saveState();
+      this.saveState(false, true);
 
       this.showToast(`🎉 Sheet '${res.sheetName}' मधून ${res.importedCount} दैनंदिन नोंदी यशस्वीरित्या आयात झाल्या!`, 'success');
       
@@ -8407,6 +8445,51 @@ const app = {
     this.showToast(`डेटा बॅकअप फाईल सेव्ह झाली: ${cleanUdise}_${today}.json`, 'success');
   },
 
+  /**
+   * Intelligently extract 11-digit school UDISE from imported JSON or file metadata
+   */
+  extractUdiseFromBackup(parsed, file = null) {
+    if (!parsed || typeof parsed !== 'object') return '';
+    const dataObj = parsed.appData || parsed;
+    const sett = dataObj.settings || parsed.settings || {};
+
+    const candidates = [
+      parsed.schoolUdise,
+      parsed.schoolCode,
+      parsed.udise,
+      sett.udise,
+      sett.uDise,
+      dataObj.schoolUdise,
+      dataObj.schoolCode,
+      dataObj.udise
+    ];
+
+    for (const c of candidates) {
+      if (c && /^\d{11}$/.test(String(c).trim())) {
+        return String(c).trim();
+      }
+    }
+
+    // Check if schoolName contains 11-digit UDISE, e.g. "शाळा (UDISE: 27211210902)" or "(27211210902)"
+    const sName = sett.schoolName || parsed.schoolName || '';
+    if (sName) {
+      const matchName = sName.match(/(?:^|[^0-9])(\d{11})(?:[^0-9]|$)/);
+      if (matchName && /^\d{11}$/.test(matchName[1])) {
+        return matchName[1];
+      }
+    }
+
+    // Check filename (e.g. 27211210902_2026-10-03.json or mdm_27211210902.json)
+    if (file && file.name) {
+      const matchFile = file.name.trim().match(/(?:^|[^0-9])(\d{11})(?:[^0-9]|$)/);
+      if (matchFile && /^\d{11}$/.test(matchFile[1])) {
+        return matchFile[1];
+      }
+    }
+
+    return '';
+  },
+
   handleJsonRestore(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
@@ -8420,6 +8503,8 @@ const app = {
           return;
         }
 
+        const isAdminMode = (sessionStorage.getItem('MDM_ADMIN_LOGGED_IN') === 'true') || (this.isAdminLoggedIn === true);
+
         // Case A: All Schools Combined Backup
         if (parsed.backupType === 'ALL_SCHOOLS_COMBINED' && Array.isArray(parsed.schools)) {
           let count = 0;
@@ -8427,10 +8512,14 @@ const app = {
             const u = sch.udise;
             const sData = sch.appData || sch;
             if (u && sData) {
+              if (this.isSchoolTombstoned(u)) {
+                this.clearTombstone(u);
+              }
               const storageKey = this.getSchoolStorageKey(u);
               const backupKey = this.getSchoolBackupKey(u);
               localStorage.setItem(storageKey, JSON.stringify(sData));
               localStorage.setItem(backupKey, JSON.stringify(sData));
+              localStorage.setItem('MDM_SAFE_BACKUP_' + u, JSON.stringify(sData));
 
               if (sch.auth) {
                 const existingAuth = this.getSchoolAuth(u) || {};
@@ -8440,28 +8529,40 @@ const app = {
                 localStorage.setItem(`MDM_SCHOOL_LICENSE_${u}`, JSON.stringify(sch.license));
               }
 
+              const schSettings = sData.settings || {};
               this.registerSchool({
                 udise: u,
-                schoolName: sch.schoolName || (sData.settings && sData.settings.schoolName) || '',
-                centre: sch.centre || (sData.settings && sData.settings.centre) || '',
-                taluka: sch.taluka || (sData.settings && sData.settings.taluka) || '',
-                district: sch.district || (sData.settings && sData.settings.district) || '',
-                pat: sch.pat || (sData.settings && sData.settings.pat) || 9
+                schoolName: sch.schoolName || schSettings.schoolName || '',
+                centre: sch.centre || schSettings.centre || '',
+                taluka: sch.taluka || schSettings.taluka || '',
+                district: sch.district || schSettings.district || '',
+                pat: sch.pat || schSettings.pat || 9,
+                patPrimary: sch.patPrimary || schSettings.patPrimary || 9,
+                patUpper: sch.patUpper || schSettings.patUpper || 15,
+                schoolLevel: sch.schoolLevel || schSettings.schoolLevel || 'both'
               });
 
               if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
-                cloudSync.pushSchoolToRegistry(u, sData.settings || {});
+                await cloudSync.pushToCloud(true, u);
+                await cloudSync.pushSchoolToRegistry(u, schSettings);
               }
               count++;
             }
           }
 
-          const curU = this.getActiveUdise();
-          this.loadState(curU);
-          this.showToast(`✅ एकत्रित बॅकअपमधून सर्व ${count} शाळांचा संपूर्ण डेटा यशस्वीरित्या रिस्टोअर झाला!`, 'success');
-          this.refreshAllViews();
-          if (typeof this.renderAdminSchoolsList === 'function') {
-            this.renderAdminSchoolsList(true);
+          if (isAdminMode) {
+            this.showToast(`✅ एकत्रित बॅकअपमधून सर्व ${count} शाळांचा संपूर्ण डेटा यशस्वीरित्या रिस्टोअर व क्लाऊडवर सिंक झाला!`, 'success');
+            if (typeof this.renderAdminSchoolsList === 'function') {
+              await this.renderAdminSchoolsList(true);
+            }
+            if (typeof this.populateAdminBackupSchoolSelect === 'function') {
+              await this.populateAdminBackupSchoolSelect();
+            }
+          } else {
+            const curU = this.getActiveUdise();
+            this.loadState(curU);
+            this.showToast(`✅ एकत्रित बॅकअपमधून सर्व ${count} शाळांचा संपूर्ण डेटा यशस्वीरित्या रिस्टोअर झाला!`, 'success');
+            this.refreshAllViews();
           }
           return;
         }
@@ -8469,75 +8570,112 @@ const app = {
         // Case B: Single School Backup
         const dataToRestore = parsed.appData || parsed;
         const targetSettings = dataToRestore.settings || {};
-        const targetUdise = targetSettings.udise || parsed.schoolUdise || parsed.udise || this.getActiveUdise();
+        let targetUdise = this.extractUdiseFromBackup(parsed, file);
 
-        if (!targetUdise) {
-          alert('अवैध बॅकअप फाईल: UDISE किंवा शाळा माहिती सापडली नाही.');
+        if (!targetUdise || targetUdise.length !== 11) {
+          const userPrompt = prompt('⚠️ बॅकअप फाईलमध्ये UDISE कोड थेट आढळला नाही.\nकृपया या शाळेचा ११ अंकी अचूक UDISE कोड प्रविष्ट करा:', this.getActiveUdise());
+          if (userPrompt && /^\d{11}$/.test(userPrompt.trim())) {
+            targetUdise = userPrompt.trim();
+          }
+        }
+
+        if (!targetUdise || targetUdise.length !== 11) {
+          alert('❌ अवैध बॅकअप: वैध ११ अंकी UDISE कोड मिळाला नाही. रिस्टोअर रद्द करण्यात आले.');
           return;
         }
 
-        // 1. Settings (School, HM, Cook, President, Pat, Fuel rates, etc.)
-        this.data.settings = Object.assign({}, this.data.settings, targetSettings);
-        if (targetUdise) this.data.settings.udise = targetUdise;
-
-        // 2. 1st April Initial Stock (१ एप्रिल रोजी शिल्लक साठा)
-        if (dataToRestore.initialStock) {
-          this.data.initialStock = Object.assign({}, dataToRestore.initialStock);
-        }
-        if (dataToRestore.initialStockUpper) {
-          this.data.initialStockUpper = Object.assign({}, dataToRestore.initialStockUpper);
+        // If school was tombstoned, clear tombstone so user's explicit restore resurrects it properly
+        if (this.isSchoolTombstoned(targetUdise)) {
+          this.clearTombstone(targetUdise);
         }
 
-        // 3. Menus (मेन्यू यादी व रचना)
-        if (dataToRestore.menus && Array.isArray(dataToRestore.menus) && dataToRestore.menus.length > 0) {
-          this.data.menus = dataToRestore.menus;
+        // Build clean school data object without leaking from previous active school
+        const cleanBase = this.createDefaultSchoolData(targetUdise, targetSettings.schoolName || parsed.schoolName || '');
+        const restoredSettings = Object.assign({}, cleanBase.settings, targetSettings);
+        restoredSettings.udise = targetUdise;
+
+        // If schoolName was placeholder like "शाळा (UDISE: ...)", see if real registered name exists
+        if (!restoredSettings.schoolName || restoredSettings.schoolName.includes('(UDISE:')) {
+          const regList = this.getRegisteredSchools();
+          const existingSch = regList.find(s => s.udise === targetUdise);
+          if (existingSch && existingSch.schoolName && !existingSch.schoolName.includes('(')) {
+            restoredSettings.schoolName = existingSch.schoolName;
+          }
         }
 
-        // 4. Menu Praman / Ingredients (घटक दर व प्रमाण)
-        if (dataToRestore.ingredients && typeof dataToRestore.ingredients === 'object') {
-          this.data.ingredients = Object.assign({}, this.data.ingredients, dataToRestore.ingredients);
+        const restoredData = {
+          settings: restoredSettings,
+          initialStock: dataToRestore.initialStock ? Object.assign({}, dataToRestore.initialStock) : cleanBase.initialStock,
+          initialStockUpper: dataToRestore.initialStockUpper ? Object.assign({}, dataToRestore.initialStockUpper) : {},
+          menus: (dataToRestore.menus && Array.isArray(dataToRestore.menus) && dataToRestore.menus.length > 0) ? dataToRestore.menus : cleanBase.menus,
+          ingredients: (dataToRestore.ingredients && typeof dataToRestore.ingredients === 'object') ? Object.assign({}, cleanBase.ingredients, dataToRestore.ingredients) : cleanBase.ingredients,
+          stockReceipts: dataToRestore.stockReceipts || [],
+          stockReceiptsUpper: dataToRestore.stockReceiptsUpper || [],
+          damagedStock: dataToRestore.damagedStock || [],
+          damagedStockUpper: dataToRestore.damagedStockUpper || [],
+          stockTransfers: dataToRestore.stockTransfers || [],
+          records: dataToRestore.records || {},
+          recordsUpper: dataToRestore.recordsUpper || {},
+          tasteRecords: dataToRestore.tasteRecords || {},
+          tasteRecordsUpper: dataToRestore.tasteRecordsUpper || {},
+          customDemands: dataToRestore.customDemands || {},
+          customDemandsUpper: dataToRestore.customDemandsUpper || {},
+          initialSampleLoaded: true,
+          savedAt: new Date().toISOString()
+        };
+
+        // 1. Save state locally for targetUdise
+        const storageKey = this.getSchoolStorageKey(targetUdise);
+        const backupKey = this.getSchoolBackupKey(targetUdise);
+        localStorage.setItem(storageKey, JSON.stringify(restoredData));
+        localStorage.setItem(backupKey, JSON.stringify(restoredData));
+        localStorage.setItem('MDM_SAFE_BACKUP_' + targetUdise, JSON.stringify(restoredData));
+
+        // 2. Register school in local registry
+        this.registerSchool({
+          udise: targetUdise,
+          schoolName: restoredSettings.schoolName || `शाळा (${targetUdise})`,
+          centre: restoredSettings.centre || 'खांडस',
+          taluka: restoredSettings.taluka || 'कर्जत',
+          district: restoredSettings.district || 'रायगड',
+          pat: restoredSettings.pat || 9,
+          patPrimary: restoredSettings.patPrimary || 9,
+          patUpper: restoredSettings.patUpper || 15,
+          schoolLevel: restoredSettings.schoolLevel || 'both'
+        });
+
+        // 3. Update active school in memory if not in admin mode OR if targetUdise was already active
+        if (!isAdminMode || this.getActiveUdise() === targetUdise) {
+          localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, targetUdise);
+          this.data = restoredData;
         }
 
-        // 5. Stock Receipts, Damaged Stock & Transfers (आलेले धान्य व खराब धान्य)
-        this.data.stockReceipts = dataToRestore.stockReceipts || [];
-        this.data.stockReceiptsUpper = dataToRestore.stockReceiptsUpper || [];
-        this.data.damagedStock = dataToRestore.damagedStock || [];
-        this.data.damagedStockUpper = dataToRestore.damagedStockUpper || [];
-        this.data.stockTransfers = dataToRestore.stockTransfers || [];
-
-        // 6. Daily Entries (दैनिक नोंदी)
-        this.data.records = dataToRestore.records || {};
-        this.data.recordsUpper = dataToRestore.recordsUpper || {};
-
-        // 7. Taste Records & Custom Demands
-        this.data.tasteRecords = dataToRestore.tasteRecords || {};
-        this.data.tasteRecordsUpper = dataToRestore.tasteRecordsUpper || {};
-        this.data.customDemands = dataToRestore.customDemands || {};
-        this.data.customDemandsUpper = dataToRestore.customDemandsUpper || {};
-
-        // Update active UDISE
-        localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, targetUdise);
-
-        // Save state locally
-        this.saveState();
-
-        // Push to Cloud
+        // 4. Guaranteed Immediate Push to Google Firebase Realtime Database & Central Registry
         if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
-          cloudSync.pushToCloud(true);
-          cloudSync.pushSchoolToRegistry(targetUdise, this.data.settings);
+          await cloudSync.pushToCloud(true, targetUdise);
+          await cloudSync.pushSchoolToRegistry(targetUdise, restoredSettings);
         }
 
-        this.showToast('✅ सर्व माहिती (दैनिक नोंदी, १ एप्रिल शिल्लक, मेन्यू, प्रमाण दर व शाळा तपशील) यशस्वीरित्या रिस्टोअर झाली!', 'success');
+        this.showToast(`✅ शाळा "${restoredSettings.schoolName}" (UDISE: ${targetUdise}) ची सर्व माहिती (नोंदी, १ एप्रिल शिल्लक साठा, मेन्यू) यशस्वीरित्या रिस्टोअर व क्लाऊडवर सेव्ह झाली!`, 'success');
 
-        // Re-initialize and refresh all views
-        this.init();
-        this.populateMenuDropdown();
-        this.renderSettingsView();
-        this.renderStockView();
-        this.renderDailyRegister();
-        this.renderMonthlyExcelSheet();
-        this.renderFormB();
-        this.renderYearlyReport();
+        // 5. Update UI views
+        if (isAdminMode) {
+          if (typeof this.renderAdminSchoolsList === 'function') {
+            await this.renderAdminSchoolsList(true);
+          }
+          if (typeof this.populateAdminBackupSchoolSelect === 'function') {
+            await this.populateAdminBackupSchoolSelect();
+          }
+        } else {
+          this.init();
+          this.populateMenuDropdown();
+          this.renderSettingsView();
+          this.renderStockView();
+          this.renderDailyRegister();
+          this.renderMonthlyExcelSheet();
+          this.renderFormB();
+          this.renderYearlyReport();
+        }
       } catch (err) {
         alert('JSON फाईल वाचताना त्रुटी: ' + err.message);
       }
@@ -8628,7 +8766,7 @@ const app = {
     } else if (level === 'upper') {
       this.switchSection('upper');
     }
-    this.saveState();
+    this.saveState(false, true);
     this.updateHeaderMeta();
     this.showToast(`शाळा स्तर सेट केला: ${level === 'both' ? 'दोन्ही (१ ते ५ व ६ ते ८)' : (level === 'upper' ? 'फक्त ६ ते ८' : 'फक्त १ ते ५')}`, 'info');
   },
@@ -8960,7 +9098,7 @@ const app = {
 
     this.data.initialStock[rawKey] = openingStock;
 
-    this.saveState();
+    this.saveState(false, true);
     this.closeAddIngredientModal();
     this.refreshAllViews();
     this.showToast(`✅ नवीन धान्य/घटक '${name}' यशस्वीरित्या जोडला गेला!`, 'success');
@@ -8981,7 +9119,7 @@ const app = {
         });
       }
 
-      this.saveState();
+      this.saveState(false, true);
       this.refreshAllViews();
       this.showToast(`'${ing.name}' घटक हटवण्यात आला.`, 'warning');
     }
@@ -9098,7 +9236,7 @@ const app = {
       dayName: dayNames[dayCode] || "विशेष मेन्यू"
     });
 
-    this.saveState();
+    this.saveState(false, true);
     this.populateMenuDropdown();
     this.renderMenusInSettings();
     this.renderDailyRegister();
@@ -9111,7 +9249,7 @@ const app = {
     if (!m) return;
     if (confirm(`'${m.name}' मेन्यू खरोखर हटवायचा आहे का?`)) {
       this.data.menus.splice(idx, 1);
-      this.saveState();
+      this.saveState(false, true);
       this.populateMenuDropdown();
       this.renderMenusInSettings();
       this.renderDailyRegister();
@@ -9173,7 +9311,7 @@ const app = {
       }
     });
 
-    this.saveState();
+    this.saveState(false, true);
     this.populateMenuDropdown();
     this.renderManualGrainsCheckboxes();
     this.onInputsChanged();
@@ -9218,7 +9356,7 @@ const app = {
       }
     });
 
-    this.saveState();
+    this.saveState(false, true);
     this.refreshAllViews();
     this.showToast('✅ घटक नावे व १ ते ५ आणि ६ ते ८ चे दर यशस्वीरित्या जतन झाले!', 'success');
   },
@@ -9270,7 +9408,7 @@ const app = {
       }
     });
 
-    this.saveState();
+    this.saveState(false, true);
     this.refreshAllViews();
 
     // Direct immediate push to Google Firebase Realtime Database
