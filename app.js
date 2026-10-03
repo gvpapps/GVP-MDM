@@ -957,12 +957,14 @@ const app = {
     if (!targetData) targetData = this.createDefaultSchoolData(newUdise, name);
     if (!targetData.settings) targetData.settings = {};
 
+    const nowIso = new Date().toISOString();
     targetData.settings.schoolName = name;
     targetData.settings.udise = newUdise;
     targetData.settings.centre = centre;
     targetData.settings.taluka = taluka;
     targetData.settings.district = district;
     targetData.settings.pat = pat;
+    targetData.settings.updatedAt = nowIso;
     localStorage.setItem(targetKey, JSON.stringify(targetData));
 
     // Update active in-memory app.data if currently loaded school is this school
@@ -978,8 +980,12 @@ const app = {
         this.data.settings.taluka = taluka;
         this.data.settings.district = district;
         this.data.settings.pat = pat;
+        this.data.settings.updatedAt = nowIso;
       }
       this.updateHeaderMeta();
+      if (typeof this.renderSettingsView === 'function') {
+        this.renderSettingsView();
+      }
       if (typeof cloudSync !== 'undefined' && cloudSync.onSchoolSwitched) {
         cloudSync.onSchoolSwitched(newUdise);
       }
@@ -999,7 +1005,8 @@ const app = {
       taluka: taluka,
       district: district,
       pat: pat,
-      lastActive: new Date().toISOString()
+      lastActive: nowIso,
+      updatedAt: nowIso
     };
     if (existingIdx >= 0) {
       list[existingIdx] = Object.assign({}, list[existingIdx], schoolEntry);
@@ -1008,16 +1015,36 @@ const app = {
     }
     localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(list));
 
-    // Sync edited school to cloud registry
+    // Update local auth profile
+    let auth = this.getSchoolAuth(newUdise) || (originalUdise !== newUdise ? this.getSchoolAuth(originalUdise) : null);
+    if (auth) {
+      auth.schoolName = name;
+      auth.centre = centre;
+      auth.taluka = taluka;
+      auth.district = district;
+      auth.pat = pat;
+      auth.udise = newUdise;
+      this.saveSchoolAuth(newUdise, auth);
+    }
+
+    // Sync edited school to cloud registry, full cloud database & auth profile
     if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
       cloudSync.pushSchoolToRegistry(newUdise, schoolEntry);
+      if (auth && cloudSync.pushAuthToCloud) {
+        cloudSync.pushAuthToCloud(newUdise, auth);
+      }
       if (newUdise !== originalUdise) {
         cloudSync.deleteSchoolFromCloud(originalUdise);
       }
+      // CRITICAL: Push full updated school settings directly to /mdm_schools on Firebase!
+      cloudSync.pushToCloud(true, newUdise);
     }
 
     // Re-render UI
     this.renderRegisteredSchoolsList();
+    if (typeof this.renderAdminSchoolsList === 'function') {
+      this.renderAdminSchoolsList(true);
+    }
     this.closeEditSchoolModal();
     this.showToast(`🎉 शाळा माहिती यशस्वीरीत्या जतन झाली! (${name})`, 'success');
     return true;
@@ -9118,6 +9145,7 @@ const app = {
     else if (rPri && rPri.checked) this.data.settings.schoolLevel = 'primary';
     else if (rUpp && rUpp.checked) this.data.settings.schoolLevel = 'upper';
 
+    this.data.settings.updatedAt = new Date().toISOString();
     this.saveState();
     this.updateHeaderMeta();
     this.renderQuickAttendanceChips();
@@ -9397,6 +9425,7 @@ const app = {
       }
     });
 
+    if (this.data.settings) this.data.settings.updatedAt = new Date().toISOString();
     this.saveState(false, true);
     this.populateMenuDropdown();
     this.renderManualGrainsCheckboxes();
@@ -9442,6 +9471,7 @@ const app = {
       }
     });
 
+    if (this.data.settings) this.data.settings.updatedAt = new Date().toISOString();
     this.saveState(false, true);
     this.refreshAllViews();
     this.showToast('✅ घटक नावे व १ ते ५ आणि ६ ते ८ चे दर यशस्वीरित्या जतन झाले!', 'success');
@@ -9494,12 +9524,56 @@ const app = {
       }
     });
 
+    const nowIso = new Date().toISOString();
+    this.data.settings.updatedAt = nowIso;
+
     this.saveState(false, true);
     this.refreshAllViews();
 
+    const activeU = this.getActiveUdise();
+    const schoolEntry = {
+      udise: activeU,
+      schoolName: this.data.settings.schoolName,
+      centre: this.data.settings.centre,
+      taluka: this.data.settings.taluka,
+      district: this.data.settings.district,
+      pat: this.data.settings.pat,
+      patPrimary: this.data.settings.patPrimary || this.data.settings.pat,
+      patUpper: this.data.settings.patUpper || 15,
+      schoolLevel: this.data.settings.schoolLevel || 'both',
+      lastActive: nowIso,
+      updatedAt: nowIso
+    };
+
+    // Update local registry list
+    let list = this.getRegisteredSchools();
+    const existingIdx = list.findIndex(s => s.udise === activeU);
+    if (existingIdx >= 0) {
+      list[existingIdx] = Object.assign({}, list[existingIdx], schoolEntry);
+    } else {
+      list.unshift(schoolEntry);
+    }
+    localStorage.setItem(this.REGISTERED_SCHOOLS_KEY, JSON.stringify(list));
+
+    // Update local auth profile
+    let auth = this.getSchoolAuth(activeU);
+    if (auth) {
+      auth.schoolName = this.data.settings.schoolName;
+      auth.centre = this.data.settings.centre;
+      auth.taluka = this.data.settings.taluka;
+      auth.district = this.data.settings.district;
+      auth.pat = this.data.settings.pat;
+      auth.schoolLevel = this.data.settings.schoolLevel || 'both';
+      this.saveSchoolAuth(activeU, auth);
+    }
+
     // Direct immediate push to Google Firebase Realtime Database
     if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
-      cloudSync.pushToCloud(true);
+      cloudSync.pushSchoolToRegistry(activeU, schoolEntry);
+      if (auth && cloudSync.pushAuthToCloud) {
+        cloudSync.pushAuthToCloud(activeU, auth);
+      }
+      cloudSync.pushToCloud(true, activeU);
     }
 
     this.showToast('✅ सर्व शाळा सेटिंग्ज, नियम व १ एप्रिल रोजी शिल्लक साठा सर्व पानांवर व डेटाबेसवर यशस्वीरित्या सेव्ह झाले!', 'success');

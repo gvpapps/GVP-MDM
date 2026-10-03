@@ -387,25 +387,69 @@ const cloudSync = {
 
   /**
    * Smart Merge for School Settings
-   * Preserves non-empty strings and valid numbers
+   * Preserves non-empty strings and valid numbers with timestamp-based reconciliation
    */
-  mergeSettings(localSett, remoteSett, targetUdise = null) {
-    const res = Object.assign({}, remoteSett || {}, localSett || {});
-    const r = remoteSett || {};
+  mergeSettings(localSett, remoteSett, targetUdise = null, preferRemote = false) {
     const l = localSett || {};
-    Object.keys(r).forEach(k => {
-      if ((l[k] === undefined || l[k] === '' || l[k] === null) && r[k] !== undefined && r[k] !== '' && r[k] !== null) {
-        res[k] = r[k];
-      }
-    });
-    // Critical: If remote has a real, non-placeholder school name, and local is empty/placeholder or has mismatched UDISE, preserve remote name
-    if (r.schoolName && !r.schoolName.includes('(UDISE:') && (
-        !l.schoolName || 
-        l.schoolName.includes('(UDISE:') || 
-        (l.udise && r.udise && l.udise !== r.udise)
-    )) {
-      res.schoolName = r.schoolName;
+    const r = remoteSett || {};
+
+    const lTime = l.updatedAt ? new Date(l.updatedAt).getTime() : 0;
+    const rTime = r.updatedAt ? new Date(r.updatedAt).getTime() : 0;
+
+    const isPlaceholder = (name) => !name || !String(name).trim() || String(name).includes('(UDISE:') || String(name).startsWith('शाळा (');
+
+    // Determine which side is authoritative based on timestamp
+    // If remote has a strictly newer timestamp, remote wins.
+    // If local has a strictly newer timestamp, local wins.
+    // If timestamps are tied or missing, fall back to preferRemote (true for pullFromCloud, false for pushToCloud).
+    let remoteWins = false;
+    if (rTime > lTime) {
+      remoteWins = true;
+    } else if (lTime > rTime) {
+      remoteWins = false;
+    } else {
+      remoteWins = !!preferRemote;
     }
+
+    let res = {};
+    if (remoteWins) {
+      // Remote is authoritative: start with local, overwrite with remote
+      res = Object.assign({}, l, r);
+      // If remote had an empty/null/undefined field but local had a non-empty value, preserve local's value
+      Object.keys(l).forEach(k => {
+        if ((r[k] === undefined || r[k] === null || r[k] === '') && (l[k] !== undefined && l[k] !== null && l[k] !== '')) {
+          res[k] = l[k];
+        }
+      });
+    } else {
+      // Local is authoritative: start with remote, overwrite with local
+      res = Object.assign({}, r, l);
+      // If local had an empty/null/undefined field but remote had a non-empty value, preserve remote's value
+      Object.keys(r).forEach(k => {
+        if ((l[k] === undefined || l[k] === null || l[k] === '') && (r[k] !== undefined && r[k] !== null && r[k] !== '')) {
+          res[k] = r[k];
+        }
+      });
+    }
+
+    // Critical Rule: Real school name ALWAYS beats placeholder school name
+    if (isPlaceholder(res.schoolName)) {
+      if (!isPlaceholder(r.schoolName)) res.schoolName = r.schoolName;
+      else if (!isPlaceholder(l.schoolName)) res.schoolName = l.schoolName;
+    } else {
+      if (isPlaceholder(l.schoolName) && !isPlaceholder(r.schoolName)) res.schoolName = r.schoolName;
+      else if (isPlaceholder(r.schoolName) && !isPlaceholder(l.schoolName)) res.schoolName = l.schoolName;
+    }
+
+    // Preserve the freshest timestamp
+    if (rTime > lTime) {
+      res.updatedAt = r.updatedAt;
+    } else if (lTime > rTime) {
+      res.updatedAt = l.updatedAt;
+    } else {
+      res.updatedAt = l.updatedAt || r.updatedAt || new Date().toISOString();
+    }
+
     // Critical: Guarantee UDISE matches targetUdise / current school
     if (targetUdise) {
       res.udise = String(targetUdise).trim();
@@ -522,7 +566,7 @@ const cloudSync = {
         const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, dataToPush.tasteRecordsUpper || {});
         const mergedStock = this.mergeStockBalances(dataToPush.initialStock, remoteData.initialStock);
         const mergedStockUpper = this.mergeStockBalances(dataToPush.initialStockUpper, remoteData.initialStockUpper);
-        const mergedSettings = this.mergeSettings(dataToPush.settings, remoteData.settings, currentUdise);
+        const mergedSettings = this.mergeSettings(dataToPush.settings, remoteData.settings, currentUdise, false);
         
         // Stock receipts union (Primary)
         const mergedReceipts = [...(remoteData.stockReceipts || [])];
@@ -772,7 +816,7 @@ const cloudSync = {
             const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, baseData.tasteRecordsUpper || {});
             const mergedStock = this.mergeStockBalances(baseData.initialStock, remoteData.initialStock);
             const mergedStockUpper = this.mergeStockBalances(baseData.initialStockUpper, remoteData.initialStockUpper);
-            const mergedSettings = this.mergeSettings(baseData.settings, remoteData.settings, currentUdise);
+            const mergedSettings = this.mergeSettings(baseData.settings, remoteData.settings, currentUdise, true);
 
             // Stock receipts union (Primary)
             const mergedReceipts = [...(remoteData.stockReceipts || [])];
@@ -846,8 +890,13 @@ const cloudSync = {
             if (isActiveSchool) {
               app.data = mergedTarget;
               if (typeof app.updateHeaderMeta === 'function') app.updateHeaderMeta();
+              if (typeof app.renderSettingsView === 'function') app.renderSettingsView();
               if (typeof app.refreshAllViews === 'function') app.refreshAllViews();
               if (typeof app.renderCurrentTab === 'function') app.renderCurrentTab();
+            }
+
+            if (typeof app !== 'undefined' && typeof app.registerSchool === 'function' && mergedSettings) {
+              app.registerSchool(mergedSettings);
             }
           }
 
