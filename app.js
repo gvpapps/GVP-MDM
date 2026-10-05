@@ -1017,20 +1017,35 @@ const app = {
 
     // Update local auth profile
     let auth = this.getSchoolAuth(newUdise) || (originalUdise !== newUdise ? this.getSchoolAuth(originalUdise) : null);
-    if (auth) {
+    if (!auth) {
+      auth = {
+        udise: newUdise,
+        schoolName: name,
+        centre: centre,
+        taluka: taluka,
+        district: district,
+        pat: pat,
+        schoolLevel: (targetData.settings && targetData.settings.schoolLevel) || 'both',
+        passwordHash: this.sha256('123456'),
+        registeredAt: Date.now()
+      };
+    } else {
       auth.schoolName = name;
       auth.centre = centre;
       auth.taluka = taluka;
       auth.district = district;
       auth.pat = pat;
       auth.udise = newUdise;
-      this.saveSchoolAuth(newUdise, auth);
+      if (targetData.settings && targetData.settings.schoolLevel) {
+        auth.schoolLevel = targetData.settings.schoolLevel;
+      }
     }
+    this.saveSchoolAuth(newUdise, auth);
 
     // Sync edited school to cloud registry, full cloud database & auth profile
     if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
       cloudSync.pushSchoolToRegistry(newUdise, schoolEntry);
-      if (auth && cloudSync.pushAuthToCloud) {
+      if (cloudSync.pushAuthToCloud) {
         cloudSync.pushAuthToCloud(newUdise, auth);
       }
       if (newUdise !== originalUdise) {
@@ -3377,7 +3392,7 @@ const app = {
       }
 
       // 6. Trigger Cloud Auto-Sync in background if enabled (debounced or immediate, never if skipCloud is true)
-      if (!skipCloud && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl() && cloudSync.config && cloudSync.config.autoSync) {
+      if (!skipCloud && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
         cloudSync.scheduleDebouncedPush(immediateCloud, currentUdise);
       }
     } catch (e) {

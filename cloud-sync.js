@@ -171,10 +171,11 @@ const cloudSync = {
           this.config.firebaseUrl = this.normalizeFirebaseUrl(this.config.firebaseUrl);
         }
       }
-      // If firebaseUrl ended up empty from an old localStorage cache, self-heal with DEFAULT_URL
+      // Ensure cloud sync is always enabled and autoSync is true by default
+      this.config.enabled = true;
+      this.config.autoSync = true;
       if (!this.config.firebaseUrl) {
         this.config.firebaseUrl = this.DEFAULT_URL;
-        this.config.enabled = true;
       }
     } catch (e) {
       console.warn("Could not load cloud sync config:", e);
@@ -293,7 +294,7 @@ const cloudSync = {
 
     if (immediate) {
       this.debounceTimer = null;
-      if (this.config.enabled && this.getEffectiveFirebaseUrl() && this.config.autoSync && udiseToPush) {
+      if (this.getEffectiveFirebaseUrl() && udiseToPush) {
         this.pushToCloud(true, udiseToPush);
       }
       return;
@@ -301,7 +302,7 @@ const cloudSync = {
 
     // Responsive 400ms debounce instead of old 2500ms lag
     this.debounceTimer = setTimeout(() => {
-      if (this.config.enabled && this.getEffectiveFirebaseUrl() && this.config.autoSync && udiseToPush) {
+      if (this.getEffectiveFirebaseUrl() && udiseToPush) {
         this.pushToCloud(true, udiseToPush);
       }
     }, 400);
@@ -314,7 +315,7 @@ const cloudSync = {
         this.debounceTimer = null;
       }
       const activeU = this.pendingPushUdise || this.getSchoolUdise();
-      if (this.config.enabled && this.getEffectiveFirebaseUrl() && this.config.autoSync && activeU) {
+      if (this.getEffectiveFirebaseUrl() && activeU) {
         this.pushToCloud(true, activeU);
       }
     }
@@ -666,8 +667,7 @@ const cloudSync = {
       const res = await this.fetchWithTimeout(endpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        keepalive: true
+        body: JSON.stringify(payload)
       }, 15000);
 
       if (res.ok) {
@@ -728,7 +728,7 @@ const cloudSync = {
       this.config.status = 'error';
       this.config.lastError = err.message || 'सिंक त्रुटी';
       this.updateUIStatus();
-      if (!isSilent && typeof app !== 'undefined') {
+      if (typeof app !== 'undefined' && typeof app.showToast === 'function') {
         app.showToast(`⚠️ क्लाऊड सिंक करताना अडचण आली: ${this.config.lastError}`, 'warning');
       }
       return false;
@@ -893,6 +893,8 @@ const cloudSync = {
               if (typeof app.renderSettingsView === 'function') app.renderSettingsView();
               if (typeof app.refreshAllViews === 'function') app.refreshAllViews();
               if (typeof app.renderCurrentTab === 'function') app.renderCurrentTab();
+              if (typeof app.onDateChanged === 'function') app.onDateChanged();
+              if (typeof app.renderRecentDaysRibbon === 'function') app.renderRecentDaysRibbon();
             }
 
             if (typeof app !== 'undefined' && typeof app.registerSchool === 'function' && mergedSettings) {
@@ -936,6 +938,12 @@ const cloudSync = {
       return false;
     } finally {
       this.isSyncing = false;
+      if (this.hasPendingPush) {
+        this.hasPendingPush = false;
+        const nextU = this.pendingPushUdise || null;
+        this.pendingPushUdise = null;
+        this.scheduleDebouncedPush(true, nextU);
+      }
     }
   },
 
