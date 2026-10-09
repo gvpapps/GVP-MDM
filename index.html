@@ -26,7 +26,7 @@
     }
   </script>
 
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261009_1">
 </head>
 <body>
 
@@ -925,9 +925,9 @@
                   </div>
 
                   <!-- Group 3: Fuel Cost & Remarks Box -->
-                  <div class="entry-section-box">
+                  <div class="entry-section-box" id="fuelRemarksBox">
                     <div class="form-row mb-0">
-                      <div class="form-group flex-1">
+                      <div class="form-group flex-1" id="fuelCostGroup">
                         <label for="entryFuelCost" class="form-label font-bold" style="color: #047857;">
                           <span>💰 इंधन खर्च (Fuel Grant):</span>
                         </label>
@@ -935,7 +935,7 @@
                         <small class="form-hint" id="fuelRateHint">दर: रु. 1.51 प्रति विद्यार्थी</small>
                       </div>
 
-                      <div class="form-group flex-1">
+                      <div class="form-group flex-1" id="remarksGroup">
                         <label for="entryRemarks" class="form-label font-bold" style="color: #334155;">
                           <span>📝 शेरा (Remarks / ऐच्छिक):</span>
                         </label>
@@ -976,18 +976,18 @@
                   </div>
 
                   <!-- Group 4: High Impact Action Buttons Bar -->
-                  <div class="d-flex flex-column gap-2 mt-3">
+                  <div class="d-flex flex-column gap-2 mt-3" id="dailyActionButtonsGroup">
                     <button type="submit" class="btn btn-hero-save w-100" id="btnSaveDaily">
                       <span>💾 आजची नोंद जतन करा (Save Record)</span>
                     </button>
-                    <div class="d-flex gap-2 flex-wrap">
-                      <button type="button" class="btn btn-whatsapp flex-1" onclick="app.shareTodayEntryViaWhatsApp(document.getElementById('entryDate').value)">
+                    <div class="d-flex gap-2 flex-wrap" id="dailySecondaryActions">
+                      <button type="button" class="btn btn-whatsapp flex-1" id="btnDailyWhatsapp" onclick="app.shareTodayEntryViaWhatsApp(document.getElementById('entryDate').value)">
                         <span>📲 WhatsApp</span>
                       </button>
-                      <button type="button" class="btn btn-outline-primary flex-1" onclick="app.printDailySlip()">
+                      <button type="button" class="btn btn-outline-primary flex-1" id="btnDailyPrintSlip" onclick="app.printDailySlip()">
                         <span>🖨️ स्लिप प्रिंट</span>
                       </button>
-                      <button type="button" class="btn btn-outline-secondary" style="min-width: 85px;" onclick="app.resetDailyForm()">
+                      <button type="button" class="btn btn-outline-secondary" id="btnDailyReset" style="min-width: 85px;" onclick="app.resetDailyForm()">
                         <span>🔄 रीसेट</span>
                       </button>
                     </div>
@@ -3226,10 +3226,10 @@
   </div>
 
   <!-- Application Logic Scripts -->
-  <script src="firebase-config.js?v=20261005_1"></script>
-  <script src="cloud-sync.js?v=20261005_1"></script>
-  <script src="excel-engine.js?v=20261005_1"></script>
-  <script src="test-suite.js?v=20261005_1"></script>
-  <script src="app.js?v=20261005_1"></script>
+  <script src="firebase-config.js?v=20261009_1"></script>
+  <script src="cloud-sync.js?v=20261009_1"></script>
+  <script src="excel-engine.js?v=20261009_1"></script>
+  <script src="test-suite.js?v=20261009_1"></script>
+  <script src="app.js?v=20261009_1"></script>
 </body>
 </html>

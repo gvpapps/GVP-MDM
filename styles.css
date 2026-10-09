@@ -5442,4 +5442,119 @@ body.level-mode-upper .section-switcher-control {
   }
 }
 
+/* ==========================================================================
+   MOBILE VIEW: ULTRA-CLEAN DAILY ENTRY FORM (Zero-Scroll Screen View)
+   ========================================================================== */
+@media screen and (max-width: 768px) {
+  /* 1. Hide bulky dashboard header and top hero metrics cards */
+  #tab-daily .dashboard-header,
+  #tab-daily .daily-hero-stats-grid {
+    display: none !important;
+  }
+
+  /* 2. Micro-compact section ribbon for composite (1-8) schools */
+  #tab-daily .daily-section-ribbon {
+    padding: 6px 10px !important;
+    margin-bottom: 8px !important;
+    border-radius: 8px !important;
+  }
+  #tab-daily .daily-section-ribbon .ribbon-title-label,
+  #tab-daily .daily-section-ribbon .ribbon-center,
+  #tab-daily .daily-section-ribbon .ribbon-right {
+    display: none !important;
+  }
+  #tab-daily .daily-section-ribbon .ribbon-left {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+  #tab-daily .daily-section-ribbon .section-segmented-group {
+    width: 100% !important;
+    display: flex !important;
+  }
+  #tab-daily .daily-section-ribbon .btn-section-toggle {
+    flex: 1 1 50% !important;
+    text-align: center !important;
+    padding: 6px 8px !important;
+    font-size: 0.82rem !important;
+  }
+
+  /* 3. Hide '1-Click Attendance Chips' row (Only bold stepper [-] 14 [+] stays visible) */
+  #tab-daily .quick-att-chips-wrapper {
+    display: none !important;
+  }
+  #tab-daily .entry-attendance-box {
+    padding: 0.75rem 0.85rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  #tab-daily .attendance-stepper-box {
+    margin: 0.35rem 0 0.15rem 0 !important;
+  }
+
+  /* 4. Hide 'Fuel Grant' input box and expand 'Remarks' to full 100% width */
+  #tab-daily #fuelCostGroup,
+  #tab-daily label[for="entryFuelCost"],
+  #tab-daily #entryFuelCost,
+  #tab-daily #fuelRateHint {
+    display: none !important;
+  }
+  #tab-daily #remarksGroup {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    margin-bottom: 0 !important;
+  }
+  #tab-daily .entry-section-box {
+    padding: 0.75rem 0.85rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+
+  /* 5. Hide middle live glance bar, bottom calculation table & recent entries ribbon */
+  #tab-daily #dailyCalcGlanceBox,
+  #tab-daily #calculationCard,
+  #tab-daily .recent-ribbon-card {
+    display: none !important;
+  }
+
+  /* 6. Action Buttons: Hide WhatsApp and Slip Print buttons; Prominent Save + Reset */
+  #tab-daily #btnDailyWhatsapp,
+  #tab-daily .btn-whatsapp,
+  #tab-daily #btnDailyPrintSlip,
+  #tab-daily button[onclick*="printDailySlip"] {
+    display: none !important;
+  }
+
+  #tab-daily #dailyActionButtonsGroup {
+    margin-top: 0.65rem !important;
+    gap: 0.45rem !important;
+  }
+  #tab-daily #btnSaveDaily {
+    padding: 0.75rem 1rem !important;
+    font-size: 1rem !important;
+    font-weight: 800 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(22, 101, 52, 0.28) !important;
+  }
+  #tab-daily #dailySecondaryActions {
+    width: 100% !important;
+  }
+  #tab-daily #btnDailyReset {
+    width: 100% !important;
+    padding: 0.45rem 0.75rem !important;
+    font-size: 0.82rem !important;
+    border-radius: 6px !important;
+  }
+
+  /* 7. Card & Spacing Optimization for Zero-Scroll Fit */
+  #tab-daily .entry-control-card {
+    margin-bottom: 0.5rem !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05) !important;
+  }
+  #tab-daily .entry-control-card .card-header {
+    padding: 0.55rem 0.85rem !important;
+  }
+  #tab-daily .entry-control-card .card-body {
+    padding: 0.65rem 0.75rem !important;
+  }
+}
+
+
 
