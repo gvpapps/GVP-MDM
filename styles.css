@@ -425,6 +425,83 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Reports Hub Sub-tabs (मासिक अहवाल, प्रपत्र ब, वार्षिक अहवाल) */
+.reports-subtab-container {
+  background: #ffffff;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.reports-subtab-bar {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding: 2px;
+}
+
+.reports-subtab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.reports-subtab-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+}
+
+.reports-subtab-btn.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.reports-subtab-btn .subtab-icon {
+  font-size: 1.15rem;
+}
+
+.reports-subtab-panel {
+  display: none;
+  animation: fadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reports-subtab-panel.active {
+  display: block;
+}
+
+@media screen and (max-width: 768px) {
+  .reports-subtab-container {
+    padding: 6px;
+    border-radius: 10px;
+  }
+  .reports-subtab-bar {
+    gap: 6px;
+  }
+  .reports-subtab-btn {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
 /* Panel Header */
 .panel-header {
   display: flex;
@@ -2598,8 +2675,9 @@ body {
 
   body.print-slip #printSlipContainer {
     display: block !important;
+    visibility: visible !important;
     width: 100% !important;
-    margin: 20px auto !important;
+    margin: 0 auto !important;
     padding: 0 !important;
   }
 
@@ -2696,15 +2774,25 @@ body {
   body.print-monthly .filter-actions,
   body.print-monthly .no-print,
   body.print-monthly .mobile-scroll-hint,
-  body.print-monthly .tab-panel:not(#tab-monthly) {
+  body.print-monthly .tab-panel:not(#tab-reports):not(#tab-monthly) {
     display: none !important;
   }
 
+  body.print-monthly #tab-reports,
   body.print-monthly #tab-monthly {
     display: block !important;
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
+  }
+
+  body.print-monthly #subtab-panel-monthly {
+    display: block !important;
+  }
+
+  body.print-monthly #subtab-panel-formb,
+  body.print-monthly #subtab-panel-yearly {
+    display: none !important;
   }
 
   body.print-monthly .excel-sheet-card,
@@ -2814,6 +2902,32 @@ body {
     page-break-inside: avoid !important;
     page-break-after: avoid !important;
     page-break-before: avoid !important;
+  }
+
+  body.print-yearly .app-header,
+  body.print-yearly .main-nav,
+  body.print-yearly .panel-header,
+  body.print-yearly .filter-actions,
+  body.print-yearly .no-print,
+  body.print-yearly .mobile-scroll-hint,
+  body.print-yearly .tab-panel:not(#tab-reports) {
+    display: none !important;
+  }
+
+  body.print-yearly #tab-reports {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  body.print-yearly #subtab-panel-yearly {
+    display: block !important;
+  }
+
+  body.print-yearly #subtab-panel-monthly,
+  body.print-yearly #subtab-panel-formb {
+    display: none !important;
   }
 
   body.print-yearly #yearlyReportPrintArea,
@@ -2937,7 +3051,32 @@ body {
     overflow: hidden !important;
     page-break-inside: avoid !important;
     page-break-after: avoid !important;
-    page-break-before: avoid !important;
+  }
+
+  body.print-formb .app-header,
+  body.print-formb .main-nav,
+  body.print-formb .panel-header,
+  body.print-formb .filter-actions,
+  body.print-formb .no-print,
+  body.print-formb .mobile-scroll-hint,
+  body.print-formb .tab-panel:not(#tab-reports) {
+    display: none !important;
+  }
+
+  body.print-formb #tab-reports {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  body.print-formb #subtab-panel-formb {
+    display: block !important;
+  }
+
+  body.print-formb #subtab-panel-monthly,
+  body.print-formb #subtab-panel-yearly {
+    display: none !important;
   }
 
   body.print-formb #printableFormB,
@@ -5342,9 +5481,9 @@ body.level-mode-upper .section-switcher-control {
 /* Printable Stock Management Sheets (शिल्लक, आवक धान्य व खराब धान्य प्रिंट) */
 .stock-print-doc {
   font-family: 'Noto Sans Devanagari', 'Mangal', 'Segoe UI', Arial, sans-serif;
-  color: #000;
+  color: #0f172a;
   background: #fff;
-  padding: 12px 16px;
+  padding: 8px 12px;
   width: 100%;
   box-sizing: border-box;
 }
@@ -5355,9 +5494,9 @@ body.level-mode-upper .section-switcher-control {
 
 .stock-print-header {
   text-align: center;
-  border-bottom: 2px solid #000;
+  border-bottom: 2px solid #1e293b;
   padding-bottom: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .stock-print-gov {
@@ -5365,42 +5504,46 @@ body.level-mode-upper .section-switcher-control {
   font-weight: 700;
   margin: 0;
   letter-spacing: 0.5px;
+  color: #1e3a8a;
 }
 
 .stock-print-title {
   font-size: 17px;
   font-weight: 800;
   margin: 3px 0;
-  color: #000;
+  color: #0f172a;
 }
 
 .stock-print-meta {
-  font-size: 12px;
+  font-size: 11.5px;
   margin: 4px 0 0 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 12px;
   font-weight: 600;
+  color: #334155;
 }
 
 .stock-print-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 8px;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .stock-print-table th,
 .stock-print-table td {
-  border: 1px solid #000;
+  border: 1.2pt solid #334155;
   padding: 5px 6px;
   text-align: left;
+  vertical-align: middle;
 }
 
 .stock-print-table th {
   background: #f1f5f9;
-  font-weight: 700;
+  font-weight: 800;
+  color: #0f172a;
   text-align: center;
 }
 
@@ -5408,37 +5551,60 @@ body.level-mode-upper .section-switcher-control {
   page-break-inside: avoid;
 }
 
+.stock-print-table tbody tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+.stock-item-pill-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.stock-item-pill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  font-size: 10.5px;
+}
+
 .stock-print-summary {
   margin-top: 10px;
-  padding: 8px;
-  border: 1px solid #000;
+  padding: 8px 10px;
+  border: 1.2pt solid #334155;
   font-size: 11.5px;
   background: #f8fafc;
+  border-radius: 4px;
 }
 
 .stock-print-signatures {
   display: flex;
   justify-content: space-between;
-  margin-top: 35px;
+  margin-top: 28px;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   page-break-inside: avoid;
 }
 
 .stock-print-sig-col {
   text-align: center;
-  min-width: 140px;
+  min-width: 130px;
 }
 
 .stock-print-sig-col .sig-space {
-  height: 35px;
+  height: 32px;
 }
 
 @media print {
   body.print-slip #printSlipContainer .stock-print-doc {
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
   }
 }
 

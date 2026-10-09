@@ -26,7 +26,7 @@
     }
   </script>
 
-  <link rel="stylesheet" href="styles.css?v=20261009_1">
+  <link rel="stylesheet" href="styles.css?v=20261009_4">
 </head>
 <body>
 
@@ -626,17 +626,9 @@
             <span class="tab-icon">📖</span>
             <span class="tab-label">दैनिक नोंदवही</span>
           </button>
-          <button class="nav-tab" data-tab="monthly" onclick="app.switchTab('monthly')">
-            <span class="tab-icon">📊</span>
-            <span class="tab-label">मासिक अहवाल (Excel)</span>
-          </button>
-          <button class="nav-tab" data-tab="formb" onclick="app.switchTab('formb')">
-            <span class="tab-icon">📄</span>
-            <span class="tab-label">प्रपत्र ब (Form B)</span>
-          </button>
-          <button class="nav-tab" data-tab="yearly" onclick="app.switchTab('yearly')">
-            <span class="tab-icon">📅</span>
-            <span class="tab-label">वार्षिक अहवाल (1 एप्रिल - 31 मार्च)</span>
+          <button class="nav-tab" data-tab="reports" onclick="app.switchTab('reports')">
+            <span class="tab-icon">📑</span>
+            <span class="tab-label">अहवाल (Reports)</span>
           </button>
           <button class="nav-tab" data-tab="taste" onclick="app.switchTab('taste')">
             <span class="tab-icon">👅</span>
@@ -1220,8 +1212,31 @@
         </div>
       </section>
 
-      <!-- TAB 3: MONTHLY EXCEL SHEET VIEW (मासिक अहवाल - हुबेहूब मूळ एक्सेल फॉरमॅट) -->
-      <section id="tab-monthly" class="tab-panel">
+      <!-- TAB: UNIFIED REPORTS HUB (सर्व अहवाल: मासिक, प्रपत्र ब, वार्षिक) -->
+      <section id="tab-reports" class="tab-panel">
+        
+        <!-- Reports Sub-tab Navigation Pill Bar (Hidden during print) -->
+        <div class="container-fluid no-print mb-3">
+          <div class="reports-subtab-container">
+            <div class="reports-subtab-bar" role="tablist">
+              <button type="button" class="reports-subtab-btn active" id="subtabBtnMonthly" data-subtab="monthly" onclick="app.switchReportsSubtab('monthly')">
+                <span class="subtab-icon">📊</span>
+                <span class="subtab-text">मासिक अहवाल (Excel Sheet)</span>
+              </button>
+              <button type="button" class="reports-subtab-btn" id="subtabBtnFormb" data-subtab="formb" onclick="app.switchReportsSubtab('formb')">
+                <span class="subtab-icon">📄</span>
+                <span class="subtab-text">प्रपत्र ब (Form B)</span>
+              </button>
+              <button type="button" class="reports-subtab-btn" id="subtabBtnYearly" data-subtab="yearly" onclick="app.switchReportsSubtab('yearly')">
+                <span class="subtab-icon">📅</span>
+                <span class="subtab-text">वार्षिक अहवाल (Yearly Report)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUB-PANEL 1: MONTHLY EXCEL SHEET -->
+        <div id="subtab-panel-monthly" class="reports-subtab-panel active">
         <div class="container-fluid">
           
           <div class="panel-header no-print">
@@ -1358,10 +1373,10 @@
           </div>
 
         </div>
-      </section>
+        </div><!-- /#subtab-panel-monthly -->
 
-      <!-- TAB 4: FORM B / प्रपत्र ब (इ. 1 ते 5) -->
-      <section id="tab-formb" class="tab-panel">
+        <!-- SUB-PANEL 2: FORM B / प्रपत्र ब -->
+        <div id="subtab-panel-formb" class="reports-subtab-panel" style="display: none;">
         <div class="container">
           
           <div class="panel-header no-print">
@@ -1500,10 +1515,10 @@
           </div>
 
         </div>
-      </section>
+        </div><!-- /#subtab-panel-formb -->
 
-      <!-- TAB 4.5: YEARLY REPORT (वार्षिक अहवाल: 1 एप्रिल ते 31 मार्च) -->
-      <section id="tab-yearly" class="tab-panel">
+        <!-- SUB-PANEL 3: YEARLY REPORT / वार्षिक अहवाल -->
+        <div id="subtab-panel-yearly" class="reports-subtab-panel" style="display: none;">
         <div class="container-fluid">
           
           <div class="panel-header">
@@ -1526,16 +1541,16 @@
               <div class="d-flex align-center gap-2">
                 <label for="yearlyYearSelect" class="form-label mb-0" style="font-weight:700; white-space:nowrap;">वर्ष निवडा:</label>
                 <select id="yearlyYearSelect" class="form-control" style="width: auto; font-weight: 700; background: #eff6ff; color: #1e40af; border-color: #93c5fd;" onchange="app.onYearlyYearChange()">
-                  <option value="2026-2027">2026-27 (2026-27)</option>
-                  <option value="2025-2026">2025-26 (2025-26)</option>
-                  <option value="2024-2025" selected>2024-25 (2024-25)</option>
-                  <option value="2023-2024">2023-24 (2023-24)</option>
-                  <option value="2022-2023">2022-23 (2022-23)</option>
-                  <option value="2021-2022">2021-22 (2021-22)</option>
-                  <option value="2020-2021">2020-21 (2020-21)</option>
-                  <option value="2019-2020">2019-20 (2019-20)</option>
-                  <option value="2018-2019">2018-19 (2018-19)</option>
-                  <option value="2017-2018">2017-18 (2017-18)</option>
+                  <option value="2026-2027" selected>सन 2026-27</option>
+                  <option value="2025-2026">सन 2025-26</option>
+                  <option value="2024-2025">सन 2024-25</option>
+                  <option value="2023-2024">सन 2023-24</option>
+                  <option value="2022-2023">सन 2022-23</option>
+                  <option value="2021-2022">सन 2021-22</option>
+                  <option value="2020-2021">सन 2020-21</option>
+                  <option value="2019-2020">सन 2019-20</option>
+                  <option value="2018-2019">सन 2018-19</option>
+                  <option value="2017-2018">सन 2017-18</option>
                 </select>
               </div>
               <button class="btn btn-primary" onclick="app.printYearlyReport()">
@@ -1551,7 +1566,7 @@
           <div class="card yearly-sheet-card" id="yearlyReportPrintArea">
             
             <div class="text-center mb-3">
-              <h3 class="excel-title" style="margin-bottom: 0.25rem;">शालेय पोषण आहार योजना (<span id="yrYearTitle">सन 2024-25</span>)</h3>
+              <h3 class="excel-title" style="margin-bottom: 0.25rem;">शालेय पोषण आहार योजना (<span id="yrYearTitle">सन 2026-27</span>)</h3>
               <p style="font-size: 0.95rem; font-weight: 700; color: #334155; margin-bottom: 0.25rem;">
                 पंचायत समिती <span id="yrTaluka">कर्जत</span>, जि. <span id="yrDistrict">रायगड</span>
               </p>
@@ -1645,7 +1660,9 @@
           </div>
 
         </div>
-      </section>
+        </div><!-- /#subtab-panel-yearly -->
+
+      </section><!-- /#tab-reports -->
 
       <!-- TAB: TASTE REGISTER (पोषण आहार चव नोंदवही) -->
       <section id="tab-taste" class="tab-panel">
@@ -2541,9 +2558,9 @@
         <span class="bottom-nav-icon">📖</span>
         <span class="bottom-nav-label">नोंदवही</span>
       </button>
-      <button class="bottom-nav-item" data-tab="monthly" onclick="app.switchTab('monthly')">
-        <span class="bottom-nav-icon">📊</span>
-        <span class="bottom-nav-label">मासिक</span>
+      <button class="bottom-nav-item" data-tab="reports" onclick="app.switchTab('reports')">
+        <span class="bottom-nav-icon">📑</span>
+        <span class="bottom-nav-label">अहवाल</span>
       </button>
       <button class="bottom-nav-item" data-tab="taste" onclick="app.switchTab('taste')">
         <span class="bottom-nav-icon">👅</span>
@@ -2582,6 +2599,10 @@
           <button class="drawer-tile" onclick="app.switchTab('register'); app.closeMobileMoreDrawer();">
             <span class="drawer-tile-icon">📖</span>
             <span class="drawer-tile-label">नोंदवही</span>
+          </button>
+          <button class="drawer-tile" onclick="app.switchTab('reports'); app.closeMobileMoreDrawer();">
+            <span class="drawer-tile-icon">📑</span>
+            <span class="drawer-tile-label">सर्व अहवाल</span>
           </button>
           <button class="drawer-tile" onclick="app.switchTab('monthly'); app.closeMobileMoreDrawer();">
             <span class="drawer-tile-icon">📊</span>
@@ -3032,8 +3053,6 @@
 
 
 
-    <div id="printSlipContainer" class="print-only-slip"></div>
-
     <!-- Toast Notification Container -->
     <div id="toastContainer" class="toast-container"></div>
 
@@ -3225,11 +3244,14 @@
     </div>
   </div>
 
+  <!-- Kitchen Slip & Stock Register Print Container (Direct child of body to prevent hiding by #app during print) -->
+  <div id="printSlipContainer" class="print-only-slip"></div>
+
   <!-- Application Logic Scripts -->
-  <script src="firebase-config.js?v=20261009_1"></script>
-  <script src="cloud-sync.js?v=20261009_1"></script>
-  <script src="excel-engine.js?v=20261009_1"></script>
-  <script src="test-suite.js?v=20261009_1"></script>
-  <script src="app.js?v=20261009_1"></script>
+  <script src="firebase-config.js?v=20261009_4"></script>
+  <script src="cloud-sync.js?v=20261009_4"></script>
+  <script src="excel-engine.js?v=20261009_4"></script>
+  <script src="test-suite.js?v=20261009_4"></script>
+  <script src="app.js?v=20261009_4"></script>
 </body>
 </html>

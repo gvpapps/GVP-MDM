@@ -33,6 +33,9 @@ const app = {
   // Current Active Section ('primary' = इ. १ ते ५, 'upper' = इ. ६ ते ८)
   activeSection: 'primary',
 
+  // Current Active Reports Subtab ('monthly', 'formb', 'yearly')
+  activeReportsSubtab: 'monthly',
+
   // Master Data Model
   data: {
     settings: {
@@ -3572,7 +3575,20 @@ const app = {
   },
 
   /**
-   * Set up today's date and month pickers
+   * Helper: Calculate current academic financial year (1 April to 31 March)
+   * e.g., '2026-2027'
+   */
+  getCurrentAcademicYear() {
+    const today = new Date();
+    const currYear = today.getFullYear();
+    const currMonth = today.getMonth() + 1; // 1 to 12
+    const acadStart = (currMonth >= 4) ? currYear : (currYear - 1);
+    const acadEnd = acadStart + 1;
+    return `${acadStart}-${acadEnd}`;
+  },
+
+  /**
+   * Set up today's date and month pickers and auto-select current academic year
    */
   setupDatePickers() {
     const today = new Date();
@@ -3595,6 +3611,21 @@ const app = {
 
     const expMonth = document.getElementById('exportMonthSelect');
     if (expMonth) expMonth.value = monthStr;
+
+    // Academic Year Auto-Selection (1 April to 31 March)
+    const currentFinYear = this.getCurrentAcademicYear();
+    const yearlySelect = document.getElementById('yearlyYearSelect');
+    if (yearlySelect) {
+      const [startYr, endYr] = currentFinYear.split('-');
+      const shortLabel = `सन ${startYr}-${String(endYr).slice(-2)}`;
+      if (!Array.from(yearlySelect.options).some(o => o.value === currentFinYear)) {
+        const newOpt = document.createElement('option');
+        newOpt.value = currentFinYear;
+        newOpt.textContent = shortLabel;
+        yearlySelect.insertBefore(newOpt, yearlySelect.firstChild);
+      }
+      yearlySelect.value = currentFinYear;
+    }
   },
 
   /**
@@ -3972,27 +4003,55 @@ const app = {
       }
     });
 
-    // Window Print setup for A4 fit
+    // Window Print setup for A4 fit & Dynamic Document Title
     window.addEventListener('beforeprint', () => {
       const printSlip = document.getElementById('printSlipContainer');
-      if (this.currentTab === 'formb' || document.body.classList.contains('print-formb')) {
+      const isFormB = this.currentTab === 'formb' || (this.currentTab === 'reports' && this.activeReportsSubtab === 'formb') || document.body.classList.contains('print-formb');
+      const isTaste = this.currentTab === 'taste' || document.body.classList.contains('print-taste') || document.body.classList.contains('printing-taste');
+      const isMonthly = this.currentTab === 'monthly' || (this.currentTab === 'reports' && (this.activeReportsSubtab === 'monthly' || !this.activeReportsSubtab)) || document.body.classList.contains('print-monthly');
+      const isYearly = this.currentTab === 'yearly' || (this.currentTab === 'reports' && this.activeReportsSubtab === 'yearly') || document.body.classList.contains('print-yearly');
+
+      if (isFormB) {
         if (printSlip) printSlip.innerHTML = '';
         document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-slip', 'print-taste', 'printing-taste');
         document.body.classList.add('print-formb', 'print-portrait');
-      } else if (this.currentTab === 'taste' || document.body.classList.contains('print-taste') || document.body.classList.contains('printing-taste')) {
+        const fbPicker = document.getElementById('formbMonthPicker');
+        const ym = fbPicker ? fbPicker.value : '';
+        const mName = ym ? this.getMonthNameMarathi(ym) : '';
+        this.preparePrintReportTitle('प्रपत्र_ब', mName ? `${mName}_${ym.split('-')[0]}` : ym);
+      } else if (isTaste) {
         if (printSlip) printSlip.innerHTML = '';
         document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-slip', 'print-formb');
         document.body.classList.add('print-taste', 'print-portrait');
-      } else if (this.currentTab === 'monthly') {
+        const tMonth = document.getElementById('tasteMonthSelect');
+        const ym = tMonth ? tMonth.value : '';
+        const mName = ym ? this.getMonthNameMarathi(ym) : '';
+        this.preparePrintReportTitle('चव_नोंदवही', mName ? `${mName}_${ym.split('-')[0]}` : ym);
+      } else if (isMonthly) {
         if (printSlip) printSlip.innerHTML = '';
         document.body.classList.remove('print-portrait', 'print-formb', 'print-yearly', 'print-register', 'print-slip', 'print-taste', 'printing-taste');
         document.body.classList.add('print-monthly', 'print-landscape');
-      } else if (this.currentTab === 'yearly') {
+        const mPicker = document.getElementById('monthlyExcelPicker');
+        const ym = mPicker ? mPicker.value : '';
+        const mName = ym ? this.getMonthNameMarathi(ym) : '';
+        this.preparePrintReportTitle('मासिक_अहवाल', mName ? `${mName}_${ym.split('-')[0]}` : ym);
+      } else if (isYearly) {
         if (printSlip) printSlip.innerHTML = '';
         document.body.classList.remove('print-portrait', 'print-formb', 'print-monthly', 'print-register', 'print-slip', 'print-taste', 'printing-taste');
         document.body.classList.add('print-yearly', 'print-landscape');
+        const ySelect = document.getElementById('yearlyYearSelect');
+        const finYear = ySelect ? ySelect.value : this.getCurrentAcademicYear();
+        this.preparePrintReportTitle('वार्षिक_अहवाल', finYear);
       } else if (document.body.classList.contains('print-slip')) {
-        // Handled specifically by printDailySlip
+        // Handled specifically by printDailySlip or Stock Register Print
+      } else if (this.currentTab === 'register') {
+        if (printSlip) printSlip.innerHTML = '';
+        document.body.classList.remove('print-portrait', 'print-formb', 'print-slip', 'print-taste', 'printing-taste');
+        document.body.classList.add('print-landscape');
+        const regPicker = document.getElementById('registerMonthSelect');
+        const ym = regPicker ? regPicker.value : '';
+        const mName = ym ? this.getMonthNameMarathi(ym) : '';
+        this.preparePrintReportTitle('दैनिक_नोंदवही', mName ? `${mName}_${ym.split('-')[0]}` : ym);
       } else {
         if (printSlip) printSlip.innerHTML = '';
         document.body.classList.remove('print-portrait', 'print-formb', 'print-slip', 'print-taste', 'printing-taste');
@@ -4114,6 +4173,11 @@ const app = {
    * Switch Active Tab
    */
   switchTab(tabId) {
+    if (tabId === 'monthly' || tabId === 'formb' || tabId === 'yearly') {
+      this.activeReportsSubtab = tabId;
+      tabId = 'reports';
+    }
+
     this.currentTab = tabId;
     document.querySelectorAll('.nav-tab').forEach(t => {
       t.classList.toggle('active', t.dataset.tab === tabId);
@@ -4128,6 +4192,50 @@ const app = {
     });
 
     this.renderCurrentTab();
+  },
+
+  /**
+   * Switch Reports Sub-tab (मासिक अहवाल, प्रपत्र ब, वार्षिक अहवाल)
+   */
+  switchReportsSubtab(subtabId) {
+    if (!['monthly', 'formb', 'yearly'].includes(subtabId)) {
+      subtabId = 'monthly';
+    }
+    this.activeReportsSubtab = subtabId;
+
+    // 1. Update subtab button pills
+    document.querySelectorAll('.reports-subtab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.subtab === subtabId);
+    });
+
+    // 2. Toggle subtab panels
+    const panels = {
+      monthly: document.getElementById('subtab-panel-monthly'),
+      formb: document.getElementById('subtab-panel-formb'),
+      yearly: document.getElementById('subtab-panel-yearly')
+    };
+
+    Object.keys(panels).forEach(k => {
+      const p = panels[k];
+      if (p) {
+        if (k === subtabId) {
+          p.style.display = 'block';
+          p.classList.add('active');
+        } else {
+          p.style.display = 'none';
+          p.classList.remove('active');
+        }
+      }
+    });
+
+    // 3. Render specific report
+    if (subtabId === 'monthly') {
+      this.renderMonthlyExcelSheet();
+    } else if (subtabId === 'formb') {
+      this.renderFormB();
+    } else if (subtabId === 'yearly') {
+      this.renderYearlyReport();
+    }
   },
 
   openMobileMoreDrawer() {
@@ -4158,14 +4266,17 @@ const app = {
       case 'register':
         this.renderDailyRegister();
         break;
+      case 'reports':
+        this.switchReportsSubtab(this.activeReportsSubtab || 'monthly');
+        break;
       case 'monthly':
-        this.renderMonthlyExcelSheet();
+        this.switchReportsSubtab('monthly');
         break;
       case 'formb':
-        this.renderFormB();
+        this.switchReportsSubtab('formb');
         break;
       case 'yearly':
-        this.renderYearlyReport();
+        this.switchReportsSubtab('yearly');
         break;
       case 'taste':
         this.onTasteTabOpen();
@@ -5174,14 +5285,18 @@ const app = {
     const cleanUdise = udise || (this.data && this.data.settings && this.data.settings.udise) || this.getActiveUdise() || '';
     const safeReport = String(reportName || 'अहवाल').replace(/\s+/g, '_');
     const safePeriod = String(periodStr || '').replace(/\s+/g, '_');
-    const newTitle = safePeriod ? `${safePeriod}_${safeReport}_${cleanUdise}` : `${safeReport}_${cleanUdise}`;
-    const originalTitle = document.title;
+    const newTitle = safePeriod ? `PM_POSHAN_${safeReport}_${safePeriod}_${cleanUdise}` : `PM_POSHAN_${safeReport}_${cleanUdise}`;
+    if (!this._originalDocTitle) {
+      this._originalDocTitle = document.title;
+    }
     document.title = newTitle;
     const restore = () => {
-      document.title = originalTitle;
+      if (this._originalDocTitle) {
+        document.title = this._originalDocTitle;
+        this._originalDocTitle = null;
+      }
     };
     window.addEventListener('afterprint', restore, { once: true });
-    setTimeout(restore, 4000);
   },
 
   /**
@@ -6273,7 +6388,7 @@ const app = {
 
   onYearlyYearChange() {
     const yearSelect = document.getElementById('yearlyYearSelect');
-    const finYear = yearSelect ? yearSelect.value : '2024-2025';
+    const finYear = yearSelect ? yearSelect.value : this.getCurrentAcademicYear();
     const [startYear] = finYear.split('-');
 
     // Synchronize monthly pickers to first active month
@@ -6311,12 +6426,13 @@ const app = {
 
   /**
    * Compute 12-month data for Financial/Academic Year (1 April to 31 March)
-   * @param {string} finYear - e.g. '2024-2025' or '2019-2020'
+   * @param {string} finYear - e.g. '2026-2027' or '2024-2025'
    * @param {string} section - 'primary' | 'upper' | 'combined'
    */
   computeYearlyData(finYear, section = this.activeSection) {
-    const parts = (finYear || '2024-2025').split('-');
-    const startYear = parseInt(parts[0]) || 2024;
+    const curAcadYear = this.getCurrentAcademicYear();
+    const parts = (finYear || curAcadYear).split('-');
+    const startYear = parseInt(parts[0]) || parseInt(curAcadYear.split('-')[0]) || 2026;
     const endYear = parseInt(parts[1]) || (startYear + 1);
 
     // 12 months sequence: Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec, Jan, Feb, Mar
@@ -6422,7 +6538,7 @@ const app = {
 
   renderYearlyReport() {
     const yearSelect = document.getElementById('yearlyYearSelect');
-    const finYear = yearSelect ? yearSelect.value : '2024-2025';
+    const finYear = yearSelect ? yearSelect.value : this.getCurrentAcademicYear();
 
     // Update section toggle buttons and badge
     const btnYrP = document.getElementById('yrTogglePrimary');
@@ -6606,7 +6722,7 @@ const app = {
   printYearlyReport() {
     this.switchTab('yearly');
     const yearSelect = document.getElementById('yearlyYearSelect');
-    const finYear = yearSelect ? yearSelect.value : '2024-2025';
+    const finYear = yearSelect ? yearSelect.value : this.getCurrentAcademicYear();
     this.preparePrintReportTitle('वार्षिक_अहवाल', finYear);
 
     this.setPrintPageOrientation('landscape', 'legal');
@@ -6632,7 +6748,7 @@ const app = {
 
   exportYearlyExcel() {
     const yearSelect = document.getElementById('yearlyYearSelect');
-    const finYear = yearSelect ? yearSelect.value : '2024-2025';
+    const finYear = yearSelect ? yearSelect.value : this.getCurrentAcademicYear();
     excelEngine.generateYearlyExcel(finYear);
   },
 
@@ -7719,7 +7835,7 @@ const app = {
     `;
 
     if (typeof this.setPrintPageOrientation === 'function') {
-      this.setPrintPageOrientation('portrait', 'A4', '8mm 10mm 8mm 10mm');
+      this.setPrintPageOrientation('portrait', 'A4', '6mm 8mm 6mm 8mm');
     }
     document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
     document.body.classList.add('print-slip', 'print-portrait');
@@ -7729,7 +7845,7 @@ const app = {
   },
 
   /**
-   * Print Stock Receipts Register (आलेले धान्य पावती नोंदवही)
+   * Print Stock Receipts Register (आलेले धान्य पावती नोंदवही - तपशीलवार तक्ता व गोषवारा)
    */
   printStockReceipts() {
     const filter = this.stockViewFilter || this.activeSection || 'primary';
@@ -7768,31 +7884,54 @@ const app = {
           if (qty > 0) {
             const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
             const ingUnit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
-            itemsDesc.push(`${ingName}: <strong>${qty}</strong> ${ingUnit}`);
+            itemsDesc.push(`<span><strong>${ingName}:</strong> ${qty.toFixed(2)} ${ingUnit}</span>`);
             rowTotalWeight += qty;
             totalByIng[k] = (totalByIng[k] || 0) + qty;
           }
         });
 
         const rDate = r.date ? r.date.split('-').reverse().join('/') : '—';
+        const itemsPills = itemsDesc.length > 0 
+          ? `<div class="stock-item-pill-grid">${itemsDesc.map(it => `<div class="stock-item-pill">${it}</div>`).join('')}</div>`
+          : '—';
+
         rowsHtml += `
           <tr>
             <td style="text-align: center;">${idx + 1}</td>
-            <td style="text-align: center;">${rDate}</td>
-            <td style="text-align: center; font-weight: 600;">${r.billNo || '—'}</td>
-            <td>${itemsDesc.join(', ') || '—'}</td>
-            <td style="text-align: right; font-weight: 700;">${rowTotalWeight.toFixed(2)} kg</td>
+            <td style="text-align: center; font-weight: 600;">${rDate}</td>
+            <td style="text-align: center; font-weight: 700;">${r.billNo || '—'}</td>
+            <td>${itemsPills}</td>
+            <td style="text-align: right; font-weight: 800; color: #1e3a8a;">${rowTotalWeight.toFixed(2)} kg</td>
             <td style="text-align: center;">${r.recordedBy || 'मुख्याध्यापक'}</td>
           </tr>
         `;
       });
     }
 
-    let summaryBadges = Object.keys(totalByIng).map(k => {
-      const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
-      const unit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
-      return `<strong>${ingName}:</strong> ${totalByIng[k].toFixed(2)} ${unit}`;
-    }).join(' | ');
+    // Consolidated receipts summary table
+    let summaryTableRows = '';
+    let grandTotalReceiptWeight = 0;
+    const ingKeys = Object.keys(totalByIng);
+    if (ingKeys.length > 0) {
+      ingKeys.forEach((k, sIdx) => {
+        const ing = (this.data.ingredients && this.data.ingredients[k]) || {};
+        const ingName = ing.name || k;
+        const unit = ing.unit || 'kg';
+        const cat = ing.category === 'pulse' ? 'कडधान्य / डाळ' : (ing.category === 'oil' ? 'तेल' : (ing.category === 'grain' ? 'धान्य (तांदूळ)' : 'मसाला / इतर'));
+        const totalQty = totalByIng[k] || 0;
+        grandTotalReceiptWeight += totalQty;
+        summaryTableRows += `
+          <tr>
+            <td style="text-align: center;">${sIdx + 1}</td>
+            <td style="font-weight: 700;">${ingName}</td>
+            <td style="text-align: center;">${cat}</td>
+            <td style="text-align: right; font-weight: 800; color: #0f172a;">${totalQty.toFixed(2)} ${unit}</td>
+          </tr>
+        `;
+      });
+    } else {
+      summaryTableRows = `<tr><td colspan="4" style="text-align: center; padding: 10px;">कोणतीही आवक धान्य नोंद नाही.</td></tr>`;
+    }
 
     printContainer.innerHTML = `
       <div class="stock-print-doc">
@@ -7826,8 +7965,27 @@ const app = {
           </tbody>
         </table>
 
-        <div class="stock-print-summary">
-          <strong>एकूण प्राप्त धान्य गोषवारा:</strong> ${summaryBadges || 'नोंद नाही'}
+        <div style="margin-top: 14px;">
+          <h4 style="margin: 0 0 6px 0; font-size: 13px; font-weight: 800; color: #1e3a8a;">
+            📦 एकूण आवक धान्य व साहित्य एकत्रित गोषवारा तक्ता (Consolidated Receipts Summary)
+          </h4>
+          <table class="stock-print-table" style="margin-bottom: 8px;">
+            <thead>
+              <tr>
+                <th style="width: 8%;">अ.क्र.</th>
+                <th style="width: 42%;">धान्य / साहित्याचे नाव</th>
+                <th style="width: 25%;">साहित्य प्रवर्ग</th>
+                <th style="width: 25%; text-align: right;">एकूण आवक प्रमाण</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${summaryTableRows}
+              <tr style="background: #e2e8f0; font-weight: 800;">
+                <td colspan="3" style="text-align: right; font-size: 11px;">एकूण आवक वजन:</td>
+                <td style="text-align: right; font-weight: 900; font-size: 11.5px; color: #1e3a8a;">${grandTotalReceiptWeight.toFixed(2)} kg</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         <div class="stock-print-signatures">
@@ -7851,7 +8009,7 @@ const app = {
     `;
 
     if (typeof this.setPrintPageOrientation === 'function') {
-      this.setPrintPageOrientation('portrait', 'A4', '8mm 10mm 8mm 10mm');
+      this.setPrintPageOrientation('portrait', 'A4', '6mm 8mm 6mm 8mm');
     }
     document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
     document.body.classList.add('print-slip', 'print-portrait');
@@ -7861,7 +8019,7 @@ const app = {
   },
 
   /**
-   * Print Damaged Stock Register / Panchanama (खराब धान्य नोंदवही व पंचनामा)
+   * Print Damaged Stock Register / Panchanama (खराब धान्य नोंदवही व पंचनामा - तपशीलवार तक्ता व गोषवारा)
    */
   printDamagedStock() {
     const filter = this.stockViewFilter || this.activeSection || 'primary';
@@ -7890,7 +8048,7 @@ const app = {
     const totalDmgByIng = {};
 
     if (!damaged || damaged.length === 0) {
-      rowsHtml = `<tr><td colspan="5" style="text-align: center; padding: 20px;">कोणतीही खराब किंवा नासाडी धान्य नोंद उपलब्ध नाही. (निल / शून्य नुकसान)</td></tr>`;
+      rowsHtml = `<tr><td colspan="6" style="text-align: center; padding: 20px;">कोणतीही खराब किंवा नासाडी धान्य नोंद उपलब्ध नाही. (निल / शून्य नुकसान)</td></tr>`;
     } else {
       damaged.forEach((d, idx) => {
         let itemsDesc = [];
@@ -7900,30 +8058,54 @@ const app = {
           if (qty > 0) {
             const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
             const ingUnit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
-            itemsDesc.push(`${ingName}: <strong>${qty}</strong> ${ingUnit}`);
+            itemsDesc.push(`<span><strong>${ingName}:</strong> ${qty.toFixed(2)} ${ingUnit}</span>`);
             rowTotalWeight += qty;
             totalDmgByIng[k] = (totalDmgByIng[k] || 0) + qty;
           }
         });
 
         const dDate = d.date ? d.date.split('-').reverse().join('/') : '—';
+        const itemsPills = itemsDesc.length > 0 
+          ? `<div class="stock-item-pill-grid">${itemsDesc.map(it => `<div class="stock-item-pill">${it}</div>`).join('')}</div>`
+          : '—';
+
         rowsHtml += `
           <tr>
             <td style="text-align: center;">${idx + 1}</td>
-            <td style="text-align: center;">${dDate}</td>
-            <td>${d.reason || 'कीड लागणे / मुदत संपणे / सांडणे'}</td>
-            <td>${itemsDesc.join(', ') || '—'}</td>
+            <td style="text-align: center; font-weight: 600;">${dDate}</td>
+            <td style="font-weight: 600;">${d.reason || 'कीड लागणे / मुदत संपणे / सांडणे'}</td>
+            <td>${itemsPills}</td>
+            <td style="text-align: right; font-weight: 800; color: #b91c1c;">${rowTotalWeight.toFixed(2)} kg</td>
             <td style="text-align: center;">${d.recordedBy || 'मुख्याध्यापक'}</td>
           </tr>
         `;
       });
     }
 
-    let summaryBadges = Object.keys(totalDmgByIng).map(k => {
-      const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
-      const unit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
-      return `<strong>${ingName}:</strong> ${totalDmgByIng[k].toFixed(2)} ${unit}`;
-    }).join(' | ');
+    // Consolidated damaged summary table
+    let summaryTableRows = '';
+    let grandTotalDmgWeight = 0;
+    const dmgKeys = Object.keys(totalDmgByIng);
+    if (dmgKeys.length > 0) {
+      dmgKeys.forEach((k, sIdx) => {
+        const ing = (this.data.ingredients && this.data.ingredients[k]) || {};
+        const ingName = ing.name || k;
+        const unit = ing.unit || 'kg';
+        const cat = ing.category === 'pulse' ? 'कडधान्य / डाळ' : (ing.category === 'oil' ? 'तेल' : (ing.category === 'grain' ? 'धान्य (तांदूळ)' : 'मसाला / इतर'));
+        const totalQty = totalDmgByIng[k] || 0;
+        grandTotalDmgWeight += totalQty;
+        summaryTableRows += `
+          <tr>
+            <td style="text-align: center;">${sIdx + 1}</td>
+            <td style="font-weight: 700;">${ingName}</td>
+            <td style="text-align: center;">${cat}</td>
+            <td style="text-align: right; font-weight: 800; color: #b91c1c;">${totalQty.toFixed(2)} ${unit}</td>
+          </tr>
+        `;
+      });
+    } else {
+      summaryTableRows = `<tr><td colspan="4" style="text-align: center; padding: 10px;">निल (कोणतेही नुकसान किंवा नासाडी नोंद नाही).</td></tr>`;
+    }
 
     printContainer.innerHTML = `
       <div class="stock-print-doc">
@@ -7946,9 +8128,10 @@ const app = {
             <tr>
               <th style="width: 6%;">अ.क्र.</th>
               <th style="width: 14%;">नोंद दिनांक</th>
-              <th style="width: 32%;">कारण / पंचनामा तपशील / शेरा</th>
-              <th style="width: 33%;">खराब झालेले धान्य व प्रमाण</th>
-              <th style="width: 15%;">नोंदवणार / साक्षीदार</th>
+              <th style="width: 28%;">कारण / पंचनामा तपशील / शेरा</th>
+              <th style="width: 32%;">खराब झालेले धान्य व साहित्य तपशील</th>
+              <th style="width: 10%;">एकूण वजन</th>
+              <th style="width: 10%;">नोंदवणार</th>
             </tr>
           </thead>
           <tbody>
@@ -7956,11 +8139,31 @@ const app = {
           </tbody>
         </table>
 
+        <div style="margin-top: 14px;">
+          <h4 style="margin: 0 0 6px 0; font-size: 13px; font-weight: 800; color: #991b1b;">
+            ⚠️ एकूण निर्लेखित / खराब धान्य गोषवारा तक्ता (Consolidated Damaged Summary)
+          </h4>
+          <table class="stock-print-table" style="margin-bottom: 8px;">
+            <thead>
+              <tr>
+                <th style="width: 8%;">अ.क्र.</th>
+                <th style="width: 42%;">धान्य / साहित्याचे नाव</th>
+                <th style="width: 25%;">साहित्य प्रवर्ग</th>
+                <th style="width: 25%; text-align: right;">एकूण खराब / निर्लेखित प्रमाण</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${summaryTableRows}
+              <tr style="background: #fee2e2; font-weight: 800;">
+                <td colspan="3" style="text-align: right; font-size: 11px;">एकूण खराब वजन:</td>
+                <td style="text-align: right; font-weight: 900; font-size: 11.5px; color: #991b1b;">${grandTotalDmgWeight.toFixed(2)} kg</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
         <div class="stock-print-summary">
-          <strong>एकूण निर्लेखित / खराब धान्य गोषवारा:</strong> ${summaryBadges || 'निल (कोणतेही नुकसान नाही)'}
-          <div style="margin-top: 4px; font-size: 11px; color: #475569;">
-            * सदर खराब झालेले धान्य खाण्यास अयोग्य झाल्याची खात्री करून समिती समक्ष निर्लेखित (write-off) करण्यात आले आहे.
-          </div>
+          <strong>पंचनामा शेरा:</strong> वरील नमूद धान्य खराब / मुदत संपलेले / खाण्यास अयोग्य झाल्याची प्रत्यक्ष खात्री करून शाळा व्यवस्थापन समिती समक्ष पंचनामा करून योग्य त्या कारणास्तव निर्लेखित (write-off) करण्यात आले आहे.
         </div>
 
         <div class="stock-print-signatures">
@@ -7989,7 +8192,7 @@ const app = {
     `;
 
     if (typeof this.setPrintPageOrientation === 'function') {
-      this.setPrintPageOrientation('portrait', 'A4', '8mm 10mm 8mm 10mm');
+      this.setPrintPageOrientation('portrait', 'A4', '6mm 8mm 6mm 8mm');
     }
     document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
     document.body.classList.add('print-slip', 'print-portrait');
@@ -8535,8 +8738,11 @@ const app = {
       this.autoSaveSchoolSettings();
     }
 
+    const authData = (typeof this.getSchoolAuth === 'function') ? this.getSchoolAuth(cleanUdise) : null;
+    const licenseData = (typeof this.getSchoolLicense === 'function') ? this.getSchoolLicense(cleanUdise) : null;
+
     const backupPayload = {
-      backupVersion: "2.0",
+      backupVersion: "2.1",
       backupType: "MDM_SCHOOL_FULL_BACKUP",
       exportedAt: new Date().toISOString(),
       exportDate: today,
@@ -8556,8 +8762,11 @@ const app = {
       recordsUpper: this.data.recordsUpper || {},
       tasteRecords: this.data.tasteRecords || {},
       tasteRecordsUpper: this.data.tasteRecordsUpper || {},
+      formBRemarks: this.data.formBRemarks || {},
       customDemands: this.data.customDemands || {},
-      customDemandsUpper: this.data.customDemandsUpper || {}
+      customDemandsUpper: this.data.customDemandsUpper || {},
+      auth: authData || undefined,
+      license: licenseData || undefined
     };
 
     const jsonStr = JSON.stringify(backupPayload, null, 2);
@@ -8571,6 +8780,10 @@ const app = {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     this.showToast(`डेटा बॅकअप फाईल सेव्ह झाली: ${cleanUdise}_${today}.json`, 'success');
+  },
+
+  exportSchoolJsonBackup() {
+    return this.exportJsonBackup();
   },
 
   /**
@@ -8746,11 +8959,21 @@ const app = {
           recordsUpper: dataToRestore.recordsUpper || {},
           tasteRecords: dataToRestore.tasteRecords || {},
           tasteRecordsUpper: dataToRestore.tasteRecordsUpper || {},
+          formBRemarks: dataToRestore.formBRemarks || {},
           customDemands: dataToRestore.customDemands || {},
           customDemandsUpper: dataToRestore.customDemandsUpper || {},
           initialSampleLoaded: true,
           savedAt: new Date().toISOString()
         };
+
+        // Also restore auth & license if present
+        if (parsed.auth) {
+          const existingAuth = (typeof this.getSchoolAuth === 'function') ? (this.getSchoolAuth(targetUdise) || {}) : {};
+          localStorage.setItem(`MDM_SCHOOL_AUTH_${targetUdise}`, JSON.stringify(Object.assign({}, existingAuth, parsed.auth)));
+        }
+        if (parsed.license) {
+          localStorage.setItem(`MDM_SCHOOL_LICENSE_${targetUdise}`, JSON.stringify(parsed.license));
+        }
 
         // 1. Save state locally for targetUdise
         const storageKey = this.getSchoolStorageKey(targetUdise);
@@ -8786,7 +9009,7 @@ const app = {
 
         this.showToast(`✅ शाळा "${restoredSettings.schoolName}" (UDISE: ${targetUdise}) ची सर्व माहिती (नोंदी, १ एप्रिल शिल्लक साठा, मेन्यू) यशस्वीरित्या रिस्टोअर व क्लाऊडवर सेव्ह झाली!`, 'success');
 
-        // 5. Update UI views
+        // 5. Update UI views safely without duplicate event listener bindings
         if (isAdminMode) {
           if (typeof this.renderAdminSchoolsList === 'function') {
             await this.renderAdminSchoolsList(true);
@@ -8795,14 +9018,17 @@ const app = {
             await this.populateAdminBackupSchoolSelect();
           }
         } else {
-          this.init();
+          this.saveState(false, true);
+          this.applyGlobalConfig();
+          this.setupDatePickers();
           this.populateMenuDropdown();
+          this.populateSchoolSelector();
+          this.updateHeaderMeta();
           this.renderSettingsView();
           this.renderStockView();
-          this.renderDailyRegister();
-          this.renderMonthlyExcelSheet();
-          this.renderFormB();
-          this.renderYearlyReport();
+          this.onDateChanged();
+          this.refreshAllViews();
+          this.renderCurrentTab();
         }
       } catch (err) {
         alert('JSON फाईल वाचताना त्रुटी: ' + err.message);
