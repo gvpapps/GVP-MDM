@@ -210,21 +210,13 @@ const app = {
     this.populateMenuDropdown();
     this.bindEvents();
 
-    // Self-healing: Cleanse any stale tombstones for active or registered schools
+    // Self-healing: Ensure active school is never blocked by a stale tombstone
     try {
       const activeStored = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY);
-      if (activeStored && /^\d{11}$/.test(activeStored.trim())) {
-        this.removeLocalTombstone(activeStored.trim());
-      }
-      const rawReg = localStorage.getItem(this.REGISTERED_SCHOOLS_KEY);
-      if (rawReg) {
-        const parsedReg = JSON.parse(rawReg);
-        if (Array.isArray(parsedReg)) {
-          parsedReg.forEach(s => {
-            if (s && s.udise && /^\d{11}$/.test(String(s.udise).trim())) {
-              this.removeLocalTombstone(String(s.udise).trim());
-            }
-          });
+      if (activeStored && /^\d{11}$/.test(activeStored.trim()) && activeStored.trim() !== '9226979531') {
+        const auth = this.getSchoolAuth(activeStored.trim());
+        if (auth && auth.passwordHash) {
+          this.removeLocalTombstone(activeStored.trim());
         }
       }
     } catch(e) {}
@@ -769,8 +761,14 @@ const app = {
     const school = list.find(s => s.udise === cleanUdise);
     const name = school ? school.schoolName : `शाळा (${cleanUdise})`;
 
-    const activeUdise = this.getActiveUdise();
-    const isDeletingActive = (activeUdise === cleanUdise);
+    const activeStored = (localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY) || '').trim();
+    const isDeletingActive = (activeStored === cleanUdise);
+
+    // 0. If deleting active school, immediately clear active state before anything else
+    if (isDeletingActive) {
+      localStorage.removeItem(this.ACTIVE_UDISE_STORAGE_KEY);
+      this.data = this.createDefaultSchoolData('');
+    }
 
     // 1. Purge ALL local storage keys for this school
     localStorage.removeItem(this.getSchoolStorageKey(cleanUdise));
@@ -800,8 +798,6 @@ const app = {
 
     // 5. If currently active school was deleted
     if (isDeletingActive) {
-      localStorage.removeItem(this.ACTIVE_UDISE_STORAGE_KEY);
-      this.data = this.createDefaultSchoolData('');
       this.closeSchoolSwitcherModal();
       this.checkAccessControl();
     } else {
@@ -2190,17 +2186,17 @@ const app = {
       try {
         const remoteTombstones = await cloudSync.pullTombstones();
         if (remoteTombstones && typeof remoteTombstones === 'object') {
-          // Authoritative sync: Remote tombstones from Firebase are the source of truth for cloud deletions.
-          // BUT: Never allow active logged-in school, default school (27240304501), or schools in local registry to be tombstoned!
-          const activeU = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY) || '';
-          const cleanedTombstones = {};
+          // Authoritative sync: Remote tombstones from Firebase are merged with local tombstones.
+          // BUT: Never allow default school (27240304501) to be tombstoned!
+          const existingLocal = this.getLocalTombstones() || {};
+          const mergedTombstones = Object.assign({}, existingLocal);
           Object.keys(remoteTombstones).forEach(k => {
             const u = k.replace(/^mdm_/, '').trim();
-            if (/^\d{11}$/.test(u) && u !== activeU && u !== '27240304501') {
-              cleanedTombstones[u] = remoteTombstones[k];
+            if (/^\d{11}$/.test(u) && u !== '27240304501') {
+              mergedTombstones[u] = remoteTombstones[k];
             }
           });
-          localStorage.setItem(this.TOMBSTONES_STORAGE_KEY, JSON.stringify(cleanedTombstones));
+          localStorage.setItem(this.TOMBSTONES_STORAGE_KEY, JSON.stringify(mergedTombstones));
         }
       } catch(e) {}
     }
@@ -2234,20 +2230,15 @@ const app = {
         }
 
         if (u && /^\d{11}$/.test(u)) {
-          const activeStored = localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY);
-          // Only purge if school is genuinely tombstoned AND is neither active nor registered
-          if (tombstones[u] && u !== activeStored && !map[u] && u !== '27240304501') {
+          // If school is tombstoned, purge lingering keys and NEVER resurrect
+          if (tombstones[u] && u !== '27240304501') {
             localStorage.removeItem(`MDM_SCHOOL_DATA_${u}`);
             localStorage.removeItem(`MDM_SCHOOL_BACKUP_${u}`);
             localStorage.removeItem(this.AUTH_STORAGE_PREFIX + u);
             localStorage.removeItem(this.LICENSE_STORAGE_PREFIX + u);
-            // CRITICAL: NEVER delete MDM_SAFE_BACKUP_${u} so emergency disaster recovery is always preserved!
+            localStorage.removeItem(`MDM_SAFE_BACKUP_${u}`);
+            localStorage.removeItem(`MDM_PERMANENT_BACKUP_${u}`);
             continue;
-          }
-          if (tombstones[u] && (u === activeStored || map[u])) {
-            // Self-heal: It's active or registered, lift tombstone!
-            delete tombstones[u];
-            this.removeLocalTombstone(u);
           }
           if (!map[u]) {
             map[u] = { udise: u, schoolName: `शाळा (${u})` };
@@ -2825,6 +2816,13 @@ const app = {
       return;
     }
 
+    const activeStored = (localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY) || '').trim();
+    const wasActive = (activeStored === udise);
+    if (wasActive) {
+      localStorage.removeItem(this.ACTIVE_UDISE_STORAGE_KEY);
+      this.data = this.createDefaultSchoolData('');
+    }
+
     // 1. Purge ALL local storage keys for this school
     localStorage.removeItem(this.getSchoolStorageKey(udise));
     localStorage.removeItem(this.getSchoolBackupKey(udise));
@@ -2853,11 +2851,9 @@ const app = {
     if (row) row.remove();
 
     this.showToast(`🗑️ शाळा "${sName}" यशस्वीरीत्या हटवण्यात आली!`, 'info');
-    this.renderAdminSchoolsList();
+    await this.renderAdminSchoolsList(true);
 
-    if (this.getActiveUdise() === udise) {
-      localStorage.removeItem(this.ACTIVE_UDISE_STORAGE_KEY);
-      this.data = this.createDefaultSchoolData('');
+    if (wasActive) {
       this.closeMasterAdminModal();
       this.checkAccessControl();
     }
