@@ -5478,12 +5478,12 @@ body.level-mode-upper .section-switcher-control {
   display: none !important;
 }
 
-/* Printable Stock Management Sheets (शिल्लक, आवक धान्य व खराब धान्य प्रिंट) */
+/* Printable Stock Management Sheets (शिल्लक, आवक धान्य व खराब धान्य प्रिंट - Landscape / आडवा व्ह्यू) */
 .stock-print-doc {
   font-family: 'Noto Sans Devanagari', 'Mangal', 'Segoe UI', Arial, sans-serif;
   color: #0f172a;
   background: #fff;
-  padding: 8px 12px;
+  padding: 0;
   width: 100%;
   box-sizing: border-box;
 }
@@ -5496,11 +5496,11 @@ body.level-mode-upper .section-switcher-control {
   text-align: center;
   border-bottom: 2px solid #1e293b;
   padding-bottom: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .stock-print-gov {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   margin: 0;
   letter-spacing: 0.5px;
@@ -5508,19 +5508,19 @@ body.level-mode-upper .section-switcher-control {
 }
 
 .stock-print-title {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 800;
-  margin: 3px 0;
+  margin: 4px 0;
   color: #0f172a;
 }
 
 .stock-print-meta {
-  font-size: 11.5px;
-  margin: 4px 0 0 0;
+  font-size: 12px;
+  margin: 5px 0 0 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
   font-weight: 600;
   color: #334155;
 }
@@ -5528,14 +5528,14 @@ body.level-mode-upper .section-switcher-control {
 .stock-print-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 8px;
-  font-size: 11px;
+  margin-top: 10px;
+  font-size: 12px;
 }
 
 .stock-print-table th,
 .stock-print-table td {
   border: 1.2pt solid #334155;
-  padding: 5px 6px;
+  padding: 8px 10px;
   text-align: left;
   vertical-align: middle;
 }
@@ -5555,28 +5555,11 @@ body.level-mode-upper .section-switcher-control {
   background-color: #f8fafc;
 }
 
-.stock-item-pill-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.stock-item-pill {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 2px 6px;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 3px;
-  font-size: 10.5px;
-}
-
 .stock-print-summary {
-  margin-top: 10px;
-  padding: 8px 10px;
+  margin-top: 12px;
+  padding: 8px 12px;
   border: 1.2pt solid #334155;
-  font-size: 11.5px;
+  font-size: 12px;
   background: #f8fafc;
   border-radius: 4px;
 }
@@ -5584,23 +5567,30 @@ body.level-mode-upper .section-switcher-control {
 .stock-print-signatures {
   display: flex;
   justify-content: space-between;
-  margin-top: 28px;
-  padding: 0 10px;
-  font-size: 11.5px;
+  margin-top: 32px;
+  padding: 0 15px;
+  font-size: 12px;
   font-weight: 700;
   page-break-inside: avoid;
 }
 
 .stock-print-sig-col {
   text-align: center;
-  min-width: 130px;
+  min-width: 160px;
 }
 
 .stock-print-sig-col .sig-space {
-  height: 32px;
+  height: 38px;
 }
 
 @media print {
+  body.print-slip #printSlipContainer {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
   body.print-slip #printSlipContainer .stock-print-doc {
     margin: 0 !important;
     padding: 0 !important;

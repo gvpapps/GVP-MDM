@@ -7835,17 +7835,17 @@ const app = {
     `;
 
     if (typeof this.setPrintPageOrientation === 'function') {
-      this.setPrintPageOrientation('portrait', 'A4', '6mm 8mm 6mm 8mm');
+      this.setPrintPageOrientation('landscape', 'A4', '20mm 15mm 15mm 15mm');
     }
-    document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
-    document.body.classList.add('print-slip', 'print-portrait');
+    document.body.classList.remove('print-portrait', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
+    document.body.classList.add('print-slip', 'print-landscape');
     setTimeout(() => {
       window.print();
     }, 150);
   },
 
   /**
-   * Print Stock Receipts Register (आलेले धान्य पावती नोंदवही - तपशीलवार तक्ता व गोषवारा)
+   * Print Stock Receipts Register (आलेले धान्य पावती नोंदवही - सुटसुटीत सिंगल टेबल)
    */
   printStockReceipts() {
     const filter = this.stockViewFilter || this.activeSection || 'primary';
@@ -7871,73 +7871,44 @@ const app = {
     if (!printContainer) return;
 
     let rowsHtml = '';
-    const totalByIng = {};
 
     if (!receipts || receipts.length === 0) {
-      rowsHtml = `<tr><td colspan="6" style="text-align: center; padding: 20px;">कोणतीही आवक धान्य नोंद उपलब्ध नाही.</td></tr>`;
+      rowsHtml = `<tr><td colspan="6" style="text-align: center; padding: 25px; font-weight: 600;">कोणतीही आवक धान्य नोंद उपलब्ध नाही. (निल)</td></tr>`;
     } else {
       receipts.forEach((r, idx) => {
         let itemsDesc = [];
-        let rowTotalWeight = 0;
         Object.keys(r.items || {}).forEach(k => {
           const qty = parseFloat(r.items[k]) || 0;
           if (qty > 0) {
             const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
             const ingUnit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
-            itemsDesc.push(`<span><strong>${ingName}:</strong> ${qty.toFixed(2)} ${ingUnit}</span>`);
-            rowTotalWeight += qty;
-            totalByIng[k] = (totalByIng[k] || 0) + qty;
+            itemsDesc.push(`<strong>${ingName}:</strong> ${qty.toFixed(2)} ${ingUnit}`);
           }
         });
 
         const rDate = r.date ? r.date.split('-').reverse().join('/') : '—';
-        const itemsPills = itemsDesc.length > 0 
-          ? `<div class="stock-item-pill-grid">${itemsDesc.map(it => `<div class="stock-item-pill">${it}</div>`).join('')}</div>`
+        const itemsList = itemsDesc.length > 0 
+          ? itemsDesc.join(', ')
           : '—';
 
         rowsHtml += `
           <tr>
-            <td style="text-align: center;">${idx + 1}</td>
+            <td style="text-align: center; font-weight: 700;">${idx + 1}</td>
             <td style="text-align: center; font-weight: 600;">${rDate}</td>
             <td style="text-align: center; font-weight: 700;">${r.billNo || '—'}</td>
-            <td>${itemsPills}</td>
-            <td style="text-align: right; font-weight: 800; color: #1e3a8a;">${rowTotalWeight.toFixed(2)} kg</td>
+            <td style="font-size: 12px; line-height: 1.5;">${itemsList}</td>
             <td style="text-align: center;">${r.recordedBy || 'मुख्याध्यापक'}</td>
+            <td style="text-align: center; min-width: 80px;"></td>
           </tr>
         `;
       });
-    }
-
-    // Consolidated receipts summary table
-    let summaryTableRows = '';
-    let grandTotalReceiptWeight = 0;
-    const ingKeys = Object.keys(totalByIng);
-    if (ingKeys.length > 0) {
-      ingKeys.forEach((k, sIdx) => {
-        const ing = (this.data.ingredients && this.data.ingredients[k]) || {};
-        const ingName = ing.name || k;
-        const unit = ing.unit || 'kg';
-        const cat = ing.category === 'pulse' ? 'कडधान्य / डाळ' : (ing.category === 'oil' ? 'तेल' : (ing.category === 'grain' ? 'धान्य (तांदूळ)' : 'मसाला / इतर'));
-        const totalQty = totalByIng[k] || 0;
-        grandTotalReceiptWeight += totalQty;
-        summaryTableRows += `
-          <tr>
-            <td style="text-align: center;">${sIdx + 1}</td>
-            <td style="font-weight: 700;">${ingName}</td>
-            <td style="text-align: center;">${cat}</td>
-            <td style="text-align: right; font-weight: 800; color: #0f172a;">${totalQty.toFixed(2)} ${unit}</td>
-          </tr>
-        `;
-      });
-    } else {
-      summaryTableRows = `<tr><td colspan="4" style="text-align: center; padding: 10px;">कोणतीही आवक धान्य नोंद नाही.</td></tr>`;
     }
 
     printContainer.innerHTML = `
       <div class="stock-print-doc">
         <div class="stock-print-header">
           <p class="stock-print-gov">महाराष्ट्र शासन • शालेय पोषण आहार योजना (PM POSHAN)</p>
-          <h2 class="stock-print-title">आवक धान्य पावती नोंदवही (Stock Receipts Log)</h2>
+          <h2 class="stock-print-title">आवक धान्य व साहित्य पावती नोंदवही (Stock Receipts Register)</h2>
           <div class="stock-print-meta">
             <span><strong>शाळा:</strong> ${schoolName}</span>
             <span><strong>UDISE:</strong> ${cleanUdise}</span>
@@ -7945,6 +7916,7 @@ const app = {
             <span><strong>तालुका:</strong> ${taluka}</span>
             <span><strong>जिल्हा:</strong> ${district}</span>
             <span><strong>विभाग:</strong> ${filterName}</span>
+            <span><strong>माहे:</strong> ${mName} ${yrS}</span>
             <span><strong>एकूण नोंदी:</strong> ${receipts ? receipts.length : 0}</span>
           </div>
         </div>
@@ -7952,41 +7924,18 @@ const app = {
         <table class="stock-print-table">
           <thead>
             <tr>
-              <th style="width: 6%;">अ.क्र.</th>
-              <th style="width: 14%;">पावती / नोंद दिनांक</th>
+              <th style="width: 5%;">अ.क्र.</th>
+              <th style="width: 14%;">पावती / चलन दिनांक</th>
               <th style="width: 15%;">पावती / चलन क्र.</th>
-              <th style="width: 43%;">प्राप्त धान्य व साहित्य तपशील</th>
-              <th style="width: 11%;">एकूण वजन</th>
-              <th style="width: 11%;">नोंदवणार</th>
+              <th style="width: 44%;">प्राप्त धान्य व साहित्य तपशील</th>
+              <th style="width: 12%;">नोंद घेणारा अधिकारी</th>
+              <th style="width: 10%;">स्वाक्षरी</th>
             </tr>
           </thead>
           <tbody>
             ${rowsHtml}
           </tbody>
         </table>
-
-        <div style="margin-top: 14px;">
-          <h4 style="margin: 0 0 6px 0; font-size: 13px; font-weight: 800; color: #1e3a8a;">
-            📦 एकूण आवक धान्य व साहित्य एकत्रित गोषवारा तक्ता (Consolidated Receipts Summary)
-          </h4>
-          <table class="stock-print-table" style="margin-bottom: 8px;">
-            <thead>
-              <tr>
-                <th style="width: 8%;">अ.क्र.</th>
-                <th style="width: 42%;">धान्य / साहित्याचे नाव</th>
-                <th style="width: 25%;">साहित्य प्रवर्ग</th>
-                <th style="width: 25%; text-align: right;">एकूण आवक प्रमाण</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${summaryTableRows}
-              <tr style="background: #e2e8f0; font-weight: 800;">
-                <td colspan="3" style="text-align: right; font-size: 11px;">एकूण आवक वजन:</td>
-                <td style="text-align: right; font-weight: 900; font-size: 11.5px; color: #1e3a8a;">${grandTotalReceiptWeight.toFixed(2)} kg</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
 
         <div class="stock-print-signatures">
           <div class="stock-print-sig-col">
@@ -8009,17 +7958,17 @@ const app = {
     `;
 
     if (typeof this.setPrintPageOrientation === 'function') {
-      this.setPrintPageOrientation('portrait', 'A4', '6mm 8mm 6mm 8mm');
+      this.setPrintPageOrientation('landscape', 'A4', '20mm 15mm 15mm 15mm');
     }
-    document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
-    document.body.classList.add('print-slip', 'print-portrait');
+    document.body.classList.remove('print-portrait', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
+    document.body.classList.add('print-slip', 'print-landscape');
     setTimeout(() => {
       window.print();
     }, 150);
   },
 
   /**
-   * Print Damaged Stock Register / Panchanama (खराब धान्य नोंदवही व पंचनामा - तपशीलवार तक्ता व गोषवारा)
+   * Print Damaged Stock Register / Panchanama (खराब धान्य नोंदवही व पंचनामा - सुटसुटीत सिंगल टेबल)
    */
   printDamagedStock() {
     const filter = this.stockViewFilter || this.activeSection || 'primary';
@@ -8045,66 +7994,37 @@ const app = {
     if (!printContainer) return;
 
     let rowsHtml = '';
-    const totalDmgByIng = {};
 
     if (!damaged || damaged.length === 0) {
-      rowsHtml = `<tr><td colspan="6" style="text-align: center; padding: 20px;">कोणतीही खराब किंवा नासाडी धान्य नोंद उपलब्ध नाही. (निल / शून्य नुकसान)</td></tr>`;
+      rowsHtml = `<tr><td colspan="6" style="text-align: center; padding: 25px; font-weight: 600;">कोणतीही खराब किंवा नासाडी धान्य नोंद उपलब्ध नाही. (निल / शून्य नुकसान)</td></tr>`;
     } else {
       damaged.forEach((d, idx) => {
         let itemsDesc = [];
-        let rowTotalWeight = 0;
         Object.keys(d.items || {}).forEach(k => {
           const qty = parseFloat(d.items[k]) || 0;
           if (qty > 0) {
             const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
             const ingUnit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
-            itemsDesc.push(`<span><strong>${ingName}:</strong> ${qty.toFixed(2)} ${ingUnit}</span>`);
-            rowTotalWeight += qty;
-            totalDmgByIng[k] = (totalDmgByIng[k] || 0) + qty;
+            itemsDesc.push(`<strong>${ingName}:</strong> ${qty.toFixed(2)} ${ingUnit}`);
           }
         });
 
         const dDate = d.date ? d.date.split('-').reverse().join('/') : '—';
-        const itemsPills = itemsDesc.length > 0 
-          ? `<div class="stock-item-pill-grid">${itemsDesc.map(it => `<div class="stock-item-pill">${it}</div>`).join('')}</div>`
+        const itemsList = itemsDesc.length > 0 
+          ? itemsDesc.join(', ')
           : '—';
 
         rowsHtml += `
           <tr>
-            <td style="text-align: center;">${idx + 1}</td>
+            <td style="text-align: center; font-weight: 700;">${idx + 1}</td>
             <td style="text-align: center; font-weight: 600;">${dDate}</td>
+            <td style="font-size: 12px; line-height: 1.5;">${itemsList}</td>
             <td style="font-weight: 600;">${d.reason || 'कीड लागणे / मुदत संपणे / सांडणे'}</td>
-            <td>${itemsPills}</td>
-            <td style="text-align: right; font-weight: 800; color: #b91c1c;">${rowTotalWeight.toFixed(2)} kg</td>
             <td style="text-align: center;">${d.recordedBy || 'मुख्याध्यापक'}</td>
+            <td style="text-align: center; min-width: 80px;"></td>
           </tr>
         `;
       });
-    }
-
-    // Consolidated damaged summary table
-    let summaryTableRows = '';
-    let grandTotalDmgWeight = 0;
-    const dmgKeys = Object.keys(totalDmgByIng);
-    if (dmgKeys.length > 0) {
-      dmgKeys.forEach((k, sIdx) => {
-        const ing = (this.data.ingredients && this.data.ingredients[k]) || {};
-        const ingName = ing.name || k;
-        const unit = ing.unit || 'kg';
-        const cat = ing.category === 'pulse' ? 'कडधान्य / डाळ' : (ing.category === 'oil' ? 'तेल' : (ing.category === 'grain' ? 'धान्य (तांदूळ)' : 'मसाला / इतर'));
-        const totalQty = totalDmgByIng[k] || 0;
-        grandTotalDmgWeight += totalQty;
-        summaryTableRows += `
-          <tr>
-            <td style="text-align: center;">${sIdx + 1}</td>
-            <td style="font-weight: 700;">${ingName}</td>
-            <td style="text-align: center;">${cat}</td>
-            <td style="text-align: right; font-weight: 800; color: #b91c1c;">${totalQty.toFixed(2)} ${unit}</td>
-          </tr>
-        `;
-      });
-    } else {
-      summaryTableRows = `<tr><td colspan="4" style="text-align: center; padding: 10px;">निल (कोणतेही नुकसान किंवा नासाडी नोंद नाही).</td></tr>`;
     }
 
     printContainer.innerHTML = `
@@ -8119,6 +8039,7 @@ const app = {
             <span><strong>तालुका:</strong> ${taluka}</span>
             <span><strong>जिल्हा:</strong> ${district}</span>
             <span><strong>विभाग:</strong> ${filterName}</span>
+            <span><strong>माहे:</strong> ${mName} ${yrS}</span>
             <span><strong>नोंदी संख्या:</strong> ${damaged ? damaged.length : 0}</span>
           </div>
         </div>
@@ -8126,12 +8047,12 @@ const app = {
         <table class="stock-print-table">
           <thead>
             <tr>
-              <th style="width: 6%;">अ.क्र.</th>
-              <th style="width: 14%;">नोंद दिनांक</th>
-              <th style="width: 28%;">कारण / पंचनामा तपशील / शेरा</th>
-              <th style="width: 32%;">खराब झालेले धान्य व साहित्य तपशील</th>
-              <th style="width: 10%;">एकूण वजन</th>
-              <th style="width: 10%;">नोंदवणार</th>
+              <th style="width: 5%;">अ.क्र.</th>
+              <th style="width: 13%;">नोंद दिनांक</th>
+              <th style="width: 36%;">खराब / निर्लेखित धान्य व साहित्य तपशील</th>
+              <th style="width: 24%;">नुकसान / निर्लेखन कारण व शेरा</th>
+              <th style="width: 12%;">नोंद घेणारा अधिकारी</th>
+              <th style="width: 10%;">स्वाक्षरी</th>
             </tr>
           </thead>
           <tbody>
@@ -8139,30 +8060,7 @@ const app = {
           </tbody>
         </table>
 
-        <div style="margin-top: 14px;">
-          <h4 style="margin: 0 0 6px 0; font-size: 13px; font-weight: 800; color: #991b1b;">
-            ⚠️ एकूण निर्लेखित / खराब धान्य गोषवारा तक्ता (Consolidated Damaged Summary)
-          </h4>
-          <table class="stock-print-table" style="margin-bottom: 8px;">
-            <thead>
-              <tr>
-                <th style="width: 8%;">अ.क्र.</th>
-                <th style="width: 42%;">धान्य / साहित्याचे नाव</th>
-                <th style="width: 25%;">साहित्य प्रवर्ग</th>
-                <th style="width: 25%; text-align: right;">एकूण खराब / निर्लेखित प्रमाण</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${summaryTableRows}
-              <tr style="background: #fee2e2; font-weight: 800;">
-                <td colspan="3" style="text-align: right; font-size: 11px;">एकूण खराब वजन:</td>
-                <td style="text-align: right; font-weight: 900; font-size: 11.5px; color: #991b1b;">${grandTotalDmgWeight.toFixed(2)} kg</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="stock-print-summary">
+        <div class="stock-print-summary" style="margin-top: 14px;">
           <strong>पंचनामा शेरा:</strong> वरील नमूद धान्य खराब / मुदत संपलेले / खाण्यास अयोग्य झाल्याची प्रत्यक्ष खात्री करून शाळा व्यवस्थापन समिती समक्ष पंचनामा करून योग्य त्या कारणास्तव निर्लेखित (write-off) करण्यात आले आहे.
         </div>
 
@@ -8192,10 +8090,10 @@ const app = {
     `;
 
     if (typeof this.setPrintPageOrientation === 'function') {
-      this.setPrintPageOrientation('portrait', 'A4', '6mm 8mm 6mm 8mm');
+      this.setPrintPageOrientation('landscape', 'A4', '20mm 15mm 15mm 15mm');
     }
-    document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
-    document.body.classList.add('print-slip', 'print-portrait');
+    document.body.classList.remove('print-portrait', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
+    document.body.classList.add('print-slip', 'print-landscape');
     setTimeout(() => {
       window.print();
     }, 150);
