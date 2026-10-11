@@ -1185,6 +1185,16 @@ const app = {
     if (recentBox) recentBox.classList.add('d-none');
   },
 
+  populateSchoolSelector() {
+    try {
+      if (typeof this.renderRegisteredSchoolsList === 'function') {
+        this.renderRegisteredSchoolsList();
+      }
+    } catch (e) {
+      console.warn("populateSchoolSelector warning:", e);
+    }
+  },
+
   // =========================================================================
   // ACCESS CONTROL: MULTI-SCHOOL AUTH, 30-DAY TRIAL & MASTER ACTIVATION
   // =========================================================================
@@ -8676,6 +8686,33 @@ const app = {
       this.autoSaveSchoolSettings();
     }
 
+    // Self-healing: if settings or schoolName is missing or empty, restore from registered schools
+    if (!this.data.settings) this.data.settings = {};
+    if (!this.data.settings.schoolName || this.data.settings.schoolName.trim() === '' || this.data.settings.schoolName.includes('(UDISE:')) {
+      const regList = (typeof this.getRegisteredSchools === 'function') ? this.getRegisteredSchools() : [];
+      const found = regList.find(s => s.udise === cleanUdise);
+      if (found && found.schoolName && !found.schoolName.includes('(UDISE:')) {
+        this.data.settings.schoolName = found.schoolName;
+        if (found.centre && !this.data.settings.centre) this.data.settings.centre = found.centre;
+        if (found.taluka && !this.data.settings.taluka) this.data.settings.taluka = found.taluka;
+        if (found.district && !this.data.settings.district) this.data.settings.district = found.district;
+      }
+    }
+
+    // Deep copy ingredients with synchronized defaultRate, ratePrimary, rateUpper
+    const exportedIngredients = {};
+    const srcIngs = this.data.ingredients || {};
+    Object.keys(srcIngs).forEach(k => {
+      const ing = Object.assign({}, srcIngs[k]);
+      const defR = (ing.defaultRate !== undefined) ? ing.defaultRate : (ing.ratePrimary !== undefined ? ing.ratePrimary : 0.02);
+      ing.defaultRate = defR;
+      if (ing.ratePrimary === undefined) ing.ratePrimary = defR;
+      if (ing.rateUpper === undefined) ing.rateUpper = +(defR * 1.5).toFixed(5);
+      exportedIngredients[k] = ing;
+    });
+
+    const exportedMenus = Array.isArray(this.data.menus) ? JSON.parse(JSON.stringify(this.data.menus)) : [];
+
     const authData = (typeof this.getSchoolAuth === 'function') ? this.getSchoolAuth(cleanUdise) : null;
     const licenseData = (typeof this.getSchoolLicense === 'function') ? this.getSchoolLicense(cleanUdise) : null;
 
@@ -8686,11 +8723,11 @@ const app = {
       exportDate: today,
       schoolUdise: cleanUdise,
       schoolName: (this.data && this.data.settings && this.data.settings.schoolName) || '',
-      settings: this.data.settings || {},
-      initialStock: this.data.initialStock || {},
-      initialStockUpper: this.data.initialStockUpper || {},
-      menus: this.data.menus || [],
-      ingredients: this.data.ingredients || {},
+      settings: Object.assign({}, this.data.settings || {}),
+      initialStock: Object.assign({}, this.data.initialStock || {}),
+      initialStockUpper: Object.assign({}, this.data.initialStockUpper || {}),
+      menus: exportedMenus,
+      ingredients: exportedIngredients,
       stockReceipts: this.data.stockReceipts || [],
       stockReceiptsUpper: this.data.stockReceiptsUpper || [],
       damagedStock: this.data.damagedStock || [],
@@ -8870,24 +8907,52 @@ const app = {
 
         // Build clean school data object without leaking from previous active school
         const cleanBase = this.createDefaultSchoolData(targetUdise, targetSettings.schoolName || parsed.schoolName || '');
-        const restoredSettings = Object.assign({}, cleanBase.settings, targetSettings);
+        const cleanTargetSettings = {};
+        for (const [k, v] of Object.entries(targetSettings)) {
+          if (v !== undefined && v !== null && v !== '') {
+            cleanTargetSettings[k] = v;
+          }
+        }
+        const restoredSettings = Object.assign({}, cleanBase.settings, cleanTargetSettings);
         restoredSettings.udise = targetUdise;
 
         // If schoolName was placeholder like "शाळा (UDISE: ...)", see if real registered name exists
-        if (!restoredSettings.schoolName || restoredSettings.schoolName.includes('(UDISE:')) {
+        if (!restoredSettings.schoolName || restoredSettings.schoolName.trim() === '' || restoredSettings.schoolName.includes('(UDISE:')) {
           const regList = this.getRegisteredSchools();
           const existingSch = regList.find(s => s.udise === targetUdise);
           if (existingSch && existingSch.schoolName && !existingSch.schoolName.includes('(')) {
             restoredSettings.schoolName = existingSch.schoolName;
+            if (existingSch.centre && !restoredSettings.centre) restoredSettings.centre = existingSch.centre;
+            if (existingSch.taluka && !restoredSettings.taluka) restoredSettings.taluka = existingSch.taluka;
+            if (existingSch.district && !restoredSettings.district) restoredSettings.district = existingSch.district;
           }
         }
+
+        // Restored ingredients with dual rates synchronization
+        const restoredIngredients = Object.assign({}, cleanBase.ingredients);
+        if (dataToRestore.ingredients && typeof dataToRestore.ingredients === 'object') {
+          Object.keys(dataToRestore.ingredients).forEach(k => {
+            const inc = dataToRestore.ingredients[k];
+            const base = restoredIngredients[k] || {};
+            restoredIngredients[k] = Object.assign({}, base, inc);
+            const cur = restoredIngredients[k];
+            const defR = (cur.defaultRate !== undefined) ? cur.defaultRate : (cur.ratePrimary !== undefined ? cur.ratePrimary : 0.02);
+            cur.defaultRate = defR;
+            if (cur.ratePrimary === undefined) cur.ratePrimary = defR;
+            if (cur.rateUpper === undefined) cur.rateUpper = +(defR * 1.5).toFixed(5);
+          });
+        }
+
+        const restoredMenus = (dataToRestore.menus && Array.isArray(dataToRestore.menus) && dataToRestore.menus.length > 0)
+          ? JSON.parse(JSON.stringify(dataToRestore.menus))
+          : cleanBase.menus;
 
         const restoredData = {
           settings: restoredSettings,
           initialStock: dataToRestore.initialStock ? Object.assign({}, dataToRestore.initialStock) : cleanBase.initialStock,
           initialStockUpper: dataToRestore.initialStockUpper ? Object.assign({}, dataToRestore.initialStockUpper) : {},
-          menus: (dataToRestore.menus && Array.isArray(dataToRestore.menus) && dataToRestore.menus.length > 0) ? dataToRestore.menus : cleanBase.menus,
-          ingredients: (dataToRestore.ingredients && typeof dataToRestore.ingredients === 'object') ? Object.assign({}, cleanBase.ingredients, dataToRestore.ingredients) : cleanBase.ingredients,
+          menus: restoredMenus,
+          ingredients: restoredIngredients,
           stockReceipts: dataToRestore.stockReceipts || [],
           stockReceiptsUpper: dataToRestore.stockReceiptsUpper || [],
           damagedStock: dataToRestore.damagedStock || [],
@@ -8960,7 +9025,15 @@ const app = {
           this.applyGlobalConfig();
           this.setupDatePickers();
           this.populateMenuDropdown();
-          this.populateSchoolSelector();
+          try {
+            if (typeof this.populateSchoolSelector === 'function') {
+              this.populateSchoolSelector();
+            } else if (typeof this.renderRegisteredSchoolsList === 'function') {
+              this.renderRegisteredSchoolsList();
+            }
+          } catch (selErr) {
+            console.warn("populateSchoolSelector warning:", selErr);
+          }
           this.updateHeaderMeta();
           this.renderSettingsView();
           this.renderStockView();
