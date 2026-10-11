@@ -463,6 +463,54 @@ const cloudSync = {
   },
 
   /**
+   * Smart Conflict-Free Merge for Ingredients / Consumption Rates (धान्य प्रमाण)
+   * Ensures rates and custom items updated on PC or Mobile are cleanly reconciled
+   */
+  mergeIngredients(localIngs, remoteIngs, preferRemote = false) {
+    const l = (localIngs && typeof localIngs === 'object') ? localIngs : {};
+    const r = (remoteIngs && typeof remoteIngs === 'object') ? remoteIngs : {};
+
+    const allKeys = Array.from(new Set([...Object.keys(l), ...Object.keys(r)]));
+    if (allKeys.length === 0) return {};
+
+    const merged = {};
+    allKeys.forEach(k => {
+      const localItem = l[k];
+      const remoteItem = r[k];
+
+      if (!localItem && remoteItem) {
+        merged[k] = Object.assign({}, remoteItem);
+      } else if (localItem && !remoteItem) {
+        merged[k] = Object.assign({}, localItem);
+      } else {
+        // Exists in both: reconcile fields
+        if (preferRemote) {
+          // On pullFromCloud: remote is authoritative for rates and names
+          merged[k] = Object.assign({}, localItem, remoteItem);
+        } else {
+          // On pushToCloud: local is authoritative
+          merged[k] = Object.assign({}, remoteItem, localItem);
+        }
+      }
+    });
+
+    return merged;
+  },
+
+  /**
+   * Smart Merge for Menus (Daily food items / pulses assignment)
+   */
+  mergeMenus(localMenus, remoteMenus, preferRemote = false) {
+    if (preferRemote && Array.isArray(remoteMenus) && remoteMenus.length > 0) {
+      return remoteMenus;
+    }
+    if (!preferRemote && Array.isArray(localMenus) && localMenus.length > 0) {
+      return localMenus;
+    }
+    return (Array.isArray(remoteMenus) && remoteMenus.length > 0) ? remoteMenus : (localMenus || []);
+  },
+
+  /**
    * Push local data to Google Firebase Realtime Database
    */
   async pushToCloud(isSilent = false, targetUdise = null) {
@@ -609,6 +657,9 @@ const cloudSync = {
           }
         });
 
+        const mergedIngredients = this.mergeIngredients(dataToPush.ingredients, remoteData.ingredients, false);
+        const mergedMenus = this.mergeMenus(dataToPush.menus, remoteData.menus, false);
+
         dataToPush = Object.assign({}, dataToPush, {
           records: mergedRecords,
           recordsUpper: mergedRecordsUpper,
@@ -617,6 +668,8 @@ const cloudSync = {
           initialStock: mergedStock,
           initialStockUpper: mergedStockUpper,
           settings: mergedSettings,
+          ingredients: mergedIngredients,
+          menus: mergedMenus,
           stockReceipts: mergedReceipts,
           stockReceiptsUpper: mergedReceiptsUpper,
           damagedStock: mergedDamaged,
@@ -632,6 +685,8 @@ const cloudSync = {
           app.data.initialStock = mergedStock;
           app.data.initialStockUpper = mergedStockUpper;
           app.data.settings = mergedSettings;
+          app.data.ingredients = mergedIngredients;
+          app.data.menus = mergedMenus;
           app.data.stockReceipts = mergedReceipts;
           app.data.stockReceiptsUpper = mergedReceiptsUpper;
           app.data.damagedStock = mergedDamaged;
@@ -817,6 +872,8 @@ const cloudSync = {
             const mergedStock = this.mergeStockBalances(baseData.initialStock, remoteData.initialStock);
             const mergedStockUpper = this.mergeStockBalances(baseData.initialStockUpper, remoteData.initialStockUpper);
             const mergedSettings = this.mergeSettings(baseData.settings, remoteData.settings, currentUdise, true);
+            const mergedIngredients = this.mergeIngredients(baseData.ingredients, remoteData.ingredients, true);
+            const mergedMenus = this.mergeMenus(baseData.menus, remoteData.menus, true);
 
             // Stock receipts union (Primary)
             const mergedReceipts = [...(remoteData.stockReceipts || [])];
@@ -866,6 +923,8 @@ const cloudSync = {
               initialStock: mergedStock,
               initialStockUpper: mergedStockUpper,
               settings: mergedSettings,
+              ingredients: mergedIngredients,
+              menus: mergedMenus,
               stockReceipts: mergedReceipts,
               stockReceiptsUpper: mergedReceiptsUpper,
               damagedStock: mergedDamaged,
@@ -890,6 +949,8 @@ const cloudSync = {
             if (isActiveSchool) {
               app.data = mergedTarget;
               if (typeof app.updateHeaderMeta === 'function') app.updateHeaderMeta();
+              if (typeof app.populateMenuDropdown === 'function') app.populateMenuDropdown();
+              if (typeof app.renderManualGrainsCheckboxes === 'function') app.renderManualGrainsCheckboxes();
               if (typeof app.renderSettingsView === 'function') app.renderSettingsView();
               if (typeof app.refreshAllViews === 'function') app.refreshAllViews();
               if (typeof app.renderCurrentTab === 'function') app.renderCurrentTab();

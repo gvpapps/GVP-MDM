@@ -8175,7 +8175,7 @@ const app = {
       div.className = 'form-group';
       div.innerHTML = `
         <label class="form-label font-sm" style="font-weight: 600;">${ing.name} (${ing.unit})</label>
-        <input type="number" step="${ing.category === 'spice' ? '0.001' : '0.01'}" min="0" class="form-control damaged-item-input" data-key="${key}" placeholder="0.00">
+        <input type="number" step="any" min="0" class="form-control damaged-item-input" data-key="${key}" placeholder="0.00">
       `;
       grid.appendChild(div);
     });
@@ -8287,7 +8287,7 @@ const app = {
       div.className = 'form-group';
       div.innerHTML = `
         <label class="form-label font-sm">${ing.name} (${ing.unit})</label>
-        <input type="number" step="${ing.category === 'spice' ? '0.001' : '0.01'}" class="form-control stock-item-input" data-key="${key}" placeholder="0.00 (ऋण - नोंद शक्य)">
+        <input type="number" step="any" class="form-control stock-item-input" data-key="${key}" placeholder="0.00 (ऋण - नोंद शक्य)">
       `;
       grid.appendChild(div);
     });
@@ -8413,7 +8413,7 @@ const app = {
       div.className = 'form-group';
       div.innerHTML = `
         <label class="form-label font-sm" style="font-weight: 600;">${ing.name} (${ing.unit})</label>
-        <input type="number" step="${ing.category === 'spice' ? '0.001' : '0.01'}" class="form-control old-stock-modal-input" data-key="${key}" value="${curVal}" placeholder="0.00 (ऋण - नोंद शक्य)">
+        <input type="number" step="any" class="form-control old-stock-modal-input" data-key="${key}" value="${curVal}" placeholder="0.00 (ऋण - नोंद शक्य)">
       `;
       grid.appendChild(div);
     });
@@ -8470,7 +8470,7 @@ const app = {
       div.className = 'form-group';
       div.innerHTML = `
         <label class="form-label font-sm" style="font-weight: 600;">${ing.name} (${ing.unit})</label>
-        <input type="number" step="${ing.category === 'spice' ? '0.001' : '0.01'}" min="0" class="form-control stock-transfer-item-input" data-key="${key}" placeholder="0.00">
+        <input type="number" step="any" min="0" class="form-control stock-transfer-item-input" data-key="${key}" placeholder="0.00">
       `;
       grid.appendChild(div);
     });
@@ -8600,7 +8600,7 @@ const app = {
       div.className = 'form-group';
       div.innerHTML = `
         <label class="form-label font-sm" style="font-weight: 600;">${ing.name} (${ing.unit})</label>
-        <input type="number" step="0.001" class="form-control old-stock-settings-input" data-key="${key}" value="${curVal}" placeholder="0.00 (ऋण - नोंद शक्य)" oninput="app.onOldStockSettingChange('${key}')">
+        <input type="number" step="any" class="form-control old-stock-settings-input" data-key="${key}" value="${curVal}" placeholder="0.00 (ऋण - नोंद शक्य)" oninput="app.onOldStockSettingChange('${key}')">
       `;
       grid.appendChild(div);
     });
