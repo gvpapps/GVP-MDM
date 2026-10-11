@@ -5478,12 +5478,12 @@ body.level-mode-upper .section-switcher-control {
   display: none !important;
 }
 
-/* Printable Stock Management Sheets (शिल्लक, आवक धान्य व खराब धान्य प्रिंट - Landscape / आडवा व्ह्यू) */
+/* Printable Stock Management Sheets (शिल्लक, आवक धान्य व खराब धान्य प्रिंट - सुबक व संतुलित A4 Landscape) */
 .stock-print-doc {
   font-family: 'Noto Sans Devanagari', 'Mangal', 'Segoe UI', Arial, sans-serif;
   color: #0f172a;
   background: #fff;
-  padding: 0;
+  padding: 4mm 6mm;
   width: 100%;
   box-sizing: border-box;
 }
@@ -5494,47 +5494,52 @@ body.level-mode-upper .section-switcher-control {
 
 .stock-print-header {
   text-align: center;
-  border-bottom: 2px solid #1e293b;
+  border-bottom: 2.5px solid #1e293b;
   padding-bottom: 8px;
   margin-bottom: 12px;
 }
 
 .stock-print-gov {
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 700;
-  margin: 0;
-  letter-spacing: 0.5px;
+  margin: 0 0 3px 0;
+  letter-spacing: 0.8px;
   color: #1e3a8a;
 }
 
 .stock-print-title {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 800;
-  margin: 4px 0;
+  margin: 4px 0 8px 0;
   color: #0f172a;
+  letter-spacing: 0.3px;
 }
 
 .stock-print-meta {
-  font-size: 12px;
-  margin: 5px 0 0 0;
+  font-size: 12.5px;
+  margin: 6px 0 0 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 16px;
+  gap: 14px;
   font-weight: 600;
   color: #334155;
+  background: #f8fafc;
+  border: 1.2pt solid #cbd5e1;
+  border-radius: 5px;
+  padding: 7px 12px;
 }
 
 .stock-print-table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
-  font-size: 12px;
+  font-size: 12.5px;
 }
 
 .stock-print-table th,
 .stock-print-table td {
-  border: 1.2pt solid #334155;
+  border: 1.2pt solid #1e293b;
   padding: 8px 10px;
   text-align: left;
   vertical-align: middle;
@@ -5555,11 +5560,41 @@ body.level-mode-upper .section-switcher-control {
   background-color: #f8fafc;
 }
 
+/* Itemized 2-Column Subtable for Grain/Item Lists */
+.stock-item-subtable {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  background: #ffffff;
+  font-size: 11.5px;
+}
+
+.stock-item-subtable th {
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+  font-weight: 700 !important;
+  padding: 4px 8px !important;
+  border: 1px solid #94a3b8 !important;
+  font-size: 11px !important;
+}
+
+.stock-item-subtable td {
+  padding: 4px 8px !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  vertical-align: middle !important;
+}
+
+.stock-item-subtable tbody tr:nth-child(even) {
+  background-color: #f8fafc !important;
+}
+
 .stock-print-summary {
-  margin-top: 12px;
-  padding: 8px 12px;
+  margin-top: 14px;
+  padding: 10px 14px;
   border: 1.2pt solid #334155;
-  font-size: 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
   background: #f8fafc;
   border-radius: 4px;
 }
@@ -5567,8 +5602,8 @@ body.level-mode-upper .section-switcher-control {
 .stock-print-signatures {
   display: flex;
   justify-content: space-between;
-  margin-top: 32px;
-  padding: 0 15px;
+  margin-top: auto;
+  padding: 25px 15px 5px 15px;
   font-size: 12px;
   font-weight: 700;
   page-break-inside: avoid;
@@ -5580,7 +5615,12 @@ body.level-mode-upper .section-switcher-control {
 }
 
 .stock-print-sig-col .sig-space {
-  height: 38px;
+  height: 55px;
+}
+
+.stock-print-sig-col .sig-line {
+  border-top: 1.2pt dotted #64748b;
+  margin: 4px 10px 6px 10px;
 }
 
 @media print {
@@ -5593,8 +5633,21 @@ body.level-mode-upper .section-switcher-control {
   }
   body.print-slip #printSlipContainer .stock-print-doc {
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 4mm 6mm !important;
     width: 100% !important;
+    min-height: 180mm !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+  }
+  .stock-print-signatures {
+    margin-top: auto !important;
+    padding-top: 25px !important;
+    page-break-inside: avoid !important;
+  }
+  .stock-print-sig-col .sig-space {
+    height: 55px !important;
   }
 }
 

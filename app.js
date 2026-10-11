@@ -7817,16 +7817,19 @@ const app = {
         <div class="stock-print-signatures">
           <div class="stock-print-sig-col">
             <div class="sig-space"></div>
+            <div class="sig-line"></div>
             <div>स्वाक्षरी: ${s.cookName || 'स्वयंपाकी / मदतनीस'}</div>
             <div style="font-size: 11px; font-weight: normal;">स्वयंपाकी / मदतनीस</div>
           </div>
           <div class="stock-print-sig-col">
             <div class="sig-space"></div>
+            <div class="sig-line"></div>
             <div>स्वाक्षरी: ${s.president || 'अध्यक्ष'}</div>
             <div style="font-size: 11px; font-weight: normal;">अध्यक्ष, शाळा व्यवस्थापन समिती</div>
           </div>
           <div class="stock-print-sig-col">
             <div class="sig-space"></div>
+            <div class="sig-line"></div>
             <div>स्वाक्षरी: ${s.headmaster || 'मुख्याध्यापक'}</div>
             <div style="font-size: 11px; font-weight: normal;">मुख्याध्यापक / सचिव (शा.व्य.स.) व शिक्का</div>
           </div>
@@ -7835,13 +7838,13 @@ const app = {
     `;
 
     if (typeof this.setPrintPageOrientation === 'function') {
-      this.setPrintPageOrientation('landscape', 'A4', '20mm 15mm 15mm 15mm');
+      this.setPrintPageOrientation('landscape', 'A4', '12mm 15mm 12mm 15mm');
     }
     document.body.classList.remove('print-portrait', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
     document.body.classList.add('print-slip', 'print-landscape');
     setTimeout(() => {
       window.print();
-    }, 150);
+    }, 250);
   },
 
   /**
@@ -7876,29 +7879,46 @@ const app = {
       rowsHtml = `<tr><td colspan="6" style="text-align: center; padding: 25px; font-weight: 600;">कोणतीही आवक धान्य नोंद उपलब्ध नाही. (निल)</td></tr>`;
     } else {
       receipts.forEach((r, idx) => {
-        let itemsDesc = [];
+        let itemsRows = '';
         Object.keys(r.items || {}).forEach(k => {
           const qty = parseFloat(r.items[k]) || 0;
           if (qty > 0) {
             const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
             const ingUnit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
-            itemsDesc.push(`<strong>${ingName}:</strong> ${qty.toFixed(2)} ${ingUnit}`);
+            itemsRows += `
+              <tr>
+                <td style="font-weight: 600;">${ingName}</td>
+                <td style="text-align: right; font-weight: 700; white-space: nowrap;">${qty.toFixed(2)} ${ingUnit}</td>
+              </tr>
+            `;
           }
         });
 
         const rDate = r.date ? r.date.split('-').reverse().join('/') : '—';
-        const itemsList = itemsDesc.length > 0 
-          ? itemsDesc.join(', ')
+        const itemsTableHtml = itemsRows
+          ? `
+            <table class="stock-item-subtable">
+              <thead>
+                <tr>
+                  <th style="text-align: left; width: 62%;">साहित्य नाव</th>
+                  <th style="text-align: right; width: 38%;">प्रमाण / वजन</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsRows}
+              </tbody>
+            </table>
+          `
           : '—';
 
         rowsHtml += `
           <tr>
-            <td style="text-align: center; font-weight: 700;">${idx + 1}</td>
-            <td style="text-align: center; font-weight: 600;">${rDate}</td>
-            <td style="text-align: center; font-weight: 700;">${r.billNo || '—'}</td>
-            <td style="font-size: 12px; line-height: 1.5;">${itemsList}</td>
-            <td style="text-align: center;">${r.recordedBy || 'मुख्याध्यापक'}</td>
-            <td style="text-align: center; min-width: 80px;"></td>
+            <td style="text-align: center; font-weight: 700; vertical-align: middle;">${idx + 1}</td>
+            <td style="text-align: center; font-weight: 600; vertical-align: middle;">${rDate}</td>
+            <td style="text-align: center; font-weight: 700; vertical-align: middle;">${r.billNo || '—'}</td>
+            <td style="padding: 4px; vertical-align: middle;">${itemsTableHtml}</td>
+            <td style="text-align: center; vertical-align: middle;">${r.recordedBy || 'मुख्याध्यापक'}</td>
+            <td style="text-align: center; min-width: 80px; vertical-align: middle;"></td>
           </tr>
         `;
       });
@@ -7940,16 +7960,19 @@ const app = {
         <div class="stock-print-signatures">
           <div class="stock-print-sig-col">
             <div class="sig-space"></div>
+            <div class="sig-line"></div>
             <div>स्वाक्षरी: ${s.cookName || 'स्वयंपाकी / मदतनीस'}</div>
             <div style="font-size: 11px; font-weight: normal;">स्वयंपाकी / मदतनीस</div>
           </div>
           <div class="stock-print-sig-col">
             <div class="sig-space"></div>
+            <div class="sig-line"></div>
             <div>स्वाक्षरी: ${s.president || 'अध्यक्ष'}</div>
             <div style="font-size: 11px; font-weight: normal;">अध्यक्ष, शाळा व्यवस्थापन समिती</div>
           </div>
           <div class="stock-print-sig-col">
             <div class="sig-space"></div>
+            <div class="sig-line"></div>
             <div>स्वाक्षरी: ${s.headmaster || 'मुख्याध्यापक'}</div>
             <div style="font-size: 11px; font-weight: normal;">मुख्याध्यापक / सचिव (शा.व्य.स.) व शिक्का</div>
           </div>
@@ -7958,13 +7981,13 @@ const app = {
     `;
 
     if (typeof this.setPrintPageOrientation === 'function') {
-      this.setPrintPageOrientation('landscape', 'A4', '20mm 15mm 15mm 15mm');
+      this.setPrintPageOrientation('landscape', 'A4', '12mm 15mm 12mm 15mm');
     }
     document.body.classList.remove('print-portrait', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
     document.body.classList.add('print-slip', 'print-landscape');
     setTimeout(() => {
       window.print();
-    }, 150);
+    }, 250);
   },
 
   /**
@@ -7999,29 +8022,46 @@ const app = {
       rowsHtml = `<tr><td colspan="6" style="text-align: center; padding: 25px; font-weight: 600;">कोणतीही खराब किंवा नासाडी धान्य नोंद उपलब्ध नाही. (निल / शून्य नुकसान)</td></tr>`;
     } else {
       damaged.forEach((d, idx) => {
-        let itemsDesc = [];
+        let itemsRows = '';
         Object.keys(d.items || {}).forEach(k => {
           const qty = parseFloat(d.items[k]) || 0;
           if (qty > 0) {
             const ingName = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].name) || k;
             const ingUnit = (this.data.ingredients && this.data.ingredients[k] && this.data.ingredients[k].unit) || 'kg';
-            itemsDesc.push(`<strong>${ingName}:</strong> ${qty.toFixed(2)} ${ingUnit}`);
+            itemsRows += `
+              <tr>
+                <td style="font-weight: 600;">${ingName}</td>
+                <td style="text-align: right; font-weight: 700; white-space: nowrap;">${qty.toFixed(2)} ${ingUnit}</td>
+              </tr>
+            `;
           }
         });
 
         const dDate = d.date ? d.date.split('-').reverse().join('/') : '—';
-        const itemsList = itemsDesc.length > 0 
-          ? itemsDesc.join(', ')
+        const itemsTableHtml = itemsRows
+          ? `
+            <table class="stock-item-subtable">
+              <thead>
+                <tr>
+                  <th style="text-align: left; width: 62%;">साहित्य नाव</th>
+                  <th style="text-align: right; width: 38%;">प्रमाण / वजन</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsRows}
+              </tbody>
+            </table>
+          `
           : '—';
 
         rowsHtml += `
           <tr>
-            <td style="text-align: center; font-weight: 700;">${idx + 1}</td>
-            <td style="text-align: center; font-weight: 600;">${dDate}</td>
-            <td style="font-size: 12px; line-height: 1.5;">${itemsList}</td>
-            <td style="font-weight: 600;">${d.reason || 'कीड लागणे / मुदत संपणे / सांडणे'}</td>
-            <td style="text-align: center;">${d.recordedBy || 'मुख्याध्यापक'}</td>
-            <td style="text-align: center; min-width: 80px;"></td>
+            <td style="text-align: center; font-weight: 700; vertical-align: middle;">${idx + 1}</td>
+            <td style="text-align: center; font-weight: 600; vertical-align: middle;">${dDate}</td>
+            <td style="padding: 4px; vertical-align: middle;">${itemsTableHtml}</td>
+            <td style="font-weight: 600; vertical-align: middle;">${d.reason || 'कीड लागणे / मुदत संपणे / सांडणे'}</td>
+            <td style="text-align: center; vertical-align: middle;">${d.recordedBy || 'मुख्याध्यापक'}</td>
+            <td style="text-align: center; min-width: 80px; vertical-align: middle;"></td>
           </tr>
         `;
       });
@@ -8049,8 +8089,8 @@ const app = {
             <tr>
               <th style="width: 5%;">अ.क्र.</th>
               <th style="width: 13%;">नोंद दिनांक</th>
-              <th style="width: 36%;">खराब / निर्लेखित धान्य व साहित्य तपशील</th>
-              <th style="width: 24%;">नुकसान / निर्लेखन कारण व शेरा</th>
+              <th style="width: 38%;">खराब / निर्लेखित धान्य व साहित्य तपशील</th>
+              <th style="width: 22%;">नुकसान / निर्लेखन कारण व शेरा</th>
               <th style="width: 12%;">नोंद घेणारा अधिकारी</th>
               <th style="width: 10%;">स्वाक्षरी</th>
             </tr>
@@ -8067,21 +8107,25 @@ const app = {
         <div class="stock-print-signatures">
           <div class="stock-print-sig-col">
             <div class="sig-space"></div>
+            <div class="sig-line"></div>
             <div>स्वाक्षरी: ${s.cookName || 'स्वयंपाकी / मदतनीस'}</div>
             <div style="font-size: 11px; font-weight: normal;">स्वयंपाकी / मदतनीस</div>
           </div>
           <div class="stock-print-sig-col">
             <div class="sig-space"></div>
+            <div class="sig-line"></div>
             <div>स्वाक्षरी: ग्रामपंचायत / स्थानिक प्रतिनिधी</div>
             <div style="font-size: 11px; font-weight: normal;">पंच / ग्रामपंचायत सदस्य</div>
           </div>
           <div class="stock-print-sig-col">
             <div class="sig-space"></div>
+            <div class="sig-line"></div>
             <div>स्वाक्षरी: ${s.president || 'अध्यक्ष'}</div>
             <div style="font-size: 11px; font-weight: normal;">अध्यक्ष, शाळा व्यवस्थापन समिती</div>
           </div>
           <div class="stock-print-sig-col">
             <div class="sig-space"></div>
+            <div class="sig-line"></div>
             <div>स्वाक्षरी: ${s.headmaster || 'मुख्याध्यापक'}</div>
             <div style="font-size: 11px; font-weight: normal;">मुख्याध्यापक / सचिव (शा.व्य.स.) व शिक्का</div>
           </div>
@@ -8090,13 +8134,13 @@ const app = {
     `;
 
     if (typeof this.setPrintPageOrientation === 'function') {
-      this.setPrintPageOrientation('landscape', 'A4', '20mm 15mm 15mm 15mm');
+      this.setPrintPageOrientation('landscape', 'A4', '12mm 15mm 12mm 15mm');
     }
     document.body.classList.remove('print-portrait', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
     document.body.classList.add('print-slip', 'print-landscape');
     setTimeout(() => {
       window.print();
-    }, 150);
+    }, 250);
   },
 
   // -------------------------------------------------------------------------
