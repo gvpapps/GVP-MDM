@@ -9131,8 +9131,10 @@ const app = {
     } else if (level === 'upper') {
       this.switchSection('upper');
     }
+    this.applySchoolLevelMode(level);
     this.saveState(false, true);
     this.updateHeaderMeta();
+    this.renderSettingsView();
     this.showToast(`शाळा स्तर सेट केला: ${level === 'both' ? 'दोन्ही (१ ते ५ व ६ ते ८)' : (level === 'upper' ? 'फक्त ६ ते ८' : 'फक्त १ ते ५')}`, 'info');
   },
 
@@ -9178,6 +9180,7 @@ const app = {
 
     // School level radios
     const schoolLevel = this.data.settings.schoolLevel || 'both';
+    this.applySchoolLevelMode(schoolLevel);
     const rBoth = document.getElementById('levelBoth');
     const rPri = document.getElementById('levelPrimary');
     const rUpp = document.getElementById('levelUpper');
@@ -9201,10 +9204,10 @@ const app = {
           <td>
             <input type="text" class="form-control form-control-sm rule-name-input" data-key="${key}" value="${ing.name}" style="font-weight: 600;" oninput="app.onIngredientRuleChange('${key}')" onchange="app.onIngredientRuleChange('${key}')">
           </td>
-          <td>
+          <td class="primary-only">
             <input type="number" step="0.00001" class="form-control form-control-sm rule-rate-p-input" data-key="${key}" value="${rateP}" oninput="app.onIngredientRuleChange('${key}')" onchange="app.onIngredientRuleChange('${key}')" title="इ. १ ते ५ प्रमाण (kg)">
           </td>
-          <td>
+          <td class="upper-only">
             <input type="number" step="0.00001" class="form-control form-control-sm rule-rate-u-input" data-key="${key}" value="${rateU}" oninput="app.onIngredientRuleChange('${key}')" onchange="app.onIngredientRuleChange('${key}')" title="इ. ६ ते ८ प्रमाण (kg)">
           </td>
           <td>${ing.unit}</td>
@@ -9393,9 +9396,12 @@ const app = {
     const rBoth = document.getElementById('levelBoth');
     const rPri = document.getElementById('levelPrimary');
     const rUpp = document.getElementById('levelUpper');
-    if (rBoth && rBoth.checked) this.data.settings.schoolLevel = 'both';
-    else if (rPri && rPri.checked) this.data.settings.schoolLevel = 'primary';
-    else if (rUpp && rUpp.checked) this.data.settings.schoolLevel = 'upper';
+    let chosenLevel = 'both';
+    if (rBoth && rBoth.checked) chosenLevel = 'both';
+    else if (rPri && rPri.checked) chosenLevel = 'primary';
+    else if (rUpp && rUpp.checked) chosenLevel = 'upper';
+    this.data.settings.schoolLevel = chosenLevel;
+    this.applySchoolLevelMode(chosenLevel);
 
     this.data.settings.updatedAt = new Date().toISOString();
     this.saveState();
@@ -9726,7 +9732,9 @@ const app = {
     if (this.data.settings) this.data.settings.updatedAt = new Date().toISOString();
     this.saveState(false, true);
     this.refreshAllViews();
-    this.showToast('✅ घटक नावे व १ ते ५ आणि ६ ते ८ चे दर यशस्वीरित्या जतन झाले!', 'success');
+    const sLevel = (this.data && this.data.settings && this.data.settings.schoolLevel) || 'both';
+    const levelStr = sLevel === 'primary' ? 'इ. १ ते ५ चे दर' : (sLevel === 'upper' ? 'इ. ६ ते ८ चे दर' : '१ ते ५ आणि ६ ते ८ चे दर');
+    this.showToast(`✅ घटक नावे व ${levelStr} यशस्वीरित्या जतन झाले!`, 'success');
   },
 
   saveSettingsFromUI() {
