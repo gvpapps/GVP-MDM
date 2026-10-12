@@ -323,35 +323,35 @@ const cloudSync = {
 
   /**
    * Smart Conflict-Free Merge for a single day record
-   * Never allows an empty/stale record to overwrite a populated record
+   * Truly preserves user edits (even if setting 0 kids or holiday) based on edit timestamp
    */
-  mergeDayRecord(recA, recB) {
+  mergeDayRecord(recA, recB, preferA = true) {
     if (!recA && !recB) return null;
     if (!recA) return Object.assign({}, recB);
     if (!recB) return Object.assign({}, recA);
 
-    const aHasData = (!recA.isHoliday && ((parseInt(recA.children) || 0) > 0 || (recA.quantities && Object.values(recA.quantities).some(v => parseFloat(v) > 0))));
-    const bHasData = (!recB.isHoliday && ((parseInt(recB.children) || 0) > 0 || (recB.quantities && Object.values(recB.quantities).some(v => parseFloat(v) > 0))));
-
-    // If one has attendance/meal data and the other does not, populated record wins
-    if (aHasData && !bHasData) return Object.assign({}, recB, recA);
-    if (!aHasData && bHasData) return Object.assign({}, recA, recB);
-
-    // If both have data or both empty, compare timestamp (newer wins)
     const timeA = new Date(recA.updatedAt || recA.savedAt || 0).getTime();
     const timeB = new Date(recB.updatedAt || recB.savedAt || 0).getTime();
 
-    if (timeA >= timeB) {
-      return Object.assign({}, recB, recA);
-    } else {
-      return Object.assign({}, recA, recB);
+    // If both have explicit timestamps, the record with the newer timestamp strictly wins!
+    if (timeA > 0 && timeB > 0 && Math.abs(timeA - timeB) > 2000) {
+      return (timeA >= timeB) ? Object.assign({}, recB, recA) : Object.assign({}, recA, recB);
     }
+
+    const aHasData = (!recA.isHoliday && ((parseInt(recA.children) || 0) > 0 || (recA.quantities && Object.values(recA.quantities).some(v => parseFloat(v) > 0))));
+    const bHasData = (!recB.isHoliday && ((parseInt(recB.children) || 0) > 0 || (recB.quantities && Object.values(recB.quantities).some(v => parseFloat(v) > 0))));
+
+    // If timestamps are tied or missing, prefer populated data over completely blank placeholder
+    if (aHasData && !bHasData) return Object.assign({}, recB, recA);
+    if (!aHasData && bHasData) return Object.assign({}, recA, recB);
+
+    return preferA ? Object.assign({}, recB, recA) : Object.assign({}, recA, recB);
   },
 
   /**
    * Smart Conflict-Free Merge for daily records dictionary
    */
-  mergeDayRecordsMap(mapA, mapB) {
+  mergeDayRecordsMap(mapA, mapB, preferA = true) {
     const result = {};
     const keysA = Object.keys(mapA || {});
     const keysB = Object.keys(mapB || {});
@@ -360,8 +360,81 @@ const cloudSync = {
     allKeys.forEach(k => {
       const recA = mapA ? mapA[k] : null;
       const recB = mapB ? mapB[k] : null;
-      const merged = this.mergeDayRecord(recA, recB);
+      const merged = this.mergeDayRecord(recA, recB, preferA);
       if (merged) result[k] = merged;
+    });
+
+    return result;
+  },
+
+  /**
+   * Robust Deduplicating & Tombstone-Aware Merge for Inward Stock Receipts
+   * Prevents duplicate entries and ensures deleted receipts are NEVER resurrected
+   */
+  mergeStockReceiptsList(localList, remoteList, deletedIds = []) {
+    const l = Array.isArray(localList) ? localList : [];
+    const r = Array.isArray(remoteList) ? remoteList : [];
+    const delSet = new Set(Array.isArray(deletedIds) ? deletedIds : []);
+
+    const combined = [...r, ...l].filter(item => item && typeof item === 'object' && (!item.id || !delSet.has(item.id)));
+    const seenIds = new Set();
+    const seenSigs = new Set();
+    const result = [];
+
+    combined.forEach(item => {
+      if (!item.id) {
+        item.id = 'rcp_' + (item.date ? item.date.replace(/-/g, '') : 'old') + '_' + Math.random().toString(36).substr(2, 6);
+      }
+      if (seenIds.has(item.id)) return;
+
+      const itemsKeys = Object.keys(item.items || {}).filter(k => !isNaN(parseFloat(item.items[k])) && parseFloat(item.items[k]) !== 0).sort();
+      const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
+      const billSig = (item.billNo || '').trim().toLowerCase();
+      const dateSig = (item.date || '').trim();
+      const secSig = item.section || 'primary';
+      const sig = `${dateSig}#${billSig}#${secSig}#${itemsSig}`;
+
+      if (seenSigs.has(sig)) return;
+
+      seenIds.add(item.id);
+      seenSigs.add(sig);
+      result.push(item);
+    });
+
+    return result;
+  },
+
+  /**
+   * Robust Deduplicating & Tombstone-Aware Merge for Damaged Stock
+   */
+  mergeDamagedStockList(localList, remoteList, deletedIds = []) {
+    const l = Array.isArray(localList) ? localList : [];
+    const r = Array.isArray(remoteList) ? remoteList : [];
+    const delSet = new Set(Array.isArray(deletedIds) ? deletedIds : []);
+
+    const combined = [...r, ...l].filter(item => item && typeof item === 'object' && (!item.id || !delSet.has(item.id)));
+    const seenIds = new Set();
+    const seenSigs = new Set();
+    const result = [];
+
+    combined.forEach(item => {
+      if (!item.id) {
+        item.id = 'dmg_' + (item.date ? item.date.replace(/-/g, '') : 'old') + '_' + Math.random().toString(36).substr(2, 6);
+      }
+      if (seenIds.has(item.id)) return;
+
+      const itemsKeys = Object.keys(item.items || {}).filter(k => parseFloat(item.items[k]) > 0).sort();
+      const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
+      const reasonSig = (item.reason || '').trim().toLowerCase();
+      const dateSig = (item.date || '').trim();
+      const secSig = item.section || 'primary';
+      const sig = `${dateSig}#${reasonSig}#${secSig}#${itemsSig}`;
+
+      if (seenSigs.has(sig)) return;
+
+      seenIds.add(item.id);
+      seenSigs.add(sig);
+      result.push(item);
     });
 
     return result;
@@ -596,58 +669,44 @@ const cloudSync = {
       const remoteRecCount = (existingRemote && existingRemote.appData)
         ? (Object.keys(existingRemote.appData.records || {}).length + Object.keys(existingRemote.appData.recordsUpper || {}).length) : 0;
 
-      // GUARD 1: Prevent Blank Device from destroying remote cloud database
+      // GUARD 1: Prevent Blank Device from destroying remote daily records while safely allowing stock & settings push
       if (localRecCount === 0 && remoteRecCount > 0) {
-        this.config.status = 'idle';
-        this.updateUIStatus();
-        const warnMsg = `⛔ डेटा सुरक्षा इशारा (डेटा नष्ट होण्यापासून रोखला!):\n\nया डिव्हाइसवर 0 दैनंदिन नोंदी आहेत, तर क्लाऊडवर आधीच ${remoteRecCount} नोंदी सुरक्षित साठवलेल्या आहेत!\n\nरिकामा डेटा अपलोड केल्यास मूळ डेटा नष्ट होईल, म्हणून सिस्टिमने हा रिकामा डेटा रोखला आहे.\n\nकृपया प्रथम "📥 क्लाऊडवरून आणा" (Pull) बटण दाबा जेणेकरून क्लाऊडवरील सर्व डेटा या डिव्हाइसवर येईल.`;
-        if (!isSilent) alert(warnMsg);
-        else console.warn(warnMsg);
-        return false;
+        const remoteRecs = (existingRemote.appData && existingRemote.appData.records) || {};
+        const remoteRecsU = (existingRemote.appData && existingRemote.appData.recordsUpper) || {};
+        dataToPush.records = remoteRecs;
+        dataToPush.recordsUpper = remoteRecsU;
+        if (typeof app !== 'undefined' && app.data && (typeof app.getActiveUdise === 'function' && app.getActiveUdise() === currentUdise)) {
+          app.data.records = remoteRecs;
+          app.data.recordsUpper = remoteRecsU;
+        }
       }
 
       // GUARD 2: Smart Conflict-Free Merge before push so any missing remote dates/receipts are combined
-      if (existingRemote && existingRemote.appData && remoteRecCount > 0) {
+      if (existingRemote && existingRemote.appData) {
         const remoteData = existingRemote.appData;
-        const mergedRecords = this.mergeDayRecordsMap(dataToPush.records, remoteData.records);
-        const mergedRecordsUpper = this.mergeDayRecordsMap(dataToPush.recordsUpper, remoteData.recordsUpper);
+        const mergedRecords = this.mergeDayRecordsMap(dataToPush.records, remoteData.records, true);
+        const mergedRecordsUpper = this.mergeDayRecordsMap(dataToPush.recordsUpper, remoteData.recordsUpper, true);
         const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, dataToPush.tasteRecords || {});
         const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, dataToPush.tasteRecordsUpper || {});
         const mergedStock = this.mergeStockBalances(dataToPush.initialStock, remoteData.initialStock);
         const mergedStockUpper = this.mergeStockBalances(dataToPush.initialStockUpper, remoteData.initialStockUpper);
         const mergedSettings = this.mergeSettings(dataToPush.settings, remoteData.settings, currentUdise, false);
         
-        // Stock receipts union (Primary)
-        const mergedReceipts = [...(remoteData.stockReceipts || [])];
-        (dataToPush.stockReceipts || []).forEach(lr => {
-          if (!mergedReceipts.some(mr => mr.date === lr.date && mr.billNo === lr.billNo && JSON.stringify(mr.items) === JSON.stringify(lr.items))) {
-            mergedReceipts.push(lr);
-          }
-        });
+        // Union of deleted tombstones
+        const mergedDeletedReceipts = Array.from(new Set([
+          ...(dataToPush.deletedStockReceiptIds || []),
+          ...(remoteData.deletedStockReceiptIds || [])
+        ]));
+        const mergedDeletedDamaged = Array.from(new Set([
+          ...(dataToPush.deletedDamagedIds || []),
+          ...(remoteData.deletedDamagedIds || [])
+        ]));
 
-        // Stock receipts union (Upper)
-        const mergedReceiptsUpper = [...(remoteData.stockReceiptsUpper || [])];
-        (dataToPush.stockReceiptsUpper || []).forEach(lr => {
-          if (!mergedReceiptsUpper.some(mr => mr.date === lr.date && mr.billNo === lr.billNo && JSON.stringify(mr.items) === JSON.stringify(lr.items))) {
-            mergedReceiptsUpper.push(lr);
-          }
-        });
-
-        // Damaged stock union (Primary)
-        const mergedDamaged = [...(remoteData.damagedStock || [])];
-        (dataToPush.damagedStock || []).forEach(ld => {
-          if (!mergedDamaged.some(md => md.date === ld.date && md.reason === ld.reason && JSON.stringify(md.items) === JSON.stringify(ld.items))) {
-            mergedDamaged.push(ld);
-          }
-        });
-
-        // Damaged stock union (Upper)
-        const mergedDamagedUpper = [...(remoteData.damagedStockUpper || [])];
-        (dataToPush.damagedStockUpper || []).forEach(ld => {
-          if (!mergedDamagedUpper.some(md => md.date === ld.date && md.reason === ld.reason && JSON.stringify(md.items) === JSON.stringify(ld.items))) {
-            mergedDamagedUpper.push(ld);
-          }
-        });
+        // Stock receipts and damaged stock with deduplication & tombstone protection
+        const mergedReceipts = this.mergeStockReceiptsList(dataToPush.stockReceipts, remoteData.stockReceipts, mergedDeletedReceipts);
+        const mergedReceiptsUpper = this.mergeStockReceiptsList(dataToPush.stockReceiptsUpper, remoteData.stockReceiptsUpper, mergedDeletedReceipts);
+        const mergedDamaged = this.mergeDamagedStockList(dataToPush.damagedStock, remoteData.damagedStock, mergedDeletedDamaged);
+        const mergedDamagedUpper = this.mergeDamagedStockList(dataToPush.damagedStockUpper, remoteData.damagedStockUpper, mergedDeletedDamaged);
 
         // Stock transfers union (Inter-Section Loans)
         const mergedTransfers = [...(remoteData.stockTransfers || [])];
@@ -672,8 +731,10 @@ const cloudSync = {
           menus: mergedMenus,
           stockReceipts: mergedReceipts,
           stockReceiptsUpper: mergedReceiptsUpper,
+          deletedStockReceiptIds: mergedDeletedReceipts,
           damagedStock: mergedDamaged,
           damagedStockUpper: mergedDamagedUpper,
+          deletedDamagedIds: mergedDeletedDamaged,
           stockTransfers: mergedTransfers
         });
 
@@ -689,8 +750,10 @@ const cloudSync = {
           app.data.menus = mergedMenus;
           app.data.stockReceipts = mergedReceipts;
           app.data.stockReceiptsUpper = mergedReceiptsUpper;
+          app.data.deletedStockReceiptIds = mergedDeletedReceipts;
           app.data.damagedStock = mergedDamaged;
           app.data.damagedStockUpper = mergedDamagedUpper;
+          app.data.deletedDamagedIds = mergedDeletedDamaged;
           app.data.stockTransfers = mergedTransfers;
           if (typeof app.saveState === 'function') app.saveState(true);
         } else if (typeof localStorage !== 'undefined') {
@@ -865,8 +928,8 @@ const cloudSync = {
             }
 
             // Smart Conflict-Free Merge: Local + Remote (Protects local populated data from being wiped)
-            const mergedRecords = this.mergeDayRecordsMap(baseData.records, remoteRecords);
-            const mergedRecordsUpper = this.mergeDayRecordsMap(baseData.recordsUpper, remoteData.recordsUpper || {});
+            const mergedRecords = this.mergeDayRecordsMap(baseData.records, remoteRecords, false);
+            const mergedRecordsUpper = this.mergeDayRecordsMap(baseData.recordsUpper, remoteData.recordsUpper || {}, false);
             const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, baseData.tasteRecords || {});
             const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, baseData.tasteRecordsUpper || {});
             const mergedStock = this.mergeStockBalances(baseData.initialStock, remoteData.initialStock);
@@ -875,37 +938,21 @@ const cloudSync = {
             const mergedIngredients = this.mergeIngredients(baseData.ingredients, remoteData.ingredients, true);
             const mergedMenus = this.mergeMenus(baseData.menus, remoteData.menus, true);
 
-            // Stock receipts union (Primary)
-            const mergedReceipts = [...(remoteData.stockReceipts || [])];
-            (baseData.stockReceipts || []).forEach(lr => {
-              if (!mergedReceipts.some(mr => mr.date === lr.date && mr.billNo === lr.billNo && JSON.stringify(mr.items) === JSON.stringify(lr.items))) {
-                mergedReceipts.push(lr);
-              }
-            });
+            // Union of deleted tombstones
+            const mergedDeletedReceipts = Array.from(new Set([
+              ...(baseData.deletedStockReceiptIds || []),
+              ...(remoteData.deletedStockReceiptIds || [])
+            ]));
+            const mergedDeletedDamaged = Array.from(new Set([
+              ...(baseData.deletedDamagedIds || []),
+              ...(remoteData.deletedDamagedIds || [])
+            ]));
 
-            // Stock receipts union (Upper)
-            const mergedReceiptsUpper = [...(remoteData.stockReceiptsUpper || [])];
-            (baseData.stockReceiptsUpper || []).forEach(lr => {
-              if (!mergedReceiptsUpper.some(mr => mr.date === lr.date && mr.billNo === lr.billNo && JSON.stringify(mr.items) === JSON.stringify(lr.items))) {
-                mergedReceiptsUpper.push(lr);
-              }
-            });
-
-            // Damaged stock union (Primary)
-            const mergedDamaged = [...(remoteData.damagedStock || [])];
-            (baseData.damagedStock || []).forEach(ld => {
-              if (!mergedDamaged.some(md => md.date === ld.date && md.reason === ld.reason && JSON.stringify(md.items) === JSON.stringify(ld.items))) {
-                mergedDamaged.push(ld);
-              }
-            });
-
-            // Damaged stock union (Upper)
-            const mergedDamagedUpper = [...(remoteData.damagedStockUpper || [])];
-            (baseData.damagedStockUpper || []).forEach(ld => {
-              if (!mergedDamagedUpper.some(md => md.date === ld.date && md.reason === ld.reason && JSON.stringify(md.items) === JSON.stringify(ld.items))) {
-                mergedDamagedUpper.push(ld);
-              }
-            });
+            // Stock receipts and damaged stock with deduplication & tombstone protection
+            const mergedReceipts = this.mergeStockReceiptsList(baseData.stockReceipts, remoteData.stockReceipts, mergedDeletedReceipts);
+            const mergedReceiptsUpper = this.mergeStockReceiptsList(baseData.stockReceiptsUpper, remoteData.stockReceiptsUpper, mergedDeletedReceipts);
+            const mergedDamaged = this.mergeDamagedStockList(baseData.damagedStock, remoteData.damagedStock, mergedDeletedDamaged);
+            const mergedDamagedUpper = this.mergeDamagedStockList(baseData.damagedStockUpper, remoteData.damagedStockUpper, mergedDeletedDamaged);
 
             // Stock transfers union (Inter-Section Loans)
             const mergedTransfers = [...(remoteData.stockTransfers || [])];
@@ -927,8 +974,10 @@ const cloudSync = {
               menus: mergedMenus,
               stockReceipts: mergedReceipts,
               stockReceiptsUpper: mergedReceiptsUpper,
+              deletedStockReceiptIds: mergedDeletedReceipts,
               damagedStock: mergedDamaged,
               damagedStockUpper: mergedDamagedUpper,
+              deletedDamagedIds: mergedDeletedDamaged,
               stockTransfers: mergedTransfers,
               customDemands: Object.assign({}, baseData.customDemands || {}, remoteData.customDemands || {}),
               customDemandsUpper: Object.assign({}, baseData.customDemandsUpper || {}, remoteData.customDemandsUpper || {}),
@@ -948,10 +997,12 @@ const cloudSync = {
 
             if (isActiveSchool) {
               app.data = mergedTarget;
+              if (typeof app.applySchoolLevelMode === 'function') app.applySchoolLevelMode(app.data.settings?.schoolLevel);
               if (typeof app.updateHeaderMeta === 'function') app.updateHeaderMeta();
               if (typeof app.populateMenuDropdown === 'function') app.populateMenuDropdown();
               if (typeof app.renderManualGrainsCheckboxes === 'function') app.renderManualGrainsCheckboxes();
               if (typeof app.renderSettingsView === 'function') app.renderSettingsView();
+              if (typeof app.renderStockView === 'function') app.renderStockView();
               if (typeof app.refreshAllViews === 'function') app.refreshAllViews();
               if (typeof app.renderCurrentTab === 'function') app.renderCurrentTab();
               if (typeof app.onDateChanged === 'function') app.onDateChanged();

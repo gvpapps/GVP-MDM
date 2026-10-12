@@ -3060,10 +3060,12 @@ const app = {
           initialStockUpper: Object.assign({}, defaultData.initialStockUpper || {}, parsed.initialStockUpper || {}),
           menus: (parsed.menus && Array.isArray(parsed.menus) && parsed.menus.length > 0) ? parsed.menus : defaultData.menus,
           ingredients: (parsed.ingredients && typeof parsed.ingredients === 'object') ? Object.assign({}, defaultData.ingredients, parsed.ingredients) : defaultData.ingredients,
-          stockReceipts: parsed.stockReceipts || [],
-          stockReceiptsUpper: parsed.stockReceiptsUpper || [],
+          stockReceipts: this.deduplicateStockReceipts(parsed.stockReceipts || []),
+          stockReceiptsUpper: this.deduplicateStockReceipts(parsed.stockReceiptsUpper || []),
+          deletedStockReceiptIds: parsed.deletedStockReceiptIds || [],
           damagedStock: parsed.damagedStock || [],
           damagedStockUpper: parsed.damagedStockUpper || [],
+          deletedDamagedIds: parsed.deletedDamagedIds || [],
           stockTransfers: parsed.stockTransfers || [],
           records: parsed.records || {},
           recordsUpper: parsed.recordsUpper || {},
@@ -3324,8 +3326,10 @@ const app = {
         ingredients: this.data.ingredients,
         stockReceipts: this.data.stockReceipts,
         stockReceiptsUpper: this.data.stockReceiptsUpper || [],
+        deletedStockReceiptIds: this.data.deletedStockReceiptIds || [],
         damagedStock: this.data.damagedStock,
         damagedStockUpper: this.data.damagedStockUpper || [],
+        deletedDamagedIds: this.data.deletedDamagedIds || [],
         stockTransfers: this.data.stockTransfers || [],
         records: this.data.records,
         recordsUpper: this.data.recordsUpper || {},
@@ -5009,6 +5013,8 @@ const app = {
     const activeSection = this.getActiveSection();
     const record = this.calculateDay(dateStr, isHoliday ? 0 : children, menuName, isHoliday ? 0 : plates, manualGrainsList, activeSection);
     record.remarks = remarksInput ? remarksInput.value.trim() : '';
+    record.updatedAt = new Date().toISOString();
+    record.savedAt = new Date().toISOString();
     if (!isHoliday && children > 0) {
       record.menuName = this.getDisplayMenuName(record);
     }
@@ -5763,7 +5769,7 @@ const app = {
         <td class="text-right">${isHoliday ? '0' : rec.fuelCost}</td>
         <td><small>${rec.remarks || ''}</small></td>
         <td class="no-print text-center">
-          <button class="btn btn-sm btn-outline-primary" onclick="app.editDayRecord('${dateStr}')">✏️ बदल</button>
+          <button class="btn btn-sm btn-outline-primary" onclick="app.editDayRecord('${dateStr}', '${this.activeSection}')">✏️ बदल</button>
         </td>
       `;
       tableBody.appendChild(tr);
@@ -5801,13 +5807,21 @@ const app = {
     }
   },
 
-  editDayRecord(dateStr) {
+  editDayRecord(dateStr, targetSection = null) {
+    if (targetSection && (targetSection === 'primary' || targetSection === 'upper')) {
+      this.switchSection(targetSection);
+    }
     this.switchTab('daily');
     const dateInput = document.getElementById('entryDate');
     if (dateInput) {
       dateInput.value = dateStr;
       this.onDateChanged();
     }
+    const formBox = document.getElementById('dailyEntryForm');
+    if (formBox) {
+      formBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    this.showToast(`दि. ${dateStr} ची ${this.getActiveSectionName()} नोंद संपादनासाठी उघडली आहे.`, 'info');
   },
 
   printDailyRegister() {
@@ -7514,10 +7528,49 @@ const app = {
     this.renderStockView();
   },
 
+  /**
+   * Deduplicate stock receipts list by normalized content signature & id
+   */
+  deduplicateStockReceipts(receiptsList) {
+    if (!Array.isArray(receiptsList) || receiptsList.length <= 1) return receiptsList || [];
+    const seenSigs = new Set();
+    const seenIds = new Set();
+    const clean = [];
+    receiptsList.forEach((r, idx) => {
+      if (!r || typeof r !== 'object') return;
+      if (!r.id) {
+        r.id = 'rcp_' + (r.date ? r.date.replace(/-/g, '') : 'old') + '_' + idx + '_' + Math.random().toString(36).substr(2, 6);
+      }
+      if (seenIds.has(r.id)) return;
+
+      const itemsKeys = Object.keys(r.items || {}).filter(k => !isNaN(parseFloat(r.items[k])) && parseFloat(r.items[k]) !== 0).sort();
+      const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(r.items[k])}`).join('|');
+      const billSig = (r.billNo || '').trim().toLowerCase();
+      const dateSig = (r.date || '').trim();
+      const secSig = r.section || 'primary';
+      const sig = `${dateSig}#${billSig}#${secSig}#${itemsSig}`;
+
+      if (seenSigs.has(sig)) return;
+
+      seenIds.add(r.id);
+      seenSigs.add(sig);
+      clean.push(r);
+    });
+    return clean;
+  },
+
   renderStockView() {
     const grid = document.getElementById('stockCardsGrid');
     if (!grid) return;
     grid.innerHTML = '';
+
+    // Deduplicate any historic duplicate receipts
+    if (this.data.stockReceipts) {
+      this.data.stockReceipts = this.deduplicateStockReceipts(this.data.stockReceipts);
+    }
+    if (this.data.stockReceiptsUpper) {
+      this.data.stockReceiptsUpper = this.deduplicateStockReceipts(this.data.stockReceiptsUpper);
+    }
 
     const filter = this.stockViewFilter || this.activeSection; // 'primary', 'upper', or 'combined'
     const btnStockP = document.getElementById('stockTogglePrimary');
@@ -7568,11 +7621,15 @@ const app = {
         tableBody.innerHTML = `<tr><td colspan="5" class="text-center p-3 text-muted">कोणतीही नवीन धान्य पावती नोंदवलेली नाही. 'नवीन धान्य प्राप्त नोंद' बटण वापरून नोंद करा.</td></tr>`;
       } else {
         receipts.forEach((r, idx) => {
+          if (!r.id) {
+            r.id = 'rcp_' + (r.date ? r.date.replace(/-/g, '') : 'old') + '_' + idx + '_' + Math.random().toString(36).substr(2, 6);
+          }
           const itemsList = Object.keys(r.items || {})
             .filter(k => !isNaN(parseFloat(r.items[k])) && parseFloat(r.items[k]) !== 0)
             .map(k => `${this.data.ingredients[k]?.name || k}: ${r.items[k]} kg`)
             .join(', ');
 
+          const rSec = r.section || (filter === 'upper' ? 'upper' : 'primary');
           const tr = document.createElement('tr');
           tr.innerHTML = `
             <td><strong>${r.date}</strong></td>
@@ -7580,7 +7637,8 @@ const app = {
             <td>${itemsList}</td>
             <td>${r.recordedBy || 'मुख्याध्यापक'}</td>
             <td class="text-center no-print">
-              <button class="btn btn-sm btn-outline-danger" onclick="app.deleteStockReceipt(${idx}, '${filter}')">🗑️ हटवा</button>
+              <button class="btn btn-sm btn-outline-primary" style="margin-right: 4px;" onclick="app.openEditStockReceiptModal('${r.id}', '${rSec}')">✏️ बदल</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="app.deleteStockReceipt('${r.id}', '${rSec}')">🗑️ हटवा</button>
             </td>
           `;
           tableBody.appendChild(tr);
@@ -7600,11 +7658,15 @@ const app = {
         dmgTableBody.innerHTML = `<tr><td colspan="5" class="text-center p-3 text-muted">कोणतीही खराब/मुदत संपलेल्या धान्याची नोंद नाही. आवश्यकता असल्यास '⚠️ खराब / नासाडी धान्य नोंद' बटण वापरा.</td></tr>`;
       } else {
         dmgs.forEach((d, idx) => {
+          if (!d.id) {
+            d.id = 'dmg_' + (d.date ? d.date.replace(/-/g, '') : 'old') + '_' + idx + '_' + Math.random().toString(36).substr(2, 6);
+          }
           const itemsList = Object.keys(d.items || {})
             .filter(k => parseFloat(d.items[k]) > 0)
             .map(k => `${this.data.ingredients[k]?.name || k}: ${d.items[k]} kg`)
             .join(', ');
 
+          const dSec = d.section || (filter === 'upper' ? 'upper' : 'primary');
           const tr = document.createElement('tr');
           tr.innerHTML = `
             <td><strong>${d.date}</strong></td>
@@ -7612,7 +7674,7 @@ const app = {
             <td><strong>${itemsList}</strong></td>
             <td>${d.recordedBy || 'मुख्याध्यापक'}</td>
             <td class="text-center no-print">
-              <button class="btn btn-sm btn-outline-danger" onclick="app.deleteDamagedStock(${idx}, '${filter}')">🗑️ हटवा</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="app.deleteDamagedStock('${d.id}', '${dSec}')">🗑️ हटवा</button>
             </td>
           `;
           dmgTableBody.appendChild(tr);
@@ -8253,11 +8315,53 @@ const app = {
     this.showToast(`✅ ${sec === 'upper' ? 'इ. ६ ते ८' : 'इ. १ ते ५'} खराब धान्य नोंदवले गेले व वापरात आपोआप जोडले गेले!`, 'success');
   },
 
-  deleteDamagedStock(idx, section = this.stockViewFilter || this.activeSection) {
+  deleteDamagedStock(idOrIdx, section = this.stockViewFilter || this.activeSection) {
     if (confirm('तुम्हाला खात्री आहे का? ही खराब धान्याची नोंद हटवायची आहे?')) {
       const targetDamaged = (section === 'upper') ? this.data.damagedStockUpper : this.data.damagedStock;
-      if (targetDamaged && targetDamaged[idx]) {
-        targetDamaged.splice(idx, 1);
+      if (!targetDamaged) return;
+
+      let index = -1;
+      if (typeof idOrIdx === 'string' && isNaN(Number(idOrIdx))) {
+        index = targetDamaged.findIndex(d => d.id === idOrIdx);
+      } else {
+        const numIdx = Number(idOrIdx);
+        if (targetDamaged[numIdx]) {
+          index = numIdx;
+        } else {
+          index = targetDamaged.findIndex(d => d.id === idOrIdx);
+        }
+      }
+
+      // Check alternate section if not found
+      if (index === -1) {
+        const altSec = (section === 'upper') ? 'primary' : 'upper';
+        const altDamaged = (altSec === 'upper') ? this.data.damagedStockUpper : this.data.damagedStock;
+        if (altDamaged) {
+          const aIdx = altDamaged.findIndex(d => d.id === idOrIdx);
+          if (aIdx !== -1) {
+            const delItem = altDamaged[aIdx];
+            const delId = delItem.id || ('dmg_' + (delItem.date || ''));
+            if (!this.data.deletedDamagedIds) this.data.deletedDamagedIds = [];
+            if (!this.data.deletedDamagedIds.includes(delId)) {
+              this.data.deletedDamagedIds.push(delId);
+            }
+            altDamaged.splice(aIdx, 1);
+            this.saveState(false, true);
+            this.refreshAllViews();
+            this.showToast('खराब धान्याची नोंद हटवण्यात आली.', 'warning');
+            return;
+          }
+        }
+      }
+
+      if (index !== -1 && targetDamaged[index]) {
+        const delItem = targetDamaged[index];
+        const delId = delItem.id || ('dmg_' + (delItem.date || ''));
+        if (!this.data.deletedDamagedIds) this.data.deletedDamagedIds = [];
+        if (!this.data.deletedDamagedIds.includes(delId)) {
+          this.data.deletedDamagedIds.push(delId);
+        }
+        targetDamaged.splice(index, 1);
         this.saveState(false, true);
         this.refreshAllViews();
         this.showToast('खराब धान्याची नोंद हटवण्यात आली.', 'warning');
@@ -8266,16 +8370,23 @@ const app = {
   },
 
   // -------------------------------------------------------------------------
-  // RECEIVED STOCK MODAL LOGIC (नवीन धान्य प्राप्त)
+  // RECEIVED STOCK MODAL LOGIC (नवीन धान्य प्राप्त / संपादन)
   // -------------------------------------------------------------------------
   currentAddStockModalSection: 'primary',
+  editingStockReceiptId: null,
 
   openAddStockModal(section) {
+    this.editingStockReceiptId = null;
     const modal = document.getElementById('addStockModal');
     const dateInput = document.getElementById('stockReceiptDate');
     const billInput = document.getElementById('stockReceiptBillNo');
     const grid = document.getElementById('stockInputsGrid');
     if (!modal || !grid) return;
+
+    const modalTitle = modal.querySelector('.modal-title');
+    if (modalTitle) modalTitle.textContent = '➕ नवीन धान्य / किराणा प्राप्त नोंद';
+    const submitBtn = modal.querySelector('button[type="submit"] span') || modal.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.textContent = '💾 साठा जतन करा';
 
     const sLevel = (this.data && this.data.settings && this.data.settings.schoolLevel) || 'both';
     if (sLevel === 'primary') {
@@ -8305,6 +8416,64 @@ const app = {
     modal.style.display = 'flex';
   },
 
+  openEditStockReceiptModal(receiptId, section) {
+    const modal = document.getElementById('addStockModal');
+    const dateInput = document.getElementById('stockReceiptDate');
+    const billInput = document.getElementById('stockReceiptBillNo');
+    const grid = document.getElementById('stockInputsGrid');
+    if (!modal || !grid) return;
+
+    let targetReceipt = null;
+    let targetSec = section || 'primary';
+
+    const primaryReceipts = this.data.stockReceipts || [];
+    const upperReceipts = this.data.stockReceiptsUpper || [];
+
+    targetReceipt = (targetSec === 'upper')
+      ? (upperReceipts.find(r => r.id === receiptId) || primaryReceipts.find(r => r.id === receiptId))
+      : (primaryReceipts.find(r => r.id === receiptId) || upperReceipts.find(r => r.id === receiptId));
+
+    if (!targetReceipt) {
+      this.showToast('संपादनासाठी पावती नोंद सापडली नाही.', 'warning');
+      return;
+    }
+
+    if (targetReceipt.section) {
+      targetSec = targetReceipt.section;
+    } else if (upperReceipts.includes(targetReceipt)) {
+      targetSec = 'upper';
+    } else {
+      targetSec = 'primary';
+    }
+
+    this.editingStockReceiptId = receiptId;
+    this.currentAddStockModalSection = targetSec;
+    this.updateAddStockModalUI();
+
+    const modalTitle = modal.querySelector('.modal-title');
+    if (modalTitle) modalTitle.textContent = '✏️ धान्य प्राप्त नोंद संपादन (Edit Stock Receipt)';
+    const submitBtn = modal.querySelector('button[type="submit"] span') || modal.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.textContent = '💾 बदल जतन करा';
+
+    if (dateInput) dateInput.value = targetReceipt.date || '';
+    if (billInput) billInput.value = targetReceipt.billNo || '';
+
+    grid.innerHTML = '';
+    Object.keys(this.data.ingredients).forEach(key => {
+      const ing = this.data.ingredients[key];
+      const div = document.createElement('div');
+      div.className = 'form-group';
+      const curVal = (targetReceipt.items && targetReceipt.items[key] !== undefined) ? targetReceipt.items[key] : '';
+      div.innerHTML = `
+        <label class="form-label font-sm">${ing.name} (${ing.unit})</label>
+        <input type="number" step="any" class="form-control stock-item-input" data-key="${key}" value="${curVal !== '' ? curVal : ''}" placeholder="0.00">
+      `;
+      grid.appendChild(div);
+    });
+
+    modal.style.display = 'flex';
+  },
+
   setAddStockModalSection(sec) {
     const sLevel = (this.data && this.data.settings && this.data.settings.schoolLevel) || 'both';
     if (sLevel === 'primary' && sec === 'upper') return;
@@ -8322,6 +8491,7 @@ const app = {
   },
 
   closeAddStockModal() {
+    this.editingStockReceiptId = null;
     const modal = document.getElementById('addStockModal');
     if (modal) modal.style.display = 'none';
   },
@@ -8329,7 +8499,10 @@ const app = {
   saveStockReceipt() {
     const dateInput = document.getElementById('stockReceiptDate');
     const billInput = document.getElementById('stockReceiptBillNo');
-    if (!dateInput || !dateInput.value) return;
+    if (!dateInput || !dateInput.value) {
+      this.showToast('कृपया दिनांक निवडा.', 'warning');
+      return;
+    }
 
     const items = {};
     document.querySelectorAll('.stock-item-input').forEach(inp => {
@@ -8343,30 +8516,123 @@ const app = {
       return;
     }
 
-    const sec = this.currentAddStockModalSection;
-    const targetReceipts = this.getActiveReceipts(sec);
+    const sec = this.currentAddStockModalSection || 'primary';
+    const billNoVal = billInput ? billInput.value.trim() : '';
+    const nowIso = new Date().toISOString();
 
+    if (this.editingStockReceiptId) {
+      // Editing existing receipt
+      let foundReceipt = null;
+      let fromSec = null;
+      let pIdx = (this.data.stockReceipts || []).findIndex(r => r.id === this.editingStockReceiptId);
+      if (pIdx !== -1) {
+        foundReceipt = this.data.stockReceipts[pIdx];
+        fromSec = 'primary';
+      } else {
+        let uIdx = (this.data.stockReceiptsUpper || []).findIndex(r => r.id === this.editingStockReceiptId);
+        if (uIdx !== -1) {
+          foundReceipt = this.data.stockReceiptsUpper[uIdx];
+          fromSec = 'upper';
+        }
+      }
+
+      if (foundReceipt) {
+        foundReceipt.date = dateInput.value;
+        foundReceipt.billNo = billNoVal;
+        foundReceipt.items = items;
+        foundReceipt.section = sec;
+        foundReceipt.updatedAt = nowIso;
+
+        // Move across primary/upper if user modified section
+        if (fromSec && fromSec !== sec) {
+          if (fromSec === 'primary') {
+            this.data.stockReceipts.splice(pIdx, 1);
+            if (!this.data.stockReceiptsUpper) this.data.stockReceiptsUpper = [];
+            this.data.stockReceiptsUpper.push(foundReceipt);
+          } else {
+            const uIdx = (this.data.stockReceiptsUpper || []).findIndex(r => r.id === this.editingStockReceiptId);
+            if (uIdx !== -1) this.data.stockReceiptsUpper.splice(uIdx, 1);
+            if (!this.data.stockReceipts) this.data.stockReceipts = [];
+            this.data.stockReceipts.push(foundReceipt);
+          }
+        }
+
+        this.editingStockReceiptId = null;
+        this.saveState(false, true);
+        this.closeAddStockModal();
+        this.showToast('✅ धान्य पावती नोंद यशस्वीरित्या अद्ययावत झाली!', 'success');
+        this.renderStockView();
+        return;
+      }
+    }
+
+    // Creating new receipt
+    const targetReceipts = this.getActiveReceipts(sec);
     targetReceipts.push({
-      id: 'rcp_' + Date.now(),
+      id: 'rcp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       section: sec,
       date: dateInput.value,
-      billNo: billInput ? billInput.value.trim() : '',
+      billNo: billNoVal,
       items: items,
-      recordedBy: this.data.settings.headmaster || 'मुख्याध्यापक',
-      createdAt: new Date().toISOString()
+      recordedBy: (this.data.settings && this.data.settings.headmaster) || 'मुख्याध्यापक',
+      createdAt: nowIso,
+      updatedAt: nowIso
     });
 
+    this.editingStockReceiptId = null;
     this.saveState(false, true);
     this.closeAddStockModal();
     this.showToast(`✅ ${sec === 'upper' ? 'इ. ६ ते ८' : 'इ. १ ते ५'} धान्य प्राप्त नोंद यशस्वीरित्या जतन झाली!`, 'success');
     this.renderStockView();
   },
 
-  deleteStockReceipt(idx, section = this.stockViewFilter || this.activeSection) {
+  deleteStockReceipt(receiptIdOrIdx, section = this.stockViewFilter || this.activeSection) {
     if (confirm('ही धान्य पावती नोंद हटवायची आहे का?')) {
       const targetReceipts = (section === 'upper') ? this.data.stockReceiptsUpper : this.data.stockReceipts;
-      if (targetReceipts && targetReceipts[idx]) {
-        targetReceipts.splice(idx, 1);
+      if (!targetReceipts) return;
+
+      let index = -1;
+      if (typeof receiptIdOrIdx === 'string' && isNaN(Number(receiptIdOrIdx))) {
+        index = targetReceipts.findIndex(r => r.id === receiptIdOrIdx);
+      } else {
+        const numIdx = Number(receiptIdOrIdx);
+        if (targetReceipts[numIdx]) {
+          index = numIdx;
+        } else {
+          index = targetReceipts.findIndex(r => r.id === receiptIdOrIdx);
+        }
+      }
+
+      // Check alternate section if not found in current
+      if (index === -1) {
+        const altSec = (section === 'upper') ? 'primary' : 'upper';
+        const altReceipts = (altSec === 'upper') ? this.data.stockReceiptsUpper : this.data.stockReceipts;
+        if (altReceipts) {
+          const aIdx = altReceipts.findIndex(r => r.id === receiptIdOrIdx);
+          if (aIdx !== -1) {
+            const delItem = altReceipts[aIdx];
+            const delId = delItem.id || ('rcp_' + (delItem.date || '') + '_' + (delItem.billNo || ''));
+            if (!this.data.deletedStockReceiptIds) this.data.deletedStockReceiptIds = [];
+            if (!this.data.deletedStockReceiptIds.includes(delId)) {
+              this.data.deletedStockReceiptIds.push(delId);
+            }
+            altReceipts.splice(aIdx, 1);
+            this.saveState(false, true);
+            this.showToast('पावती नोंद हटवण्यात आली.', 'warning');
+            this.renderStockView();
+            return;
+          }
+        }
+      }
+
+      if (index !== -1 && targetReceipts[index]) {
+        const delItem = targetReceipts[index];
+        const delId = delItem.id || ('rcp_' + (delItem.date || '') + '_' + (delItem.billNo || ''));
+        if (!this.data.deletedStockReceiptIds) this.data.deletedStockReceiptIds = [];
+        if (!this.data.deletedStockReceiptIds.includes(delId)) {
+          this.data.deletedStockReceiptIds.push(delId);
+        }
+        targetReceipts.splice(index, 1);
         this.saveState(false, true);
         this.showToast('पावती नोंद हटवण्यात आली.', 'warning');
         this.renderStockView();
