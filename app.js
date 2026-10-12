@@ -1485,6 +1485,14 @@ const app = {
     if (navBtn) navBtn.style.display = isAdmin ? 'inline-flex' : 'none';
     if (headerBtn) headerBtn.style.display = isAdmin ? 'inline-block' : 'none';
     if (drawerBtn) drawerBtn.style.display = isAdmin ? 'flex' : 'none';
+
+    // Automated Tests tab & quick test buttons (Only visible for Master Admin)
+    const testTabBtn = document.getElementById('navTabTests') || document.querySelector('.nav-tab[data-tab="tests"]');
+    const quickTestBtn = document.getElementById('quickTestBtn');
+    const drawerTestBtn = document.getElementById('drawerTestBtn');
+    if (testTabBtn) testTabBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+    if (quickTestBtn) quickTestBtn.style.display = isAdmin ? 'inline-block' : 'none';
+    if (drawerTestBtn) drawerTestBtn.style.display = isAdmin ? 'flex' : 'none';
   },
 
   /**
@@ -1507,9 +1515,10 @@ const app = {
 
     if (targetLevel === 'primary') {
       if (badge) {
+        badge.style.display = 'inline-flex';
         badge.className = 'meta-pill level-badge level-primary';
       }
-      if (badgeText) badgeText.textContent = '🎒 इ. १ ते ५ (प्राथमिक)';
+      if (badgeText) badgeText.textContent = '🎒 इ. १ ते ५';
       if (switcher) switcher.style.display = 'none';
       this.activeSection = 'primary';
       if (document.body) {
@@ -1518,9 +1527,10 @@ const app = {
       }
     } else if (targetLevel === 'upper') {
       if (badge) {
+        badge.style.display = 'inline-flex';
         badge.className = 'meta-pill level-badge level-upper';
       }
-      if (badgeText) badgeText.textContent = '🎓 इ. ६ ते ८ (उच्च प्राथमिक)';
+      if (badgeText) badgeText.textContent = '🎓 इ. ६ ते ८';
       if (switcher) switcher.style.display = 'none';
       this.activeSection = 'upper';
       if (document.body) {
@@ -1529,11 +1539,11 @@ const app = {
       }
     } else {
       // Both (1-8 Composite)
+      // Hide redundant static badge so 1-8 is not duplicated; interactive section switcher shows sections clearly
       if (badge) {
-        badge.className = 'meta-pill level-badge level-both';
+        badge.style.display = 'none';
       }
-      if (badgeText) badgeText.textContent = '📚 इ. १ ते ८ (संयुक्त)';
-      if (switcher) switcher.style.display = 'flex';
+      if (switcher) switcher.style.display = 'inline-flex';
     }
 
     // Sync section toggle buttons state
@@ -4097,7 +4107,7 @@ const app = {
 
     const patLbl = document.getElementById('headerPatLabel');
     if (patLbl) {
-      patLbl.textContent = this.activeSection === 'upper' ? 'पट (६-८):' : 'पट (१-५):';
+      patLbl.textContent = 'पट:';
     }
 
     const secPills = document.querySelectorAll('.section-toggle-btn');
@@ -4186,6 +4196,17 @@ const app = {
     if (tabId === 'monthly' || tabId === 'formb' || tabId === 'yearly') {
       this.activeReportsSubtab = tabId;
       tabId = 'reports';
+    }
+
+    if (tabId === 'tests') {
+      const activeUdise = this.getActiveUdise();
+      const isAdmin = (sessionStorage.getItem('MDM_ADMIN_LOGGED_IN') === 'true') || 
+                      (this.isAdminLoggedIn === true) || 
+                      (activeUdise === '9226979531');
+      if (!isAdmin) {
+        this.showToast('हा विभाग फक्त सिस्टीम ॲडमिनसाठी उपलब्ध आहे.', 'warning');
+        tabId = 'daily';
+      }
     }
 
     this.currentTab = tabId;

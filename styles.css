@@ -5474,7 +5474,8 @@ body.level-mode-upper .dual-only {
 }
 
 body.level-mode-primary .section-switcher-control,
-body.level-mode-upper .section-switcher-control {
+body.level-mode-upper .section-switcher-control,
+body.level-mode-both #headerSchoolLevelBadge {
   display: none !important;
 }
 
