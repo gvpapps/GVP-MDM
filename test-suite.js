@@ -279,6 +279,47 @@ const testSuite = {
           details: `१ ते ५: ${pRec ? pRec.children : 0} मुले, तांदूळ ${pRec ? pRec.quantities.rice : 0} kg | ६ ते ८: ${uRec ? uRec.children : 0} मुले, तांदूळ ${uRec ? uRec.quantities.rice : 0} kg`
         };
       }
+    },
+    {
+      id: 13,
+      name: "Test 13: तांदूळ दैनिक नोंदवही (भाग-१) गणित व शिल्लक पडताळणी",
+      description: "माहे १ ते ३१ तारखांचे हिशोब: दिवसाची सुरुवातीची शिल्लक + प्राप्त = एकूण उपलब्ध - वापर = अखेर शिल्लक तंतोतंत जुळते.",
+      run() {
+        const testMonth = "2026-09";
+        const stockSummary = app.computeMonthlyStock(testMonth, 'primary');
+        const op = stockSummary.opening.rice || 0;
+        const rc = stockSummary.received.rice || 0;
+        const con = stockSummary.consumed.rice || 0;
+        const clo = stockSummary.closing.rice || 0;
+        const expectedClo = +(op + rc - con).toFixed(3);
+        const passed = Math.abs(clo - expectedClo) < 0.001 && typeof app.renderRiceMonthlyRegister === 'function';
+
+        return {
+          passed,
+          details: `सुरुवात: ${op.toFixed(3)} kg, प्राप्त: ${rc.toFixed(3)} kg, वापर: ${con.toFixed(3)} kg => अखेर शिल्लक: ${clo.toFixed(3)} kg (अपेक्षित: ${expectedClo.toFixed(3)} kg)`
+        };
+      }
+    },
+    {
+      id: 14,
+      name: "Test 14: वार्षिक तांदूळ उपयोगिता प्रमाणपत्र व गोषवारा ताळेबंद पडताळणी",
+      description: "एप्रिल ते मार्च १२ महिन्यांची तांदूळ बेरीज: १ एप्रिल शिल्लक + एकूण प्राप्त - एकूण शिजवलेला = ३१ मार्च शिल्लक तंतोतंत जुळते.",
+      run() {
+        const finYear = app.getCurrentAcademicYear();
+        const yearlyData = app.computeYearlyData(finYear, 'primary');
+        const riceMat = yearlyData.ingredientMatrix && yearlyData.ingredientMatrix.rice;
+        const op = riceMat ? riceMat.opening : 0;
+        const rec = riceMat ? riceMat.annualReceived : 0;
+        const con = riceMat ? riceMat.annualConsumed : 0;
+        const clo = riceMat ? riceMat.finalClosing : 0;
+        const expectedClo = +(op + rec - con).toFixed(3);
+        const passed = Math.abs(clo - expectedClo) < 0.01 && typeof app.renderRiceYearlyReport === 'function';
+
+        return {
+          passed,
+          details: `वर्ष: ${finYear}, एप्रिल शिल्लक: ${op.toFixed(3)} kg, वर्ष प्राप्त: ${rec.toFixed(3)} kg, वर्ष शिजवलेला: ${con.toFixed(3)} kg => मार्च शिल्लक: ${clo.toFixed(3)} kg`
+        };
+      }
     }
   ],
 

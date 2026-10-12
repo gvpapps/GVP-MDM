@@ -310,7 +310,9 @@ const app = {
       document.getElementById('fbSectionBadge'),
       document.getElementById('yrSectionBadge'),
       document.getElementById('tasteSectionBadge'),
-      document.getElementById('stockSectionBadge')
+      document.getElementById('stockSectionBadge'),
+      document.getElementById('riceMonSectionBadge'),
+      document.getElementById('riceYrSectionBadge')
     ];
     secBadges.forEach(b => {
       if (b) {
@@ -3632,6 +3634,9 @@ const app = {
     const expMonth = document.getElementById('exportMonthSelect');
     if (expMonth) expMonth.value = monthStr;
 
+    const riceMonth = document.getElementById('riceMonthlyPicker');
+    if (riceMonth) riceMonth.value = monthStr;
+
     // Academic Year Auto-Selection (1 April to 31 March)
     const currentFinYear = this.getCurrentAcademicYear();
     const yearlySelect = document.getElementById('yearlyYearSelect');
@@ -3645,6 +3650,19 @@ const app = {
         yearlySelect.insertBefore(newOpt, yearlySelect.firstChild);
       }
       yearlySelect.value = currentFinYear;
+    }
+
+    const riceYearlySelect = document.getElementById('riceYearlyYearSelect');
+    if (riceYearlySelect) {
+      const [startYr, endYr] = currentFinYear.split('-');
+      const shortLabel = `सन ${startYr}-${String(endYr).slice(-2)}`;
+      if (!Array.from(riceYearlySelect.options).some(o => o.value === currentFinYear)) {
+        const newOpt = document.createElement('option');
+        newOpt.value = currentFinYear;
+        newOpt.textContent = shortLabel;
+        riceYearlySelect.insertBefore(newOpt, riceYearlySelect.firstChild);
+      }
+      riceYearlySelect.value = currentFinYear;
     }
   },
 
@@ -4180,6 +4198,8 @@ const app = {
     this.renderMonthlyExcelSheet();
     this.renderFormB();
     this.renderYearlyReport();
+    this.renderRiceMonthlyRegister();
+    this.renderRiceYearlyReport();
     this.renderStockView();
     this.renderSettingsView();
 
@@ -4193,7 +4213,7 @@ const app = {
    * Switch Active Tab
    */
   switchTab(tabId) {
-    if (tabId === 'monthly' || tabId === 'formb' || tabId === 'yearly') {
+    if (tabId === 'monthly' || tabId === 'formb' || tabId === 'yearly' || tabId === 'ricemonthly' || tabId === 'riceyearly') {
       this.activeReportsSubtab = tabId;
       tabId = 'reports';
     }
@@ -4229,7 +4249,7 @@ const app = {
    * Switch Reports Sub-tab (मासिक अहवाल, प्रपत्र ब, वार्षिक अहवाल)
    */
   switchReportsSubtab(subtabId) {
-    if (!['monthly', 'formb', 'yearly'].includes(subtabId)) {
+    if (!['monthly', 'formb', 'yearly', 'ricemonthly', 'riceyearly'].includes(subtabId)) {
       subtabId = 'monthly';
     }
     this.activeReportsSubtab = subtabId;
@@ -4243,7 +4263,9 @@ const app = {
     const panels = {
       monthly: document.getElementById('subtab-panel-monthly'),
       formb: document.getElementById('subtab-panel-formb'),
-      yearly: document.getElementById('subtab-panel-yearly')
+      yearly: document.getElementById('subtab-panel-yearly'),
+      ricemonthly: document.getElementById('subtab-panel-ricemonthly'),
+      riceyearly: document.getElementById('subtab-panel-riceyearly')
     };
 
     Object.keys(panels).forEach(k => {
@@ -4266,6 +4288,10 @@ const app = {
       this.renderFormB();
     } else if (subtabId === 'yearly') {
       this.renderYearlyReport();
+    } else if (subtabId === 'ricemonthly') {
+      this.renderRiceMonthlyRegister();
+    } else if (subtabId === 'riceyearly') {
+      this.renderRiceYearlyReport();
     }
   },
 
@@ -4308,6 +4334,12 @@ const app = {
         break;
       case 'yearly':
         this.switchReportsSubtab('yearly');
+        break;
+      case 'ricemonthly':
+        this.switchReportsSubtab('ricemonthly');
+        break;
+      case 'riceyearly':
+        this.switchReportsSubtab('riceyearly');
         break;
       case 'taste':
         this.onTasteTabOpen();
@@ -5088,6 +5120,8 @@ const app = {
     if (exMonth) exMonth.value = yearMonth;
     const fbMonth = document.getElementById('formbMonthPicker');
     if (fbMonth) fbMonth.value = yearMonth;
+    const riceMonth = document.getElementById('riceMonthlyPicker');
+    if (riceMonth) riceMonth.value = yearMonth;
 
     // Check status of other section to inform user
     const otherSection = (activeSection === 'primary') ? 'upper' : 'primary';
@@ -6573,7 +6607,8 @@ const app = {
       totalFuelSubsidy,
       totalCookHonorarium,
       totalExpenses: +(totalFuelSubsidy + totalCookHonorarium).toFixed(2),
-      ingredientMatrix
+      ingredientMatrix,
+      monthlySummaries
     };
   },
 
@@ -6791,6 +6826,653 @@ const app = {
     const yearSelect = document.getElementById('yearlyYearSelect');
     const finYear = yearSelect ? yearSelect.value : this.getCurrentAcademicYear();
     excelEngine.generateYearlyExcel(finYear);
+  },
+
+  // =========================================================================
+  // RICE SPECIAL REPORTS (तांदूळ विशेष अहवाल - मासिक नोंदवही व वार्षिक उपयोगिता)
+  // =========================================================================
+
+  onRiceMonthlyMonthChange() {
+    this.renderRiceMonthlyRegister();
+  },
+
+  renderRiceMonthlyRegister() {
+    const picker = document.getElementById('riceMonthlyPicker');
+    if (!picker) return;
+    let yearMonth = picker.value;
+    if (!yearMonth) {
+      yearMonth = this.currentMonth || new Date().toISOString().substring(0, 7);
+      picker.value = yearMonth;
+    }
+
+    const [yearStr, monthStr] = yearMonth.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    const monthName = this.getMonthNameMarathi(yearMonth);
+    const section = this.activeSection || 'primary';
+    const secTitle = section === 'upper' ? 'इ. ६ वी ते ८ वी (उच्च प्राथमिक)' : 'इ. १ ली ते ५ वी (प्राथमिक)';
+    const riceRate = this.getIngredientRate('rice', section);
+    const riceRateGrams = Math.round(riceRate * 1000);
+    const pat = this.getActivePat(section);
+    const cleanUdise = this.data?.settings?.udise || '';
+
+    // Header labels
+    const elMonth = document.getElementById('riceMonHeaderMonth');
+    if (elMonth) elMonth.textContent = `${monthName} ${year}`;
+    const elSchool = document.getElementById('riceMonHeaderSchool');
+    if (elSchool) elSchool.textContent = this.data.settings.schoolName || '';
+    const elCentre = document.getElementById('riceMonHeaderCentre');
+    if (elCentre) elCentre.textContent = this.data.settings.centre || '';
+    const elTaluka = document.getElementById('riceMonHeaderTaluka');
+    if (elTaluka) elTaluka.textContent = this.data.settings.taluka || '';
+    const elDist = document.getElementById('riceMonHeaderDistrict');
+    if (elDist) elDist.textContent = this.data.settings.district || '';
+    const elUdise = document.getElementById('riceMonHeaderUdise');
+    if (elUdise) elUdise.textContent = cleanUdise;
+    const elSec = document.getElementById('riceMonHeaderSection');
+    if (elSec) elSec.textContent = secTitle;
+    const elRate = document.getElementById('riceMonHeaderRate');
+    if (elRate) elRate.textContent = riceRateGrams;
+    const elFooterSchool = document.getElementById('riceMonFooterSchool');
+    if (elFooterSchool) elFooterSchool.textContent = this.data.settings.schoolName || '';
+
+    // Update section toggle buttons and badge
+    const btnP = document.getElementById('riceMonTogglePrimary');
+    const btnU = document.getElementById('riceMonToggleUpper');
+    if (btnP && btnU) {
+      btnP.classList.toggle('active', section === 'primary');
+      btnU.classList.toggle('active', section === 'upper');
+    }
+    const badge = document.getElementById('riceMonSectionBadge');
+    if (badge) {
+      badge.textContent = section === 'upper' ? '🎓 इ. ६ ते ८ (उच्च प्राथमिक)' : '🎒 इ. १ ते ५ (प्राथमिक)';
+      badge.className = section === 'upper' ? 'badge bg-primary text-white' : 'badge bg-success text-white';
+    }
+
+    const firstDateOfMonth = `${yearMonth}-01`;
+    const openingStock = +(this.computeStockForDate(firstDateOfMonth, section).rice || 0);
+
+    const records = this.getActiveRecords(section) || {};
+    const receipts = this.getActiveReceipts(section) || [];
+    const transfers = this.data.stockTransfers || [];
+
+    const tbody = document.getElementById('riceMonthlyTableBody');
+    const tfoot = document.getElementById('riceMonthlyTableFoot');
+    if (!tbody || !tfoot) return;
+    tbody.innerHTML = '';
+    tfoot.innerHTML = '';
+
+    const dayNames = ['रविवार', 'सोमवार', 'मंगळवार', 'बुधवार', 'गुरुवार', 'शुक्रवार', 'शनिवार'];
+
+    let runningStock = openingStock;
+    let totalReceived = 0;
+    let totalBeneficiaries = 0;
+    let totalConsumed = 0;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayStr = String(day).padStart(2, '0');
+      const dateStr = `${yearMonth}-${dayStr}`;
+      const dateObj = new Date(year, month - 1, day);
+      const dayOfWeek = dayNames[dateObj.getDay()];
+      const isSunday = (dateObj.getDay() === 0);
+
+      // Check receipts on this date for rice
+      let dayRec = 0;
+      receipts.forEach(r => {
+        if (r.date === dateStr && r.items && r.items.rice) {
+          dayRec += parseFloat(r.items.rice) || 0;
+        }
+      });
+      // Transfers on this date
+      transfers.forEach(t => {
+        if (t.date === dateStr && t.items && t.items.rice) {
+          const amt = parseFloat(t.items.rice) || 0;
+          if (t.toSection === section) dayRec += amt;
+          if (t.fromSection === section) dayRec -= amt;
+        }
+      });
+
+      const rec = records[dateStr];
+      const isHoliday = rec ? !!rec.isHoliday : isSunday;
+      const holidayReason = (rec && rec.isHoliday) ? (rec.holidayReason || 'सुट्टी') : (isSunday ? 'रविवार' : '');
+
+      let beneficiaries = 0;
+      let consumedRice = 0;
+
+      if (!isHoliday && rec && rec.children > 0) {
+        beneficiaries = parseInt(rec.children, 10) || 0;
+        if (rec.quantities && rec.quantities.rice !== undefined) {
+          consumedRice = parseFloat(rec.quantities.rice) || 0;
+        } else {
+          consumedRice = +(beneficiaries * riceRate).toFixed(3);
+        }
+      }
+
+      const dayOpening = runningStock;
+      const dayAvailable = +(dayOpening + dayRec).toFixed(3);
+      const dayClosing = +(dayAvailable - consumedRice).toFixed(3);
+      runningStock = dayClosing;
+
+      totalReceived += dayRec;
+      totalBeneficiaries += beneficiaries;
+      totalConsumed += consumedRice;
+
+      const tr = document.createElement('tr');
+      if (isHoliday) {
+        tr.classList.add('table-light', 'text-muted');
+        tr.style.backgroundColor = isSunday ? '#fef2f2' : '#f8fafc';
+      }
+
+      const dayRecDisplay = dayRec > 0 ? dayRec.toFixed(3) : '-';
+      const dayBenDisplay = beneficiaries > 0 ? beneficiaries : (isHoliday ? `<span class="badge bg-secondary" style="font-size:0.75rem;">${holidayReason}</span>` : '-');
+      const dayConDisplay = consumedRice > 0 ? consumedRice.toFixed(3) : (isHoliday ? '-' : '-');
+
+      tr.innerHTML = `
+        <td class="text-center fw-bold">${day}</td>
+        <td class="text-center">${dayOfWeek}</td>
+        <td class="text-center">${pat}</td>
+        <td class="text-end font-monospace">${dayOpening.toFixed(3)}</td>
+        <td class="text-end font-monospace ${dayRec > 0 ? 'text-success fw-bold' : ''}">${dayRecDisplay}</td>
+        <td class="text-end font-monospace fw-semibold">${dayAvailable.toFixed(3)}</td>
+        <td class="text-center ${beneficiaries > 0 ? 'fw-bold' : ''}">${dayBenDisplay}</td>
+        <td class="text-end font-monospace ${consumedRice > 0 ? 'text-primary fw-bold' : ''}">${dayConDisplay}</td>
+        <td class="text-end font-monospace fw-bold text-dark">${dayClosing.toFixed(3)}</td>
+        <td class="text-center text-muted" style="font-size:0.8rem;">${(rec && !isHoliday && beneficiaries > 0) ? 'स्वाक्षरी' : ''}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    // Totals Footer Row
+    const totalAvailableAll = +(openingStock + totalReceived).toFixed(3);
+    const trFoot = document.createElement('tr');
+    trFoot.classList.add('table-warning', 'fw-bold', 'align-middle');
+    trFoot.style.borderTop = '2px solid #0f172a';
+    trFoot.innerHTML = `
+      <td class="text-center" colspan="2">एकूण</td>
+      <td class="text-center">${pat}</td>
+      <td class="text-end font-monospace">${openingStock.toFixed(3)}</td>
+      <td class="text-end font-monospace text-success">${totalReceived > 0 ? totalReceived.toFixed(3) : '0.000'}</td>
+      <td class="text-end font-monospace text-primary">${totalAvailableAll.toFixed(3)}</td>
+      <td class="text-center text-dark">${totalBeneficiaries}</td>
+      <td class="text-end font-monospace text-primary">${totalConsumed.toFixed(3)}</td>
+      <td class="text-end font-monospace text-dark">${runningStock.toFixed(3)}</td>
+      <td class="text-center">-</td>
+    `;
+    tfoot.appendChild(trFoot);
+  },
+
+  printRiceMonthlyRegister() {
+    this.switchTab('reports');
+    this.switchReportsSubtab('ricemonthly');
+    const picker = document.getElementById('riceMonthlyPicker');
+    const ym = (picker && picker.value) ? picker.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
+    const [yrS] = ym.split('-');
+    const mName = this.getMonthNameMarathi(ym);
+    this.preparePrintReportTitle('तांदूळ_दैनिक_नोंदवही', `${mName}_${yrS}`);
+
+    this.setPrintPageOrientation('portrait', 'A4');
+    document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb', 'print-rice-yearly');
+    document.body.classList.add('print-rice-monthly', 'print-portrait');
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  },
+
+  exportRiceMonthlyExcel() {
+    const picker = document.getElementById('riceMonthlyPicker');
+    const ym = (picker && picker.value) ? picker.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
+    const [yearStr, monthStr] = ym.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const mName = this.getMonthNameMarathi(ym);
+    const section = this.activeSection || 'primary';
+    const secTitle = section === 'upper' ? 'इ. ६ ते ८ (उच्च प्राथमिक)' : 'इ. १ ते ५ (प्राथमिक)';
+    const riceRate = this.getIngredientRate('rice', section);
+    const pat = this.getActivePat(section);
+    const cleanUdise = this.data?.settings?.udise || '';
+    const fileBase = `तांदूळ_नोंदवही_${mName}_${yearStr}_${cleanUdise}`;
+
+    const headers = [
+      'दिनांक', 'वार', 'पटसंख्या', 'मागील महिना शिल्लक तांदूळ (कि.ग्रॅ.)',
+      'चालू महिना प्राप्त तांदूळ (कि.ग्रॅ.)', 'एकूण तांदूळ (कि.ग्रॅ.)', 'लाभार्थी संख्या',
+      'शिजवलेला सर्व तांदूळ एकत्रित (कि.ग्रॅ.)', 'महिना अखेर शिल्लक तांदूळ (कि.ग्रॅ.)', 'शेरा'
+    ];
+
+    const firstDateOfMonth = `${ym}-01`;
+    const openingStock = +(this.computeStockForDate(firstDateOfMonth, section).rice || 0);
+    const records = this.getActiveRecords(section) || {};
+    const receipts = this.getActiveReceipts(section) || [];
+    const transfers = this.data.stockTransfers || [];
+    const dayNames = ['रविवार', 'सोमवार', 'मंगळवार', 'बुधवार', 'गुरुवार', 'शुक्रवार', 'शनिवार'];
+
+    let runningStock = openingStock;
+    let totalRec = 0;
+    let totalBen = 0;
+    let totalCon = 0;
+    const rows = [];
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayStr = String(day).padStart(2, '0');
+      const dateStr = `${ym}-${dayStr}`;
+      const dateObj = new Date(year, month - 1, day);
+      const dayOfWeek = dayNames[dateObj.getDay()];
+      const isSunday = (dateObj.getDay() === 0);
+
+      let dayRec = 0;
+      receipts.forEach(r => {
+        if (r.date === dateStr && r.items && r.items.rice) {
+          dayRec += parseFloat(r.items.rice) || 0;
+        }
+      });
+      transfers.forEach(t => {
+        if (t.date === dateStr && t.items && t.items.rice) {
+          const amt = parseFloat(t.items.rice) || 0;
+          if (t.toSection === section) dayRec += amt;
+          if (t.fromSection === section) dayRec -= amt;
+        }
+      });
+
+      const rec = records[dateStr];
+      const isHoliday = rec ? !!rec.isHoliday : isSunday;
+      const holidayReason = (rec && rec.isHoliday) ? (rec.holidayReason || 'सुट्टी') : (isSunday ? 'रविवार' : '');
+
+      let ben = 0;
+      let con = 0;
+      if (!isHoliday && rec && rec.children > 0) {
+        ben = parseInt(rec.children, 10) || 0;
+        con = (rec.quantities && rec.quantities.rice !== undefined) ? parseFloat(rec.quantities.rice) || 0 : +(ben * riceRate).toFixed(3);
+      }
+
+      const dayOpen = runningStock;
+      const dayAvail = +(dayOpen + dayRec).toFixed(3);
+      const dayClose = +(dayAvail - con).toFixed(3);
+      runningStock = dayClose;
+
+      totalRec += dayRec;
+      totalBen += ben;
+      totalCon += con;
+
+      rows.push([
+        day,
+        dayOfWeek,
+        pat,
+        +dayOpen.toFixed(3),
+        dayRec > 0 ? +dayRec.toFixed(3) : 0,
+        +dayAvail.toFixed(3),
+        isHoliday ? holidayReason : ben,
+        con > 0 ? +con.toFixed(3) : 0,
+        +dayClose.toFixed(3),
+        isHoliday ? holidayReason : ''
+      ]);
+    }
+
+    // Totals row
+    rows.push([
+      'एकूण',
+      '-',
+      pat,
+      +openingStock.toFixed(3),
+      +totalRec.toFixed(3),
+      +(openingStock + totalRec).toFixed(3),
+      totalBen,
+      +totalCon.toFixed(3),
+      +runningStock.toFixed(3),
+      '-'
+    ]);
+
+    if (typeof XLSX !== 'undefined') {
+      const wb = XLSX.utils.book_new();
+      const wsData = [
+        ["महाराष्ट्र शासन — शालेय शिक्षण व क्रीडा विभाग"],
+        [`${this.data.settings.schoolName || 'शाळा'} | UDISE: ${cleanUdise} | केंद्र: ${this.data.settings.centre || ''} | तालुका: ${this.data.settings.taluka || ''}`],
+        [`भाग - १ तांदळाचे हिशोब (दैनिक नोंदवही) — माहे ${mName} ${yearStr} (${secTitle})`],
+        [],
+        headers,
+        ...rows,
+        [],
+        ["टोल फ्री क्र. १८००२३३९९८८", "", "", "", "मुख्याध्यापक स्वाक्षरी", "", "", "अध्यक्ष शाळा व्यवस्थापन समिती"]
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, "तांदूळ नोंदवही");
+      XLSX.writeFile(wb, `${fileBase}.xlsx`);
+    } else {
+      let csvContent = "\uFEFF";
+      csvContent += `"${this.data.settings.schoolName || 'शाळा'}"\n`;
+      csvContent += `"भाग - १ तांदळाचे हिशोब — माहे ${mName} ${yearStr} (${secTitle})"\n\n`;
+      csvContent += headers.map(h => `"${h}"`).join(',') + '\n';
+      rows.forEach(r => {
+        csvContent += r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\n';
+      });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${fileBase}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  },
+
+  onRiceYearlyYearChange() {
+    this.renderRiceYearlyReport();
+  },
+
+  renderRiceYearlyReport() {
+    const yearSelect = document.getElementById('riceYearlyYearSelect');
+    const finYear = yearSelect ? yearSelect.value : this.getCurrentAcademicYear();
+    const section = this.activeSection || 'primary';
+    const secTitle = section === 'upper' ? 'इ. ६ वी ते ८ वी (उच्च प्राथमिक)' : 'इ. १ ली ते ५ वी (प्राथमिक)';
+    const pat = this.getActivePat(section);
+    const cleanUdise = this.data?.settings?.udise || '';
+
+    // Header meta
+    const elYear = document.getElementById('riceYrHeaderYear');
+    if (elYear) elYear.textContent = finYear;
+    const elSchool = document.getElementById('riceYrHeaderSchool');
+    if (elSchool) elSchool.textContent = this.data.settings.schoolName || '';
+    const elUdise = document.getElementById('riceYrHeaderUdise');
+    if (elUdise) elUdise.textContent = cleanUdise;
+    const elCentre = document.getElementById('riceYrHeaderCentre');
+    if (elCentre) elCentre.textContent = this.data.settings.centre || '';
+    const elTaluka = document.getElementById('riceYrHeaderTaluka');
+    if (elTaluka) elTaluka.textContent = this.data.settings.taluka || '';
+    const elDist = document.getElementById('riceYrHeaderDistrict');
+    if (elDist) elDist.textContent = this.data.settings.district || '';
+    const elSec = document.getElementById('riceYrHeaderSection');
+    if (elSec) elSec.textContent = secTitle;
+
+    // Signatures
+    const signSchool = document.getElementById('riceYrSignSchool');
+    if (signSchool) signSchool.textContent = this.data.settings.schoolName || '';
+    const signCentre = document.getElementById('riceYrSignCentre');
+    if (signCentre) signCentre.textContent = this.data.settings.centre || '';
+    const signTaluka = document.getElementById('riceYrSignTaluka');
+    if (signTaluka) signTaluka.textContent = this.data.settings.taluka || '';
+
+    // Update section toggles & badge
+    const btnP = document.getElementById('riceYrTogglePrimary');
+    const btnU = document.getElementById('riceYrToggleUpper');
+    if (btnP && btnU) {
+      btnP.classList.toggle('active', section === 'primary');
+      btnU.classList.toggle('active', section === 'upper');
+    }
+    const badge = document.getElementById('riceYrSectionBadge');
+    if (badge) {
+      badge.textContent = section === 'upper' ? '🎓 इ. ६ ते ८ (उच्च प्राथमिक)' : '🎒 इ. १ ते ५ (प्राथमिक)';
+      badge.className = section === 'upper' ? 'badge bg-primary text-white' : 'badge bg-success text-white';
+    }
+
+    // Calculate annual data using computeYearlyData
+    const yearlyData = this.computeYearlyData(finYear, section);
+    const riceData = (yearlyData.ingredientMatrix && yearlyData.ingredientMatrix.rice) ? yearlyData.ingredientMatrix.rice : { opening: 0, months: [] };
+    const monthConfigs = yearlyData.monthConfigs || [];
+    const summaries = yearlyData.monthlySummaries || [];
+
+    const tbody = document.getElementById('riceYearlyTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    let annualWorkingDays = 0;
+    let annualBeneficiaries = 0;
+    let annualReceived = 0;
+    let annualBorrowIn = 0;
+    let annualBorrowOut = 0;
+    let annualConsumed = 0;
+    let annualFuel = 0;
+
+    let currentOpening = riceData.opening || 0;
+
+    monthConfigs.forEach((m, idx) => {
+      const ms = summaries[idx];
+      const recMonth = (riceData.months && riceData.months[idx]) ? riceData.months[idx] : { received: 0, consumed: 0, closing: 0 };
+      const wDays = yearlyData.workingDays[idx] || 0;
+      const ben = yearlyData.beneficiaries[idx] || 0;
+      const fuel = yearlyData.fuelSubsidy[idx] || 0;
+
+      const mRec = recMonth.received || 0;
+      const mBorrowIn = (ms && ms.transfersIn && ms.transfersIn.rice) ? ms.transfersIn.rice : 0;
+      const mBorrowOut = (ms && ms.transfersOut && ms.transfersOut.rice) ? ms.transfersOut.rice : 0;
+      const mAvail = +(currentOpening + mRec + mBorrowIn - mBorrowOut).toFixed(3);
+      const mCon = recMonth.consumed || 0;
+      const mClose = +(mAvail - mCon).toFixed(3);
+
+      annualWorkingDays += wDays;
+      annualBeneficiaries += ben;
+      annualReceived += mRec;
+      annualBorrowIn += mBorrowIn;
+      annualBorrowOut += mBorrowOut;
+      annualConsumed += mCon;
+      annualFuel += fuel;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="text-center fw-bold">${idx + 1}</td>
+        <td class="text-start fw-semibold">${m.name}</td>
+        <td class="text-center">${pat}</td>
+        <td class="text-center">${wDays}</td>
+        <td class="text-end font-monospace">${currentOpening.toFixed(3)}</td>
+        <td class="text-end font-monospace ${mRec > 0 ? 'text-success fw-bold' : ''}">${mRec > 0 ? mRec.toFixed(3) : '-'}</td>
+        <td class="text-end font-monospace ${mBorrowIn > 0 ? 'text-primary fw-bold' : ''}">${mBorrowIn > 0 ? mBorrowIn.toFixed(3) : '-'}</td>
+        <td class="text-end font-monospace ${mBorrowOut > 0 ? 'text-danger fw-bold' : ''}">${mBorrowOut > 0 ? mBorrowOut.toFixed(3) : '-'}</td>
+        <td class="text-end font-monospace fw-semibold">${mAvail.toFixed(3)}</td>
+        <td class="text-center ${ben > 0 ? 'fw-bold' : ''}">${ben > 0 ? ben : '-'}</td>
+        <td class="text-end font-monospace ${mCon > 0 ? 'text-primary fw-bold' : ''}">${mCon > 0 ? mCon.toFixed(3) : '-'}</td>
+        <td class="text-end font-monospace fw-bold text-dark">${mClose.toFixed(3)}</td>
+        <td class="text-end font-monospace">${fuel > 0 ? '₹ ' + fuel.toFixed(2) : '-'}</td>
+        <td class="text-center text-muted" style="font-size:0.8rem;">-</td>
+      `;
+      tbody.appendChild(tr);
+
+      currentOpening = mClose;
+    });
+
+    // Total Row
+    const aprilOpening = riceData.opening || 0;
+    const marchClosing = currentOpening;
+    const totalAvailable = +(aprilOpening + annualReceived + annualBorrowIn - annualBorrowOut).toFixed(3);
+
+    const trTotal = document.createElement('tr');
+    trTotal.classList.add('table-warning', 'fw-bold', 'align-middle');
+    trTotal.style.borderTop = '2px solid #0f172a';
+    trTotal.innerHTML = `
+      <td class="text-center" colspan="2">एकूण</td>
+      <td class="text-center">${pat}</td>
+      <td class="text-center text-dark">${annualWorkingDays}</td>
+      <td class="text-end font-monospace">${aprilOpening.toFixed(3)}</td>
+      <td class="text-end font-monospace text-success">${annualReceived.toFixed(3)}</td>
+      <td class="text-end font-monospace text-primary">${annualBorrowIn > 0 ? annualBorrowIn.toFixed(3) : '0.000'}</td>
+      <td class="text-end font-monospace text-danger">${annualBorrowOut > 0 ? annualBorrowOut.toFixed(3) : '0.000'}</td>
+      <td class="text-end font-monospace text-primary">${totalAvailable.toFixed(3)}</td>
+      <td class="text-center text-dark">${annualBeneficiaries}</td>
+      <td class="text-end font-monospace text-primary">${annualConsumed.toFixed(3)}</td>
+      <td class="text-end font-monospace text-dark">${marchClosing.toFixed(3)}</td>
+      <td class="text-end font-monospace text-dark">₹ ${annualFuel.toFixed(2)}</td>
+      <td class="text-center">-</td>
+    `;
+    tbody.appendChild(trTotal);
+
+    // Populate Goashwara (गोषवारा) Box
+    const elGOpen = document.getElementById('riceGoashOpening');
+    if (elGOpen) elGOpen.textContent = `${aprilOpening.toFixed(3)} कि.ग्रॅ.`;
+    const elGRec = document.getElementById('riceGoashReceived');
+    if (elGRec) elGRec.textContent = `${annualReceived.toFixed(3)} कि.ग्रॅ.`;
+    const elGBorrowIn = document.getElementById('riceGoashBorrowIn');
+    if (elGBorrowIn) elGBorrowIn.textContent = `${annualBorrowIn.toFixed(3)} कि.ग्रॅ.`;
+    const elGBorrowOut = document.getElementById('riceGoashBorrowOut');
+    if (elGBorrowOut) elGBorrowOut.textContent = `${annualBorrowOut.toFixed(3)} कि.ग्रॅ.`;
+    const elGAvail = document.getElementById('riceGoashTotalAvail');
+    if (elGAvail) elGAvail.textContent = `${totalAvailable.toFixed(3)} कि.ग्रॅ.`;
+    const elGCon = document.getElementById('riceGoashConsumed');
+    if (elGCon) elGCon.textContent = `${annualConsumed.toFixed(3)} कि.ग्रॅ.`;
+    const elGClo = document.getElementById('riceGoashClosing');
+    if (elGClo) elGClo.textContent = `${marchClosing.toFixed(3)} कि.ग्रॅ.`;
+    const elGFuel = document.getElementById('riceGoashFuelTotal');
+    if (elGFuel) elGFuel.textContent = `₹ ${annualFuel.toFixed(2)}`;
+  },
+
+  printRiceYearlyReport() {
+    this.switchTab('reports');
+    this.switchReportsSubtab('riceyearly');
+    const yearSelect = document.getElementById('riceYearlyYearSelect');
+    const finYear = yearSelect ? yearSelect.value : this.getCurrentAcademicYear();
+    this.preparePrintReportTitle('वार्षिक_तांदूळ_उपयोगिता', finYear);
+
+    this.setPrintPageOrientation('landscape', 'A4');
+    document.body.classList.remove('print-portrait', 'print-formb', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-rice-monthly');
+    document.body.classList.add('print-rice-yearly', 'print-landscape');
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  },
+
+  exportRiceYearlyExcel() {
+    const yearSelect = document.getElementById('riceYearlyYearSelect');
+    const finYear = yearSelect ? yearSelect.value : this.getCurrentAcademicYear();
+    const section = this.activeSection || 'primary';
+    const secTitle = section === 'upper' ? 'इ. ६ वी ते ८ वी (उच्च प्राथमिक)' : 'इ. १ ली ते ५ वी (प्राथमिक)';
+    const pat = this.getActivePat(section);
+    const cleanUdise = this.data?.settings?.udise || '';
+    const fileBase = `वार्षिक_तांदूळ_उपयोगिता_${finYear}_${cleanUdise}`;
+
+    const headers = [
+      'अ.क्र.', 'महिना', 'पट', 'शिजविलेले दिवस', 'मागील शिल्लक तांदूळ (कि.ग्रॅ.)',
+      'प्राप्त तांदूळ (कि.ग्रॅ.)', 'उसनवार तांदूळ (+) घेतलेला', 'उसनवार तांदूळ (-) दिलेला',
+      'एकूण तांदूळ (कि.ग्रॅ.)', 'लाभार्थी संख्या', 'शिजवलेला तांदूळ (कि.ग्रॅ.)',
+      'अखेर शिल्लक तांदूळ (कि.ग्रॅ.)', 'इंधन भाजीपाला खर्च (रु.)', 'शेरा'
+    ];
+
+    const yearlyData = this.computeYearlyData(finYear, section);
+    const riceData = (yearlyData.ingredientMatrix && yearlyData.ingredientMatrix.rice) ? yearlyData.ingredientMatrix.rice : { opening: 0, months: [] };
+    const monthConfigs = yearlyData.monthConfigs || [];
+    const summaries = yearlyData.monthlySummaries || [];
+
+    let annualWorkingDays = 0;
+    let annualBeneficiaries = 0;
+    let annualReceived = 0;
+    let annualBorrowIn = 0;
+    let annualBorrowOut = 0;
+    let annualConsumed = 0;
+    let annualFuel = 0;
+
+    let currentOpening = riceData.opening || 0;
+    const rows = [];
+
+    monthConfigs.forEach((m, idx) => {
+      const ms = summaries[idx];
+      const recMonth = (riceData.months && riceData.months[idx]) ? riceData.months[idx] : { received: 0, consumed: 0, closing: 0 };
+      const wDays = yearlyData.workingDays[idx] || 0;
+      const ben = yearlyData.beneficiaries[idx] || 0;
+      const fuel = yearlyData.fuelSubsidy[idx] || 0;
+
+      const mRec = recMonth.received || 0;
+      const mBorrowIn = (ms && ms.transfersIn && ms.transfersIn.rice) ? ms.transfersIn.rice : 0;
+      const mBorrowOut = (ms && ms.transfersOut && ms.transfersOut.rice) ? ms.transfersOut.rice : 0;
+      const mAvail = +(currentOpening + mRec + mBorrowIn - mBorrowOut).toFixed(3);
+      const mCon = recMonth.consumed || 0;
+      const mClose = +(mAvail - mCon).toFixed(3);
+
+      annualWorkingDays += wDays;
+      annualBeneficiaries += ben;
+      annualReceived += mRec;
+      annualBorrowIn += mBorrowIn;
+      annualBorrowOut += mBorrowOut;
+      annualConsumed += mCon;
+      annualFuel += fuel;
+
+      rows.push([
+        idx + 1,
+        m.name,
+        pat,
+        wDays,
+        +currentOpening.toFixed(3),
+        mRec > 0 ? +mRec.toFixed(3) : 0,
+        mBorrowIn > 0 ? +mBorrowIn.toFixed(3) : 0,
+        mBorrowOut > 0 ? +mBorrowOut.toFixed(3) : 0,
+        +mAvail.toFixed(3),
+        ben,
+        mCon > 0 ? +mCon.toFixed(3) : 0,
+        +mClose.toFixed(3),
+        fuel > 0 ? +fuel.toFixed(2) : 0,
+        ''
+      ]);
+
+      currentOpening = mClose;
+    });
+
+    const aprilOpening = riceData.opening || 0;
+    const marchClosing = currentOpening;
+    const totalAvailable = +(aprilOpening + annualReceived + annualBorrowIn - annualBorrowOut).toFixed(3);
+
+    // Total row
+    rows.push([
+      'एकूण',
+      '-',
+      pat,
+      annualWorkingDays,
+      +aprilOpening.toFixed(3),
+      +annualReceived.toFixed(3),
+      +annualBorrowIn.toFixed(3),
+      +annualBorrowOut.toFixed(3),
+      +totalAvailable.toFixed(3),
+      annualBeneficiaries,
+      +annualConsumed.toFixed(3),
+      +marchClosing.toFixed(3),
+      +annualFuel.toFixed(2),
+      '-'
+    ]);
+
+    const goashwaraRows = [
+      [],
+      ["*** गोषवारा (वार्षिक तांदूळ ताळेबंद / विवरण) ***"],
+      ["१. मागील वर्ष अखेर शिल्लक तांदूळ (१ एप्रिल शिल्लक)", `${aprilOpening.toFixed(3)} कि.ग्रॅ.`],
+      ["२. चालू वर्ष एकूण प्राप्त तांदूळ (शासनाकडून)", `${annualReceived.toFixed(3)} कि.ग्रॅ.`],
+      ["३. चालू वर्ष उसनवार घेतलेला तांदूळ (+)", `${annualBorrowIn.toFixed(3)} कि.ग्रॅ.`],
+      ["४. चालू वर्ष उसनवार दिलेला तांदूळ (-)", `${annualBorrowOut.toFixed(3)} कि.ग्रॅ.`],
+      ["५. चालू वर्ष एकूण उपलब्ध तांदूळ (१+२+३-४)", `${totalAvailable.toFixed(3)} कि.ग्रॅ.`],
+      ["६. चालू वर्ष एकूण शिजवण्यात आलेला तांदूळ", `${annualConsumed.toFixed(3)} कि.ग्रॅ.`],
+      ["७. ३१ मार्च अखेर शिल्लक तांदूळ (५ - ६)", `${marchClosing.toFixed(3)} कि.ग्रॅ.`],
+      ["८. चालू वर्ष एकूण इंधन व भाजीपाला खर्च", `₹ ${annualFuel.toFixed(2)}`],
+      [],
+      ["मुख्याध्यापक / सचिव (शाळा)", "", "केंद्रप्रमुख (केंद्र)", "", "गटशिक्षणाधिकारी / प्रशासन अधिकारी (पं.स.)"]
+    ];
+
+    if (typeof XLSX !== 'undefined') {
+      const wb = XLSX.utils.book_new();
+      const wsData = [
+        ["महाराष्ट्र शासन — शालेय शिक्षण व क्रीडा विभाग"],
+        [`${this.data.settings.schoolName || 'शाळा'} | UDISE: ${cleanUdise} | केंद्र: ${this.data.settings.centre || ''} | तालुका: ${this.data.settings.taluka || ''} | जिल्हा: ${this.data.settings.district || ''}`],
+        [`प्रधानमंत्री पोषण शक्ती निर्माण योजना (PM POSHAN) — वार्षिक तांदूळ उपयोगिता प्रमाणपत्र (उचल व वाटप पत्रक) सन ${finYear} (${secTitle})`],
+        [],
+        headers,
+        ...rows,
+        ...goashwaraRows
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, "वार्षिक तांदूळ उपयोगिता");
+      XLSX.writeFile(wb, `${fileBase}.xlsx`);
+    } else {
+      let csvContent = "\uFEFF";
+      csvContent += `"${this.data.settings.schoolName || 'शाळा'}"\n`;
+      csvContent += `"वार्षिक तांदूळ उपयोगिता प्रमाणपत्र — सन ${finYear} (${secTitle})"\n\n`;
+      csvContent += headers.map(h => `"${h}"`).join(',') + '\n';
+      rows.forEach(r => {
+        csvContent += r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\n';
+      });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${fileBase}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   },
 
   // =========================================================================
@@ -9586,6 +10268,8 @@ const app = {
         this.renderMonthlyExcelSheet();
         this.renderFormB();
         this.renderYearlyReport();
+        this.renderRiceMonthlyRegister();
+        this.renderRiceYearlyReport();
       }
     }
   },
@@ -9699,6 +10383,8 @@ const app = {
     this.renderMonthlyExcelSheet();
     this.renderFormB();
     this.renderYearlyReport();
+    this.renderRiceMonthlyRegister();
+    this.renderRiceYearlyReport();
   },
 
   saveSchoolSettingsFromDOM() {

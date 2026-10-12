@@ -26,7 +26,7 @@
     }
   </script>
 
-  <link rel="stylesheet" href="styles.css?v=20261012_3">
+  <link rel="stylesheet" href="styles.css?v=20261012_4">
 </head>
 <body>
 
@@ -1094,6 +1094,14 @@
                 <span class="subtab-icon">📅</span>
                 <span class="subtab-text">वार्षिक अहवाल (Yearly Report)</span>
               </button>
+              <button type="button" class="reports-subtab-btn" id="subtabBtnRiceMonthly" data-subtab="ricemonthly" onclick="app.switchReportsSubtab('ricemonthly')">
+                <span class="subtab-icon">🍚</span>
+                <span class="subtab-text">तांदूळ दैनिक नोंदवही (भाग-१)</span>
+              </button>
+              <button type="button" class="reports-subtab-btn" id="subtabBtnRiceYearly" data-subtab="riceyearly" onclick="app.switchReportsSubtab('riceyearly')">
+                <span class="subtab-icon">📋</span>
+                <span class="subtab-text">तांदूळ वार्षिक उपयोगिता (प्रमाणपत्र)</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1524,6 +1532,302 @@
 
         </div>
         </div><!-- /#subtab-panel-yearly -->
+
+        <!-- SUB-PANEL 4: RICE MONTHLY REGISTER (भाग-१ तांदळाचे हिशोब) -->
+        <div id="subtab-panel-ricemonthly" class="reports-subtab-panel" style="display: none;">
+          <div class="container-fluid">
+            
+            <div class="panel-header no-print">
+              <div class="panel-title-group">
+                <h2 class="panel-title d-flex align-items-center gap-2">
+                  <span>🍚 मासिक तांदूळ हिशोब नोंदवही (भाग-१ तांदळाचे हिशोब)</span>
+                  <span class="badge" id="riceMonSectionBadge">🎒 इ. १ ते ५ (प्राथमिक)</span>
+                </h2>
+                <p class="panel-desc">१ ते ३१ तारखांचे दैनंदिन हिशोब: मागील शिल्लक, चालू महिना प्राप्त, एकूण, लाभार्थी संख्या, शिजवलेला तांदूळ व अखेर शिल्लक</p>
+              </div>
+              <div class="panel-actions">
+                <div class="section-segmented-group me-2 dual-only" role="group" aria-label="विभाग निवडा">
+                  <button type="button" class="btn-section-toggle section-toggle-btn active" id="riceMonTogglePrimary" data-section="primary" onclick="app.switchSection('primary')">
+                    🎒 इ. १ ते ५
+                  </button>
+                  <button type="button" class="btn-section-toggle section-toggle-btn" id="riceMonToggleUpper" data-section="upper" onclick="app.switchSection('upper')">
+                    🎓 इ. ६ ते ८
+                  </button>
+                </div>
+                <input type="month" id="riceMonthlyPicker" class="form-control" onchange="app.onRiceMonthlyMonthChange()">
+                <button class="btn btn-success" onclick="app.exportRiceMonthlyExcel()">
+                  <span>📥 Excel डाऊनलोड (.xlsx)</span>
+                </button>
+                <button class="btn btn-primary" onclick="app.printRiceMonthlyRegister()">
+                  <span>🖨️ A4 Portrait प्रिंट</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Rice Monthly Register Printable Card -->
+            <div id="riceMonthlyPrintArea" class="rice-print-card bg-white p-3 p-md-4 rounded-3 shadow-sm border mb-4">
+              <div class="rice-register-header text-center mb-3">
+                <h3 class="rice-reg-title fw-bold text-dark m-0" style="font-size: 1.35rem; letter-spacing: 0.5px;">भाग - १ तांदळाचे हिशोब</h3>
+                <div class="rice-reg-sub mt-2 fs-6 fw-semibold text-secondary">
+                  <strong>माहे:</strong> <span id="riceMonHeaderMonth" class="text-primary fw-bold"></span> &nbsp;|&nbsp;
+                  <strong>शाळेचे नाव:</strong> <span id="riceMonHeaderSchool" class="text-dark fw-bold"></span> &nbsp;|&nbsp;
+                  <strong>केंद्र:</strong> <span id="riceMonHeaderCentre"></span> &nbsp;|&nbsp;
+                  <strong>ता.:</strong> <span id="riceMonHeaderTaluka"></span> &nbsp;|&nbsp;
+                  <strong>जि.:</strong> <span id="riceMonHeaderDistrict"></span>
+                </div>
+                <div class="rice-reg-meta mt-2 d-flex flex-wrap justify-content-center gap-2">
+                  <span class="badge bg-light text-dark border">UDISE: <span id="riceMonHeaderUdise" class="fw-bold"></span></span>
+                  <span class="badge bg-light text-dark border">विभाग: <span id="riceMonHeaderSection" class="fw-bold"></span></span>
+                  <span class="badge bg-light text-primary border">प्रती विद्यार्थी प्रमाण: <span id="riceMonHeaderRate" class="fw-bold"></span> ग्रॅम</span>
+                </div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-bordered align-middle text-center rice-monthly-table" id="riceMonthlyTable">
+                  <thead>
+                    <tr class="table-primary text-center align-middle" style="background: #e0f2fe; color: #0369a1;">
+                      <th style="width: 5%;">दिनांक</th>
+                      <th style="width: 8%;">वार</th>
+                      <th style="width: 7%;">पटसंख्या</th>
+                      <th style="width: 12%;">मागील महिना शिल्लक तांदूळ<br><small>(कि.ग्रॅ.)</small></th>
+                      <th style="width: 12%;">चालू महिना प्राप्त तांदूळ<br><small>(कि.ग्रॅ.)</small></th>
+                      <th style="width: 12%;">एकूण तांदूळ<br><small>(४ + ५)</small></th>
+                      <th style="width: 8%;">लाभार्थी संख्या</th>
+                      <th style="width: 13%;">शिजवलेला सर्व तांदूळ एकत्रित<br><small>(कि.ग्रॅ.)</small></th>
+                      <th style="width: 13%;">महिना अखेर शिल्लक तांदूळ<br><small>(कि.ग्रॅ.)</small></th>
+                      <th style="width: 10%;">मुख्याध्यापक स्वाक्षरी</th>
+                    </tr>
+                    <tr class="table-light text-muted" style="font-size: 0.78rem;">
+                      <th>१</th>
+                      <th>२</th>
+                      <th>३</th>
+                      <th>४</th>
+                      <th>५</th>
+                      <th>६</th>
+                      <th>७</th>
+                      <th>८</th>
+                      <th>९</th>
+                      <th>१०</th>
+                    </tr>
+                  </thead>
+                  <tbody id="riceMonthlyTableBody">
+                    <!-- Populated via JS -->
+                  </tbody>
+                  <tfoot id="riceMonthlyTableFoot">
+                    <!-- Total row populated via JS -->
+                  </tfoot>
+                </table>
+              </div>
+
+              <!-- Footer Signatures & Toll-Free Banner -->
+              <div class="rice-footer-signatures mt-3 pt-2">
+                <div class="d-flex justify-content-between align-items-end flex-wrap gap-3">
+                  <div class="text-center" style="min-width: 180px;">
+                    <div style="height: 45px;"></div>
+                    <p class="mb-0 fw-bold">मुख्याध्यापक स्वाक्षरी</p>
+                    <small class="text-muted" id="riceMonFooterSchool"></small>
+                  </div>
+                  <div class="text-center p-2 border rounded-2 bg-light shadow-2xs" style="max-width: 320px;">
+                    <div class="fw-bold text-danger" style="font-size: 0.92rem;">शालेय पोषण आहार टोल फ्री क्र. १८००२३३९९८८</div>
+                    <small class="text-muted">तक्रार किंवा मदतीसाठी संपर्क साधा</small>
+                  </div>
+                  <div class="text-center" style="min-width: 180px;">
+                    <div style="height: 45px;"></div>
+                    <p class="mb-0 fw-bold">अध्यक्ष</p>
+                    <small class="text-muted">शाळा व्यवस्थापन समिती</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div><!-- /#subtab-panel-ricemonthly -->
+
+        <!-- SUB-PANEL 5: RICE YEARLY REPORT (वार्षिक तांदूळ उपयोगिता प्रमाणपत्र) -->
+        <div id="subtab-panel-riceyearly" class="reports-subtab-panel" style="display: none;">
+          <div class="container-fluid">
+            
+            <div class="panel-header no-print">
+              <div class="panel-title-group">
+                <h2 class="panel-title d-flex align-items-center gap-2">
+                  <span>📋 वार्षिक तांदूळ उपयोगिता प्रमाणपत्र (उचल व वाटप माहिती पत्रक)</span>
+                  <span class="badge" id="riceYrSectionBadge">🎒 इ. १ ते ५ (प्राथमिक)</span>
+                </h2>
+                <p class="panel-desc">एप्रिल ते मार्च १२ महिन्यांचे अधिकृत तांदूळ हिशोब विवरणपत्र, उचल-वाटप, गोषवारा व स्वाक्षरी तक्ता</p>
+              </div>
+              <div class="panel-actions">
+                <div class="section-segmented-group me-2 dual-only" role="group" aria-label="विभाग निवडा">
+                  <button type="button" class="btn-section-toggle section-toggle-btn active" id="riceYrTogglePrimary" data-section="primary" onclick="app.switchSection('primary')">
+                    🎒 इ. १ ते ५
+                  </button>
+                  <button type="button" class="btn-section-toggle section-toggle-btn" id="riceYrToggleUpper" data-section="upper" onclick="app.switchSection('upper')">
+                    🎓 इ. ६ ते ८
+                  </button>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <label for="riceYearlyYearSelect" class="form-label mb-0 fw-bold text-nowrap">वर्ष निवडा:</label>
+                  <select id="riceYearlyYearSelect" class="form-select" style="width: auto; font-weight: 700; background: #eff6ff; color: #1e40af; border-color: #93c5fd;" onchange="app.onRiceYearlyYearChange()">
+                    <option value="2026-2027" selected>सन 2026-27</option>
+                    <option value="2025-2026">सन 2025-26</option>
+                    <option value="2024-2025">सन 2024-25</option>
+                    <option value="2023-2024">सन 2023-24</option>
+                    <option value="2022-2023">सन 2022-23</option>
+                    <option value="2021-2022">सन 2021-22</option>
+                    <option value="2020-2021">सन 2020-21</option>
+                    <option value="2019-2020">सन 2019-20</option>
+                    <option value="2018-2019">सन 2018-19</option>
+                    <option value="2017-2018">सन 2017-18</option>
+                  </select>
+                </div>
+                <button class="btn btn-success" onclick="app.exportRiceYearlyExcel()">
+                  <span>📥 Excel डाऊनलोड (.xlsx)</span>
+                </button>
+                <button class="btn btn-primary" onclick="app.printRiceYearlyReport()">
+                  <span>🖨️ A4 Landscape प्रिंट</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Rice Yearly Printable Card -->
+            <div id="riceYearlyPrintArea" class="rice-yearly-card bg-white p-3 p-md-4 rounded-3 shadow-sm border mb-4">
+              <div class="rice-yearly-header text-center mb-3">
+                <h3 class="rice-yr-title fw-bold text-dark m-0" style="font-size: 1.3rem;">महाराष्ट्र शासन — शालेय शिक्षण व क्रीडा विभाग</h3>
+                <h4 class="rice-yr-subtitle fw-bold text-primary mt-1 mb-1" style="font-size: 1.15rem;">प्रधानमंत्री पोषण शक्ती निर्माण योजना (PM POSHAN) — वार्षिक तांदूळ उपयोगिता प्रमाणपत्र</h4>
+                <div class="rice-yr-meta mt-2 fs-6 fw-semibold text-secondary">
+                  <strong>शैक्षणिक वर्ष:</strong> <span id="riceYrHeaderYear" class="text-primary fw-bold"></span> &nbsp;|&nbsp;
+                  <strong>शाळेचे नाव:</strong> <span id="riceYrHeaderSchool" class="text-dark fw-bold"></span> &nbsp;|&nbsp;
+                  <strong>युडायस:</strong> <span id="riceYrHeaderUdise" class="fw-bold"></span> &nbsp;|&nbsp;
+                  <strong>केंद्र:</strong> <span id="riceYrHeaderCentre"></span> &nbsp;|&nbsp;
+                  <strong>तालुका:</strong> <span id="riceYrHeaderTaluka"></span> &nbsp;|&nbsp;
+                  <strong>जिल्हा:</strong> <span id="riceYrHeaderDistrict"></span> &nbsp;|&nbsp;
+                  <strong>विभाग:</strong> <span id="riceYrHeaderSection" class="badge bg-light text-dark border"></span>
+                </div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-bordered align-middle text-center rice-yearly-table" id="riceYearlyTable">
+                  <thead>
+                    <tr class="table-primary text-center align-middle" style="background: #e0f2fe; color: #0369a1;">
+                      <th style="width: 4%;">अ.क्र.</th>
+                      <th style="width: 9%;">महिना</th>
+                      <th style="width: 6%;">पट</th>
+                      <th style="width: 6%;">शिजविलेले दिवस</th>
+                      <th style="width: 8%;">मागील शिल्लक तांदूळ<br><small>(कि.ग्रॅ.)</small></th>
+                      <th style="width: 8%;">प्राप्त तांदूळ<br><small>(कि.ग्रॅ.)</small></th>
+                      <th style="width: 7%;">उसनवार (+) घेतलेला</th>
+                      <th style="width: 7%;">उसनवार (-) दिलेला</th>
+                      <th style="width: 8%;">एकूण तांदूळ<br><small>(५+६+७-८)</small></th>
+                      <th style="width: 7%;">लाभार्थी संख्या</th>
+                      <th style="width: 8%;">शिजवलेला तांदूळ<br><small>(कि.ग्रॅ.)</small></th>
+                      <th style="width: 8%;">अखेर शिल्लक तांदूळ<br><small>(कि.ग्रॅ.)</small></th>
+                      <th style="width: 9%;">इंधन भाजीपाला खर्च<br><small>(रुपयात)</small></th>
+                      <th style="width: 5%;">शेरा</th>
+                    </tr>
+                    <tr class="table-light text-muted" style="font-size: 0.78rem;">
+                      <th>१</th>
+                      <th>२</th>
+                      <th>३</th>
+                      <th>४</th>
+                      <th>५</th>
+                      <th>६</th>
+                      <th>७</th>
+                      <th>८</th>
+                      <th>९</th>
+                      <th>१०</th>
+                      <th>११</th>
+                      <th>१२</th>
+                      <th>१३</th>
+                      <th>१४</th>
+                    </tr>
+                  </thead>
+                  <tbody id="riceYearlyTableBody">
+                    <!-- Populated via JS -->
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Official Goashwara (गोषवारा) Box -->
+              <div class="rice-goashwara-section mt-3">
+                <div class="card border-primary shadow-xs">
+                  <div class="card-header bg-primary text-white py-1 px-3 fw-bold" style="font-size: 0.95rem;">
+                    📌 गोषवारा (वार्षिक तांदूळ ताळेबंद / विवरण पत्र)
+                  </div>
+                  <div class="card-body p-2 p-md-3">
+                    <div class="row g-2">
+                      <div class="col-md-6 col-12">
+                        <table class="table table-sm table-bordered m-0 rice-goashwara-table">
+                          <tbody>
+                            <tr>
+                              <td class="fw-semibold" style="width: 65%;">१. मागील वर्ष अखेर शिल्लक तांदूळ (१ एप्रिल शिल्लक):</td>
+                              <td class="text-end fw-bold font-monospace" id="riceGoashOpening">0.000 कि.ग्रॅ.</td>
+                            </tr>
+                            <tr>
+                              <td class="fw-semibold">२. चालू वर्ष एकूण प्राप्त तांदूळ (शासनाकडून):</td>
+                              <td class="text-end fw-bold font-monospace text-success" id="riceGoashReceived">0.000 कि.ग्रॅ.</td>
+                            </tr>
+                            <tr>
+                              <td class="fw-semibold">३. चालू वर्ष उसनवार घेतलेला तांदूळ (+):</td>
+                              <td class="text-end fw-bold font-monospace text-primary" id="riceGoashBorrowIn">0.000 कि.ग्रॅ.</td>
+                            </tr>
+                            <tr>
+                              <td class="fw-semibold">४. चालू वर्ष उसनवार दिलेला तांदूळ (-):</td>
+                              <td class="text-end fw-bold font-monospace text-danger" id="riceGoashBorrowOut">0.000 कि.ग्रॅ.</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <div class="col-md-6 col-12">
+                        <table class="table table-sm table-bordered m-0 rice-goashwara-table">
+                          <tbody>
+                            <tr class="table-info">
+                              <td class="fw-bold" style="width: 65%;">५. चालू वर्ष एकूण उपलब्ध तांदूळ (१+२+३-४):</td>
+                              <td class="text-end fw-bold font-monospace text-primary" id="riceGoashTotalAvail">0.000 कि.ग्रॅ.</td>
+                            </tr>
+                            <tr class="table-warning">
+                              <td class="fw-bold">६. चालू वर्ष एकूण शिजवण्यात आलेला तांदूळ:</td>
+                              <td class="text-end fw-bold font-monospace text-danger" id="riceGoashConsumed">0.000 कि.ग्रॅ.</td>
+                            </tr>
+                            <tr class="table-success">
+                              <td class="fw-bold">७. ३१ मार्च अखेर शिल्लक तांदूळ (५ - ६):</td>
+                              <td class="text-end fw-bold font-monospace text-success" id="riceGoashClosing">0.000 कि.ग्रॅ.</td>
+                            </tr>
+                            <tr>
+                              <td class="fw-semibold">८. चालू वर्ष एकूण इंधन व भाजीपाला खर्च:</td>
+                              <td class="text-end fw-bold font-monospace" id="riceGoashFuelTotal">₹ 0.00</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Official Signatures -->
+              <div class="rice-yearly-signatures mt-4 pt-2">
+                <div class="d-flex justify-content-between align-items-end flex-wrap gap-3">
+                  <div class="text-center" style="min-width: 200px;">
+                    <div style="height: 50px;"></div>
+                    <p class="mb-0 fw-bold">मुख्याध्यापक / सचिव</p>
+                    <small class="text-muted">शाळा व्यवस्थापन समिती<br><span id="riceYrSignSchool"></span></small>
+                  </div>
+                  <div class="text-center" style="min-width: 200px;">
+                    <div style="height: 50px;"></div>
+                    <p class="mb-0 fw-bold">केंद्रप्रमुख</p>
+                    <small class="text-muted">केंद्र: <span id="riceYrSignCentre"></span></small>
+                  </div>
+                  <div class="text-center" style="min-width: 220px;">
+                    <div style="height: 50px;"></div>
+                    <p class="mb-0 fw-bold">गटशिक्षणाधिकारी / प्रशासन अधिकारी</p>
+                    <small class="text-muted">पंचायत समिती <span id="riceYrSignTaluka"></span></small>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </div><!-- /#subtab-panel-riceyearly -->
 
       </section><!-- /#tab-reports -->
 
@@ -3098,10 +3402,10 @@
   <div id="printSlipContainer" class="print-only-slip"></div>
 
   <!-- Application Logic Scripts -->
-  <script src="firebase-config.js?v=20261012_3"></script>
-  <script src="cloud-sync.js?v=20261012_3"></script>
-  <script src="excel-engine.js?v=20261012_3"></script>
-  <script src="test-suite.js?v=20261012_3"></script>
-  <script src="app.js?v=20261012_3"></script>
+  <script src="firebase-config.js?v=20261012_4"></script>
+  <script src="cloud-sync.js?v=20261012_4"></script>
+  <script src="excel-engine.js?v=20261012_4"></script>
+  <script src="test-suite.js?v=20261012_4"></script>
+  <script src="app.js?v=20261012_4"></script>
 </body>
 </html>
