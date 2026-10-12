@@ -574,13 +574,24 @@ const cloudSync = {
    * Smart Merge for Menus (Daily food items / pulses assignment)
    */
   mergeMenus(localMenus, remoteMenus, preferRemote = false) {
-    if (preferRemote && Array.isArray(remoteMenus) && remoteMenus.length > 0) {
-      return remoteMenus;
-    }
-    if (!preferRemote && Array.isArray(localMenus) && localMenus.length > 0) {
-      return localMenus;
-    }
-    return (Array.isArray(remoteMenus) && remoteMenus.length > 0) ? remoteMenus : (localMenus || []);
+    const l = Array.isArray(localMenus) ? localMenus : [];
+    const r = Array.isArray(remoteMenus) ? remoteMenus : [];
+    if (l.length === 0 && r.length === 0) return [];
+    if (l.length === 0) return r;
+    if (r.length === 0) return l;
+
+    const base = preferRemote ? r : l;
+    const secondary = preferRemote ? l : r;
+    const merged = [...base];
+
+    secondary.forEach(item => {
+      const exists = merged.some(m => (m.id && item.id && m.id === item.id) || (m.name && item.name && m.name === item.name));
+      if (!exists) {
+        merged.push(item);
+      }
+    });
+
+    return merged;
   },
 
   /**
@@ -981,7 +992,8 @@ const cloudSync = {
               stockTransfers: mergedTransfers,
               customDemands: Object.assign({}, baseData.customDemands || {}, remoteData.customDemands || {}),
               customDemandsUpper: Object.assign({}, baseData.customDemandsUpper || {}, remoteData.customDemandsUpper || {}),
-              formBRemarks: Object.assign({}, baseData.formBRemarks || {}, remoteData.formBRemarks || {})
+              formBRemarks: Object.assign({}, baseData.formBRemarks || {}, remoteData.formBRemarks || {}),
+              formBActivityDates: Object.assign({}, baseData.formBActivityDates || {}, remoteData.formBActivityDates || {})
             });
 
             // Save to localStorage for this specific school

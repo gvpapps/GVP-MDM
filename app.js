@@ -63,21 +63,24 @@ const app = {
     ingredients: {
       rice: { id: "rice", name: "तांदूळ", defaultRate: 0.10, ratePrimary: 0.10, rateUpper: 0.15, unit: "kg", category: "grain" },
       moong_dal: { id: "moong_dal", name: "मुगडाळ", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
-      tur_dal: { id: "tur_dal", name: "तूरडाळ", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+      tur_dal: { id: "tur_dal", name: "तुरडाळ", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
       masoor_dal: { id: "masoor_dal", name: "मसूरडाळ", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+      moong: { id: "moong", name: "मुग", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
       matki: { id: "matki", name: "मटकी", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
-      moong: { id: "moong", name: "मूग", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
       chavali: { id: "chavali", name: "चवळी", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
       chana: { id: "chana", name: "हरभरा", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
       vatana: { id: "vatana", name: "वाटाणा", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
       cumin: { id: "cumin", name: "जिरे", defaultRate: 0.00020, ratePrimary: 0.00020, rateUpper: 0.00030, unit: "kg", category: "spice" },
       mustard: { id: "mustard", name: "मोहरी", defaultRate: 0.00015, ratePrimary: 0.00015, rateUpper: 0.000225, unit: "kg", category: "spice" },
       turmeric: { id: "turmeric", name: "हळद", defaultRate: 0.00015, ratePrimary: 0.00015, rateUpper: 0.000225, unit: "kg", category: "spice" },
-      chilli: { id: "chilli", name: "मिरची पावडर", defaultRate: 0.00300, ratePrimary: 0.00300, rateUpper: 0.00450, unit: "kg", category: "spice" },
-      oil: { id: "oil", name: "सोयाबीन तेल", defaultRate: 0.00500, ratePrimary: 0.00500, rateUpper: 0.00750, unit: "kg", category: "oil" },
+      chilli: { id: "chilli", name: "मिरची", defaultRate: 0.00300, ratePrimary: 0.00300, rateUpper: 0.00450, unit: "kg", category: "spice" },
+      oil: { id: "oil", name: "तेल", defaultRate: 0.00500, ratePrimary: 0.00500, rateUpper: 0.00750, unit: "kg", category: "oil" },
       salt: { id: "salt", name: "मीठ", defaultRate: 0.00070, ratePrimary: 0.00070, rateUpper: 0.00105, unit: "kg", category: "salt" },
-      masala: { id: "masala", name: "कांदा-लसून मसाला", defaultRate: 0.00090, ratePrimary: 0.00090, rateUpper: 0.00135, unit: "kg", category: "spice" },
-      soyavadi: { id: "soyavadi", name: "सोयावडी", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" }
+      masala: { id: "masala", name: "कांदा म.", defaultRate: 0.00090, ratePrimary: 0.00090, rateUpper: 0.00135, unit: "kg", category: "spice" },
+      purak_ahar: { id: "purak_ahar", name: "पूरक आहार", defaultRate: 0.00, ratePrimary: 0.00, rateUpper: 0.00, unit: "kg", category: "grain" },
+      soyavadi: { id: "soyavadi", name: "सोया वडी", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+      gul_sakhar: { id: "gul_sakhar", name: "गुळ साखर", defaultRate: 0.010, ratePrimary: 0.010, rateUpper: 0.015, unit: "kg", category: "grain" },
+      doodh_powder: { id: "doodh_powder", name: "दूध पावडर", defaultRate: 0.015, ratePrimary: 0.015, rateUpper: 0.020, unit: "kg", category: "grain" }
     },
 
     // Master Menus & Associated Ingredients (4-Week Cyclic Timetable)
@@ -207,6 +210,7 @@ const app = {
   init() {
     this.applyGlobalConfig();
     this.setupDatePickers();
+    this.ensureStandardMenus();
     this.populateMenuDropdown();
     this.bindEvents();
 
@@ -1089,21 +1093,24 @@ const app = {
       ingredients: {
         rice: { id: "rice", name: "तांदूळ", defaultRate: 0.10, unit: "kg", category: "grain" },
         moong_dal: { id: "moong_dal", name: "मुगडाळ", defaultRate: 0.02, unit: "kg", category: "pulse" },
-        tur_dal: { id: "tur_dal", name: "तूरडाळ", defaultRate: 0.02, unit: "kg", category: "pulse" },
+        tur_dal: { id: "tur_dal", name: "तुरडाळ", defaultRate: 0.02, unit: "kg", category: "pulse" },
         masoor_dal: { id: "masoor_dal", name: "मसूरडाळ", defaultRate: 0.02, unit: "kg", category: "pulse" },
+        moong: { id: "moong", name: "मुग", defaultRate: 0.02, unit: "kg", category: "pulse" },
         matki: { id: "matki", name: "मटकी", defaultRate: 0.02, unit: "kg", category: "pulse" },
-        moong: { id: "moong", name: "मूग", defaultRate: 0.02, unit: "kg", category: "pulse" },
         chavali: { id: "chavali", name: "चवळी", defaultRate: 0.02, unit: "kg", category: "pulse" },
         chana: { id: "chana", name: "हरभरा", defaultRate: 0.02, unit: "kg", category: "pulse" },
         vatana: { id: "vatana", name: "वाटाणा", defaultRate: 0.02, unit: "kg", category: "pulse" },
         cumin: { id: "cumin", name: "जिरे", defaultRate: 0.00020, unit: "kg", category: "spice" },
         mustard: { id: "mustard", name: "मोहरी", defaultRate: 0.00015, unit: "kg", category: "spice" },
         turmeric: { id: "turmeric", name: "हळद", defaultRate: 0.00015, unit: "kg", category: "spice" },
-        chilli: { id: "chilli", name: "मिरची पावडर", defaultRate: 0.00300, unit: "kg", category: "spice" },
-        oil: { id: "oil", name: "सोयाबीन तेल", defaultRate: 0.00500, unit: "kg", category: "oil" },
+        chilli: { id: "chilli", name: "मिरची", defaultRate: 0.00300, unit: "kg", category: "spice" },
+        oil: { id: "oil", name: "तेल", defaultRate: 0.00500, unit: "kg", category: "oil" },
         salt: { id: "salt", name: "मीठ", defaultRate: 0.00070, unit: "kg", category: "salt" },
-        masala: { id: "masala", name: "कांदा-लसून मसाला", defaultRate: 0.00090, unit: "kg", category: "spice" },
-        soyavadi: { id: "soyavadi", name: "सोयावडी", defaultRate: 0.02, unit: "kg", category: "pulse" }
+        masala: { id: "masala", name: "कांदा म.", defaultRate: 0.00090, unit: "kg", category: "spice" },
+        purak_ahar: { id: "purak_ahar", name: "पूरक आहार", defaultRate: 0.00, unit: "kg", category: "grain" },
+        soyavadi: { id: "soyavadi", name: "सोया वडी", defaultRate: 0.02, unit: "kg", category: "pulse" },
+        gul_sakhar: { id: "gul_sakhar", name: "गुळ साखर", defaultRate: 0.010, unit: "kg", category: "grain" },
+        doodh_powder: { id: "doodh_powder", name: "दूध पावडर", defaultRate: 0.015, unit: "kg", category: "grain" }
       },
       menus: [
         { id: "veg_pulav", name: "व्हेजिटेबल पुलाव", pulseKey: "vatana", dayCode: 2, dayName: "सोमवार (आठवडा 1, 3)" },
@@ -3085,11 +3092,16 @@ const app = {
           tasteRecordsUpper: parsed.tasteRecordsUpper || {},
           customDemands: parsed.customDemands || {},
           customDemandsUpper: parsed.customDemandsUpper || {},
+          formBRemarks: parsed.formBRemarks || {},
+          formBActivityDates: parsed.formBActivityDates || {},
           initialSampleLoaded: (parsed.initialSampleLoaded === true)
         };
       } else {
         this.data = defaultData;
       }
+
+      this.ensureFormBIngredients();
+      this.ensureStandardMenus();
 
       // Sanity Check: If parsed schoolName was empty, a placeholder, or contaminated with another school's name
       if (regSchoolName && (!this.data.settings.schoolName || this.data.settings.schoolName.includes('(UDISE:') || (this.data.settings.schoolName.includes('मुगाव') && cleanUdise !== '27211210902'))) {
@@ -5985,46 +5997,57 @@ const app = {
     const exRateFuel = document.getElementById('exRateFuel');
     if (exRateFuel) exRateFuel.textContent = this.getActiveFuelRate();
 
-    // Dynamically update all ingredient rates in Monthly Excel table header according to active section
-    Object.keys(this.data.ingredients || {}).forEach(k => {
-      const el = document.getElementById(`exRate_${k}`);
-      if (el) el.textContent = this.getIngredientRate(k, this.activeSection);
+    // Dynamically update all 20 column headers and rates from FORM_B_ITEMS
+    this.FORM_B_ITEMS.forEach(item => {
+      const nameEl = document.getElementById(`exColName_${item.key}`);
+      if (nameEl) {
+        const ing = (this.data.ingredients && this.data.ingredients[item.key]) || item;
+        nameEl.textContent = ing.name || item.name;
+      }
+      const rateEl = document.getElementById(`exRate_${item.key}`);
+      if (rateEl) {
+        rateEl.textContent = this.getIngredientRate(item.key, this.activeSection);
+      }
     });
 
     const summary = this.computeMonthlyStock(yearMonth, this.activeSection);
-    const op = summary.opening;
-    const rc = summary.received;
-    const totAvail = summary.totalAvailable;
-    const con = summary.consumed;
-    const clo = summary.closing;
+    const op = summary.opening || {};
+    const rc = summary.received || {};
+    const totAvail = summary.totalAvailable || {};
+    const con = summary.consumed || {};
+    const clo = summary.closing || {};
 
     const tableBody = document.getElementById('officialExcelTableBody');
     if (!tableBody) return;
     tableBody.innerHTML = '';
 
+    const formatStockCell = (key, val) => {
+      const v = val || 0;
+      if (['cumin', 'mustard', 'turmeric', 'chilli', 'oil', 'salt', 'masala', 'gul_sakhar', 'doodh_powder'].includes(key)) {
+        return v.toFixed(3);
+      }
+      return v.toFixed(2);
+    };
+
+    const formatDailyCell = (key, val) => {
+      if (val === undefined || val === null || val === 0) return '';
+      if (['cumin', 'mustard', 'turmeric', 'chilli', 'salt', 'masala'].includes(key)) {
+        return (val * 1000).toFixed(2);
+      }
+      if (key === 'oil') {
+        return (val * 1000).toFixed(1);
+      }
+      return val.toFixed(2);
+    };
+
     // Row 7: Opening Stock
     const trOpen = document.createElement('tr');
     trOpen.style.background = '#f8fafc';
+    const openColsHtml = this.FORM_B_ITEMS.map(item => `<td>${formatStockCell(item.key, op[item.key])}</td>`).join('');
     trOpen.innerHTML = `
       <td></td>
       <td colspan="4" style="text-align: left; font-weight: 700;">मागील शिल्लक धान्य/किराणा :-</td>
-      <td>${(op.rice || 0).toFixed(2)}</td>
-      <td>${(op.moong_dal || 0).toFixed(2)}</td>
-      <td>${(op.tur_dal || 0).toFixed(2)}</td>
-      <td>${(op.masoor_dal || 0).toFixed(2)}</td>
-      <td>${(op.matki || 0).toFixed(2)}</td>
-      <td>${(op.moong || 0).toFixed(2)}</td>
-      <td>${(op.chavali || 0).toFixed(2)}</td>
-      <td>${(op.chana || 0).toFixed(2)}</td>
-      <td>${(op.vatana || 0).toFixed(2)}</td>
-      <td>${(op.cumin || 0).toFixed(3)}</td>
-      <td>${(op.mustard || 0).toFixed(3)}</td>
-      <td>${(op.turmeric || 0).toFixed(3)}</td>
-      <td>${(op.chilli || 0).toFixed(3)}</td>
-      <td>${(op.oil || 0).toFixed(3)}</td>
-      <td>${(op.salt || 0).toFixed(3)}</td>
-      <td>${(op.masala || 0).toFixed(3)}</td>
-      <td>${(op.soyavadi || 0).toFixed(2)}</td>
+      ${openColsHtml}
       <td></td>
     `;
     tableBody.appendChild(trOpen);
@@ -6032,26 +6055,11 @@ const app = {
     // Row 8: Received Stock
     const trRec = document.createElement('tr');
     trRec.style.background = '#f8fafc';
+    const recColsHtml = this.FORM_B_ITEMS.map(item => `<td>${formatStockCell(item.key, rc[item.key])}</td>`).join('');
     trRec.innerHTML = `
       <td></td>
       <td colspan="4" style="text-align: left; font-weight: 700;">प्राप्त धान्य/किराणा :-</td>
-      <td>${(rc.rice || 0).toFixed(2)}</td>
-      <td>${(rc.moong_dal || 0).toFixed(2)}</td>
-      <td>${(rc.tur_dal || 0).toFixed(2)}</td>
-      <td>${(rc.masoor_dal || 0).toFixed(2)}</td>
-      <td>${(rc.matki || 0).toFixed(2)}</td>
-      <td>${(rc.moong || 0).toFixed(2)}</td>
-      <td>${(rc.chavali || 0).toFixed(2)}</td>
-      <td>${(rc.chana || 0).toFixed(2)}</td>
-      <td>${(rc.vatana || 0).toFixed(2)}</td>
-      <td>${(rc.cumin || 0).toFixed(3)}</td>
-      <td>${(rc.mustard || 0).toFixed(3)}</td>
-      <td>${(rc.turmeric || 0).toFixed(3)}</td>
-      <td>${(rc.chilli || 0).toFixed(3)}</td>
-      <td>${(rc.oil || 0).toFixed(3)}</td>
-      <td>${(rc.salt || 0).toFixed(3)}</td>
-      <td>${(rc.masala || 0).toFixed(3)}</td>
-      <td>${(rc.soyavadi || 0).toFixed(2)}</td>
+      ${recColsHtml}
       <td></td>
     `;
     tableBody.appendChild(trRec);
@@ -6059,26 +6067,11 @@ const app = {
     // Row 9: Total Available
     const trTot = document.createElement('tr');
     trTot.style.background = '#e2e8f0';
+    const totColsHtml = this.FORM_B_ITEMS.map(item => `<td>${formatStockCell(item.key, totAvail[item.key])}</td>`).join('');
     trTot.innerHTML = `
       <td></td>
       <td colspan="4" style="text-align: left; font-weight: 800;">एकूण प्राप्त धान्य/किराणा :-</td>
-      <td>${(totAvail.rice || 0).toFixed(2)}</td>
-      <td>${(totAvail.moong_dal || 0).toFixed(2)}</td>
-      <td>${(totAvail.tur_dal || 0).toFixed(2)}</td>
-      <td>${(totAvail.masoor_dal || 0).toFixed(2)}</td>
-      <td>${(totAvail.matki || 0).toFixed(2)}</td>
-      <td>${(totAvail.moong || 0).toFixed(2)}</td>
-      <td>${(totAvail.chavali || 0).toFixed(2)}</td>
-      <td>${(totAvail.chana || 0).toFixed(2)}</td>
-      <td>${(totAvail.vatana || 0).toFixed(2)}</td>
-      <td>${(totAvail.cumin || 0).toFixed(3)}</td>
-      <td>${(totAvail.mustard || 0).toFixed(3)}</td>
-      <td>${(totAvail.turmeric || 0).toFixed(3)}</td>
-      <td>${(totAvail.chilli || 0).toFixed(3)}</td>
-      <td>${(totAvail.oil || 0).toFixed(3)}</td>
-      <td>${(totAvail.salt || 0).toFixed(3)}</td>
-      <td>${(totAvail.masala || 0).toFixed(3)}</td>
-      <td>${(totAvail.soyavadi || 0).toFixed(2)}</td>
+      ${totColsHtml}
       <td></td>
     `;
     tableBody.appendChild(trTot);
@@ -6094,29 +6087,20 @@ const app = {
       const tr = document.createElement('tr');
       if (isHoliday) tr.style.background = '#fef2f2';
 
+      const dailyColsHtml = this.FORM_B_ITEMS.map(item => {
+        if (item.key === 'rice') {
+          return `<td>${isHoliday ? '0' : (q.rice || 0).toFixed(2)}</td>`;
+        }
+        return `<td>${formatDailyCell(item.key, q[item.key])}</td>`;
+      }).join('');
+
       tr.innerHTML = `
         <td>${day}</td>
         <td>${rec.dayName}</td>
         <td>${isHoliday ? '' : this.getDisplayMenuName(rec)}</td>
         <td>${rec.children}</td>
         <td>${rec.plates}</td>
-        <td>${isHoliday ? '0' : (q.rice || 0).toFixed(2)}</td>
-        <td>${q.moong_dal ? q.moong_dal.toFixed(2) : ''}</td>
-        <td>${q.tur_dal ? q.tur_dal.toFixed(2) : ''}</td>
-        <td>${q.masoor_dal ? q.masoor_dal.toFixed(2) : ''}</td>
-        <td>${q.matki ? q.matki.toFixed(2) : ''}</td>
-        <td>${q.moong ? q.moong.toFixed(2) : ''}</td>
-        <td>${q.chavali ? q.chavali.toFixed(2) : ''}</td>
-        <td>${q.chana ? q.chana.toFixed(2) : ''}</td>
-        <td>${q.vatana ? q.vatana.toFixed(2) : ''}</td>
-        <td>${q.cumin ? (q.cumin * 1000).toFixed(2) : ''}</td>
-        <td>${q.mustard ? (q.mustard * 1000).toFixed(2) : ''}</td>
-        <td>${q.turmeric ? (q.turmeric * 1000).toFixed(2) : ''}</td>
-        <td>${q.chilli ? (q.chilli * 1000).toFixed(2) : ''}</td>
-        <td>${q.oil ? (q.oil * 1000).toFixed(1) : ''}</td>
-        <td>${q.salt ? (q.salt * 1000).toFixed(2) : ''}</td>
-        <td>${q.masala ? (q.masala * 1000).toFixed(2) : ''}</td>
-        <td>${q.soyavadi ? q.soyavadi.toFixed(2) : ''}</td>
+        ${dailyColsHtml}
         <td>${isHoliday ? '' : rec.fuelCost}</td>
       `;
       tableBody.appendChild(tr);
@@ -6126,26 +6110,21 @@ const app = {
     const trCon = document.createElement('tr');
     trCon.style.background = '#f1f5f9';
     trCon.style.fontWeight = '800';
+    const conColsHtml = this.FORM_B_ITEMS.map(item => {
+      const v = con[item.key] || 0;
+      if (['cumin', 'mustard', 'turmeric', 'chilli', 'salt', 'masala'].includes(item.key)) {
+        return `<td>${(v * 1000).toFixed(2)}</td>`;
+      }
+      if (item.key === 'oil') {
+        return `<td>${(v * 1000).toFixed(1)}</td>`;
+      }
+      return `<td>${v.toFixed(2)}</td>`;
+    }).join('');
+
     trCon.innerHTML = `
       <td colspan="4" style="text-align: left;">एकूण वापरलेले धान्य/किराणा :-</td>
       <td>${summary.totalPlates}</td>
-      <td>${(con.rice || 0).toFixed(2)}</td>
-      <td>${(con.moong_dal || 0).toFixed(2)}</td>
-      <td>${(con.tur_dal || 0).toFixed(2)}</td>
-      <td>${(con.masoor_dal || 0).toFixed(2)}</td>
-      <td>${(con.matki || 0).toFixed(2)}</td>
-      <td>${(con.moong || 0).toFixed(2)}</td>
-      <td>${(con.chavali || 0).toFixed(2)}</td>
-      <td>${(con.chana || 0).toFixed(2)}</td>
-      <td>${(con.vatana || 0).toFixed(2)}</td>
-      <td>${((con.cumin || 0) * 1000).toFixed(2)}</td>
-      <td>${((con.mustard || 0) * 1000).toFixed(2)}</td>
-      <td>${((con.turmeric || 0) * 1000).toFixed(2)}</td>
-      <td>${((con.chilli || 0) * 1000).toFixed(2)}</td>
-      <td>${((con.oil || 0) * 1000).toFixed(1)}</td>
-      <td>${((con.salt || 0) * 1000).toFixed(2)}</td>
-      <td>${((con.masala || 0) * 1000).toFixed(2)}</td>
-      <td>${(con.soyavadi || 0).toFixed(2)}</td>
+      ${conColsHtml}
       <td>${summary.totalFuel}</td>
     `;
     tableBody.appendChild(trCon);
@@ -6154,26 +6133,21 @@ const app = {
     const trClo = document.createElement('tr');
     trClo.style.background = '#fef08a';
     trClo.style.fontWeight = '800';
+    const cloColsHtml = this.FORM_B_ITEMS.map(item => {
+      const v = clo[item.key] || 0;
+      if (['cumin', 'mustard', 'turmeric', 'chilli', 'salt', 'masala'].includes(item.key)) {
+        return `<td>${(v * 1000).toFixed(2)}</td>`;
+      }
+      if (item.key === 'oil') {
+        return `<td>${(v * 1000).toFixed(1)}</td>`;
+      }
+      return `<td>${v.toFixed(2)}</td>`;
+    }).join('');
+
     trClo.innerHTML = `
       <td colspan="4" style="text-align: left;">शिल्लक धान्य/किराणा :-</td>
       <td></td>
-      <td>${(clo.rice || 0).toFixed(2)}</td>
-      <td>${(clo.moong_dal || 0).toFixed(2)}</td>
-      <td>${(clo.tur_dal || 0).toFixed(2)}</td>
-      <td>${(clo.masoor_dal || 0).toFixed(2)}</td>
-      <td>${(clo.matki || 0).toFixed(2)}</td>
-      <td>${(clo.moong || 0).toFixed(2)}</td>
-      <td>${(clo.chavali || 0).toFixed(2)}</td>
-      <td>${(clo.chana || 0).toFixed(2)}</td>
-      <td>${(clo.vatana || 0).toFixed(2)}</td>
-      <td>${((clo.cumin || 0) * 1000).toFixed(2)}</td>
-      <td>${((clo.mustard || 0) * 1000).toFixed(2)}</td>
-      <td>${((clo.turmeric || 0) * 1000).toFixed(2)}</td>
-      <td>${((clo.chilli || 0) * 1000).toFixed(2)}</td>
-      <td>${((clo.oil || 0) * 1000).toFixed(1)}</td>
-      <td>${((clo.salt || 0) * 1000).toFixed(2)}</td>
-      <td>${((clo.masala || 0) * 1000).toFixed(2)}</td>
-      <td>${(clo.soyavadi || 0).toFixed(2)}</td>
+      ${cloColsHtml}
       <td></td>
     `;
     tableBody.appendChild(trClo);
@@ -6205,6 +6179,172 @@ const app = {
   // =========================================================================
   // TAB 4: FORM B (प्रपत्र ब)
   // =========================================================================
+
+  // Official 20 Form B Items in Exact Proforma Sequence (१ ते २०)
+  FORM_B_ITEMS: [
+    { key: "rice", name: "तांदूळ", defaultRate: 0.10, ratePrimary: 0.10, rateUpper: 0.15, unit: "kg", category: "grain" },
+    { key: "moong_dal", name: "मुगडाळ", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+    { key: "tur_dal", name: "तुरडाळ", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+    { key: "masoor_dal", name: "मसूरडाळ", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+    { key: "moong", name: "मुग", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+    { key: "matki", name: "मटकी", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+    { key: "chavali", name: "चवळी", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+    { key: "chana", name: "हरभरा", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+    { key: "vatana", name: "वाटाणा", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+    { key: "cumin", name: "जिरे", defaultRate: 0.00020, ratePrimary: 0.00020, rateUpper: 0.00030, unit: "kg", category: "spice" },
+    { key: "mustard", name: "मोहरी", defaultRate: 0.00015, ratePrimary: 0.00015, rateUpper: 0.000225, unit: "kg", category: "spice" },
+    { key: "turmeric", name: "हळद", defaultRate: 0.00015, ratePrimary: 0.00015, rateUpper: 0.000225, unit: "kg", category: "spice" },
+    { key: "chilli", name: "मिरची", defaultRate: 0.00300, ratePrimary: 0.00300, rateUpper: 0.00450, unit: "kg", category: "spice" },
+    { key: "oil", name: "तेल", defaultRate: 0.00500, ratePrimary: 0.00500, rateUpper: 0.00750, unit: "kg", category: "oil" },
+    { key: "salt", name: "मीठ", defaultRate: 0.00070, ratePrimary: 0.00070, rateUpper: 0.00105, unit: "kg", category: "salt" },
+    { key: "masala", name: "कांदा म.", defaultRate: 0.00090, ratePrimary: 0.00090, rateUpper: 0.00135, unit: "kg", category: "spice" },
+    { key: "purak_ahar", name: "पूरक आहार", defaultRate: 0.00, ratePrimary: 0.00, rateUpper: 0.00, unit: "kg", category: "grain" },
+    { key: "soyavadi", name: "सोया वडी", defaultRate: 0.02, ratePrimary: 0.02, rateUpper: 0.03, unit: "kg", category: "pulse" },
+    { key: "gul_sakhar", name: "गुळ साखर", defaultRate: 0.010, ratePrimary: 0.010, rateUpper: 0.015, unit: "kg", category: "grain" },
+    { key: "doodh_powder", name: "दूध पावडर", defaultRate: 0.015, ratePrimary: 0.015, rateUpper: 0.020, unit: "kg", category: "grain" }
+  ],
+
+  ensureFormBIngredients() {
+    if (!this.data) return;
+    if (!this.data.ingredients || typeof this.data.ingredients !== 'object') {
+      this.data.ingredients = {};
+    }
+    this.FORM_B_ITEMS.forEach(item => {
+      if (!this.data.ingredients[item.key]) {
+        this.data.ingredients[item.key] = {
+          id: item.key,
+          name: item.name,
+          defaultRate: item.defaultRate,
+          ratePrimary: item.ratePrimary,
+          rateUpper: item.rateUpper,
+          unit: item.unit,
+          category: item.category
+        };
+      } else {
+        if (item.key === 'chana' && this.data.ingredients[item.key].name === 'चना') {
+          this.data.ingredients[item.key].name = 'हरभरा';
+        }
+        if (item.key === 'masala' && this.data.ingredients[item.key].name === 'मसाला') {
+          this.data.ingredients[item.key].name = 'कांदा म.';
+        }
+        if (item.key === 'soyavadi' && this.data.ingredients[item.key].name === 'सोयाबीन') {
+          this.data.ingredients[item.key].name = 'सोया वडी';
+        }
+      }
+    });
+  },
+
+  ensureStandardMenus() {
+    if (!this.data) return;
+    if (!Array.isArray(this.data.menus)) this.data.menus = [];
+
+    const standardMenus = [
+      { id: "veg_pulav", name: "व्हेजिटेबल पुलाव", pulseKey: "vatana", dayCode: 2, dayName: "सोमवार (आठवडा 1, 3)" },
+      { id: "moong_khichdi", name: "मूगडाळ खिचडी", pulseKey: "moong_dal", dayCode: 3, dayName: "मंगळवार / शुक्रवार" },
+      { id: "moog_shevga_varan", name: "मूग शेवग्याचे वरण", pulseKey: "tur_dal", pulseKeys: ["moong", "tur_dal"], pulseSplit: { moong: 0.010, tur_dal: 0.010 }, dayCode: 4, dayName: "बुधवार" },
+      { id: "chavali_khichdi", name: "चवळी खिचडी", pulseKey: "chavali", dayCode: 5, dayName: "गुरुवार (आठवडा 1, 3)" },
+      { id: "matki_usal", name: "मटकी उसळभात", pulseKey: "matki", dayCode: 6, dayName: "शुक्रवार / शनिवार" },
+      { id: "masale_bhat", name: "मसालेभात", pulseKey: "tur_dal", dayCode: 7, dayName: "शनिवार (आठवडा 1, 3)" },
+      { id: "soya_pulav", name: "सोयाबीन पुलाव", pulseKey: "soyavadi", dayCode: 2, dayName: "सोमवार (आठवडा 2, 4)" },
+      { id: "masoori_pulav", name: "मसूरी पुलाव", pulseKey: "masoor_dal", dayCode: 3, dayName: "मंगळवार (आठवडा 2, 4)" },
+      { id: "matar_pulav", name: "मटार पुलाव", pulseKey: "vatana", dayCode: 5, dayName: "गुरुवार (आठवडा 2, 4)" },
+      { id: "god_bhat", name: "गोड भात", pulseKey: "gul_sakhar", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "purak_ahar", name: "पूरक आहार", pulseKey: "purak_ahar", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "doodh_kheer", name: "दूध / खीर", pulseKey: "doodh_powder", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "non_veg", name: "नॉन व्हेज / अंडी", pulseKey: "nil", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "varan_bhat", name: "वरणभात", pulseKey: "tur_dal", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "holiday", name: "सुट्टी", pulseKey: null, dayCode: 0, dayName: "सुट्टी" }
+    ];
+
+    standardMenus.forEach(sMenu => {
+      const existing = this.data.menus.find(m => m.id === sMenu.id || m.name === sMenu.name);
+      if (!existing) {
+        this.data.menus.push(sMenu);
+      } else {
+        if (sMenu.id === 'god_bhat' && (!existing.pulseKey || existing.pulseKey === 'nil')) {
+          existing.pulseKey = 'gul_sakhar';
+        }
+      }
+    });
+  },
+
+  /**
+   * Recalculate daily calculations for strictly the selected month only
+   * Guarantees past historical months are 100% frozen and untouched
+   */
+  recalculateCurrentMonth(confirmUser = true) {
+    const picker = document.getElementById('monthlyExcelPicker');
+    const yearMonth = (picker && picker.value) ? picker.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
+    if (!yearMonth) return;
+
+    const [yearStr, monthStr] = yearMonth.split('-');
+    const mName = this.getMonthNameMarathi ? this.getMonthNameMarathi(yearMonth) : `${monthStr}/${yearStr}`;
+
+    if (confirmUser && typeof confirm === 'function') {
+      const msg = `केवळ चालू महिना (${mName} ${yearStr}) मधील दैनंदिन नोंदींची नवीन दरांनुसार पुनर्गणना करायची आहे का?\n\n(महत्त्वाची नोंद: मागील सर्व महिन्यांचा ताळेबंद १००% सुरक्षित व अपरिवर्तित राहील.)`;
+      if (!confirm(msg)) return;
+    }
+
+    const year = parseInt(yearStr);
+    const month = parseInt(monthStr);
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    let updatedCountPrimary = 0;
+    let updatedCountUpper = 0;
+
+    // Strict safety guarantee: ONLY update dates within yearMonth
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${yearMonth}-${String(day).padStart(2, '0')}`;
+
+      // 1. Primary records
+      if (this.data.records && this.data.records[dateStr]) {
+        const oldRec = this.data.records[dateStr];
+        const isHol = oldRec.isHoliday || oldRec.children === 0;
+        const newRec = this.calculateDay(
+          dateStr,
+          isHol ? 0 : oldRec.children,
+          oldRec.menuName,
+          isHol ? 0 : oldRec.plates,
+          (oldRec.grainSelectMode === 'manual' && Array.isArray(oldRec.selectedGrains)) ? oldRec.selectedGrains : null,
+          'primary'
+        );
+        newRec.remarks = oldRec.remarks || '';
+        this.data.records[dateStr] = newRec;
+        updatedCountPrimary++;
+      }
+
+      // 2. Upper records
+      if (this.data.recordsUpper && this.data.recordsUpper[dateStr]) {
+        const oldRec = this.data.recordsUpper[dateStr];
+        const isHol = oldRec.isHoliday || oldRec.children === 0;
+        const newRec = this.calculateDay(
+          dateStr,
+          isHol ? 0 : oldRec.children,
+          oldRec.menuName,
+          isHol ? 0 : oldRec.plates,
+          (oldRec.grainSelectMode === 'manual' && Array.isArray(oldRec.selectedGrains)) ? oldRec.selectedGrains : null,
+          'upper'
+        );
+        newRec.remarks = oldRec.remarks || '';
+        this.data.recordsUpper[dateStr] = newRec;
+        updatedCountUpper++;
+      }
+    }
+
+    this.saveState();
+    this.renderMonthlyExcelSheet();
+    if (typeof this.renderDailyRegister === 'function') this.renderDailyRegister();
+    if (typeof this.renderFormBTable === 'function') this.renderFormBTable();
+
+    // Trigger cloud sync if online
+    if (typeof cloudSync !== 'undefined' && typeof cloudSync.schedulePush === 'function') {
+      cloudSync.schedulePush();
+    }
+
+    if (typeof this.showToast === 'function') {
+      this.showToast(`✅ ${mName} ${yearStr} मधील हिशोब नवीन दरांनुसार यशस्वीरीत्या पुनर्गणना झाला! (इतर महिने सुरक्षित)`, 'success');
+    }
+  },
 
   onFormBMonthChange() {
     this.renderFormB();
@@ -6242,82 +6382,168 @@ const app = {
     const pat = this.getActivePat();
     const fuelRate = this.getActiveFuelRate();
 
-    document.getElementById('fbSchoolName').textContent = this.data.settings.schoolName;
-    document.getElementById('fbCentre').textContent = this.data.settings.centre;
-    document.getElementById('fbTaluka').textContent = this.data.settings.taluka;
-    document.getElementById('fbDistrict').textContent = this.data.settings.district;
-    document.getElementById('fbMonthYear').textContent = `${monthNamesMarathi[month]} ${year}`;
-    document.getElementById('fbPat').textContent = pat;
+    const talukaName = (this.data && this.data.settings && this.data.settings.taluka) || 'कर्जत';
+    const districtName = (this.data && this.data.settings && this.data.settings.district) || 'रायगड';
+    const schoolName = (this.data && this.data.settings && this.data.settings.schoolName) || '';
+    const centreName = (this.data && this.data.settings && this.data.settings.centre) || '';
+
+    const fbSchoolNameEl = document.getElementById('fbSchoolName');
+    if (fbSchoolNameEl) fbSchoolNameEl.textContent = schoolName;
+
+    const fbCentreEl = document.getElementById('fbCentre');
+    if (fbCentreEl) fbCentreEl.textContent = centreName;
+
+    const fbTalukaEl = document.getElementById('fbTaluka');
+    if (fbTalukaEl) fbTalukaEl.textContent = talukaName;
+
+    const fbDistrictEl = document.getElementById('fbDistrict');
+    if (fbDistrictEl) fbDistrictEl.textContent = districtName;
+
+    // Dynamic Panchayat Samiti Taluka binding (updates if user edits taluka in Settings!)
+    const fbPanchayatSamitiEl = document.getElementById('fbPanchayatSamiti');
+    if (fbPanchayatSamitiEl) fbPanchayatSamitiEl.textContent = talukaName;
+
+    const fbDistrictDisplayEl = document.getElementById('fbDistrictDisplay');
+    if (fbDistrictDisplayEl) fbDistrictDisplayEl.textContent = districtName;
+
+    const fbMonthYearEl = document.getElementById('fbMonthYear');
+    if (fbMonthYearEl) fbMonthYearEl.textContent = `${monthNamesMarathi[month]} ${year}`;
+
+    const fbMonthOnlyEl = document.getElementById('fbMonthOnly');
+    if (fbMonthOnlyEl) fbMonthOnlyEl.textContent = monthNamesMarathi[month];
+
+    const fbYearOnlyEl = document.getElementById('fbYearOnly');
+    if (fbYearOnlyEl) fbYearOnlyEl.textContent = year;
+
+    const fbYearOnly2El = document.getElementById('fbYearOnly2');
+    if (fbYearOnly2El) fbYearOnly2El.textContent = year;
+
+    const fbLevelTextEl = document.getElementById('fbLevelText');
+    if (fbLevelTextEl) fbLevelTextEl.textContent = isUpper ? 'इ. ६ वी ते ८ वी' : 'इ. १ ली ते ५ वी';
+
+    const fbPatEl = document.getElementById('fbPat');
+    if (fbPatEl) fbPatEl.textContent = pat;
 
     const summary = this.computeMonthlyStock(yearMonth, this.activeSection);
-    document.getElementById('fbTotalPlates').textContent = summary.totalPlates;
-    document.getElementById('fbWorkingDays').textContent = summary.workingDays;
-    document.getElementById('fbMealDays').textContent = summary.workingDays;
+    const fbTotalPlatesEl = document.getElementById('fbTotalPlates');
+    if (fbTotalPlatesEl) fbTotalPlatesEl.textContent = summary.totalPlates;
 
-    document.getElementById('fbFootPlates').textContent = summary.totalPlates;
-    document.getElementById('fbCalcPlates').textContent = summary.totalPlates;
-    document.getElementById('fbFuelRate').textContent = fuelRate;
+    const fbWorkingDaysEl = document.getElementById('fbWorkingDays');
+    if (fbWorkingDaysEl) fbWorkingDaysEl.textContent = summary.workingDays;
+
+    const fbMealDaysEl = document.getElementById('fbMealDays');
+    if (fbMealDaysEl) fbMealDaysEl.textContent = summary.workingDays;
+
+    const fbFootPlatesEl = document.getElementById('fbFootPlates');
+    if (fbFootPlatesEl) fbFootPlatesEl.textContent = summary.totalPlates;
+
+    const fbCalcPlatesEl = document.getElementById('fbCalcPlates');
+    if (fbCalcPlatesEl) fbCalcPlatesEl.textContent = summary.totalPlates;
+
+    const fbFuelRateEl = document.getElementById('fbFuelRate');
+    if (fbFuelRateEl) fbFuelRateEl.textContent = fuelRate;
 
     const fuelAmt = Math.round(summary.totalPlates * fuelRate);
-    document.getElementById('fbFuelTotal').textContent = fuelAmt;
+    const fbFuelTotalEl = document.getElementById('fbFuelTotal');
+    if (fbFuelTotalEl) fbFuelTotalEl.textContent = fuelAmt;
 
     const cookRate = this.data.settings.cookHonorarium || 2500;
     const cookCount = this.data.settings.cookCount || 1;
     const cookAmt = cookRate * cookCount;
-    document.getElementById('fbCookHonorarium').textContent = cookAmt;
+    const fbCookHonorariumEl = document.getElementById('fbCookHonorarium');
+    if (fbCookHonorariumEl) fbCookHonorariumEl.textContent = cookAmt;
+
     const fbCookRateEl = document.getElementById('fbCookRate');
     if (fbCookRateEl) fbCookRateEl.textContent = cookRate;
-    document.getElementById('fbCookCount').textContent = cookCount;
 
-    // Check receipts for this month to populate receipt date and bill no for active section
-    const activeReceipts = this.getActiveReceipts();
-    const receiptsInMonth = (activeReceipts || []).filter(r => r.date && r.date.startsWith(yearMonth));
-    const receiptDateEl = document.getElementById('fbReceiptDate');
-    if (receiptDateEl) {
-      if (receiptsInMonth.length > 0) {
-        const str = receiptsInMonth.map(r => {
-          const [yr, mo, dy] = r.date.split('-');
-          const dmy = `${dy}/${mo}/${yr}`;
-          return r.billNo ? `${dmy} (${r.billNo})` : dmy;
-        }).join(', ');
-        receiptDateEl.textContent = str;
-      } else {
-        receiptDateEl.textContent = 'निरंक / —';
-      }
-    }
+    const fbCookCountEl = document.getElementById('fbCookCount');
+    if (fbCookCountEl) fbCookCountEl.textContent = cookCount;
 
-    document.getElementById('fbReportDate').textContent = this.formatDateEnglish(new Date());
-    document.getElementById('fbSignSchool').textContent = this.data.settings.schoolName;
-    document.getElementById('fbSignCentre2').textContent = this.data.settings.centre;
+    // Check receipts for this month to populate separate rice and grocery receipt dates
+    const activeReceipts = this.getActiveReceipts() || [];
+    const receiptsInMonth = activeReceipts.filter(r => r.date && r.date.startsWith(yearMonth));
+
+    const riceReceipts = receiptsInMonth.filter(r => r.items && Number(r.items.rice) > 0);
+    const groceryReceipts = receiptsInMonth.filter(r => {
+      if (!r.items) return false;
+      return Object.keys(r.items).some(k => k !== 'rice' && Number(r.items[k]) > 0);
+    });
+
+    const formatReceipts = (arr) => {
+      if (!arr || arr.length === 0) return 'निरंक / —';
+      return arr.map(r => {
+        const [yr, mo, dy] = r.date.split('-');
+        const dmy = `${dy}/${mo}/${yr}`;
+        return r.billNo ? `${dmy} (${r.billNo})` : dmy;
+      }).join(', ');
+    };
+
+    const fbReceiptDateRiceEl = document.getElementById('fbReceiptDateRice');
+    if (fbReceiptDateRiceEl) fbReceiptDateRiceEl.textContent = formatReceipts(riceReceipts);
+
+    const fbReceiptDateGroceryEl = document.getElementById('fbReceiptDateGrocery');
+    if (fbReceiptDateGroceryEl) fbReceiptDateGroceryEl.textContent = formatReceipts(groceryReceipts);
+
+    const legacyReceiptEl = document.getElementById('fbReceiptDate');
+    if (legacyReceiptEl) legacyReceiptEl.textContent = formatReceipts(receiptsInMonth);
+
+    // 4 Activity Dates: Load and bind
+    const actDates = (this.data.formBActivityDates && this.data.formBActivityDates[yearMonth]) || {};
+    const actFields = ['snehBhojan', 'healthCheckup', 'deworming', 'folicAcid'];
+    actFields.forEach(fld => {
+      const inp = document.getElementById(`fbActInput_${fld}`);
+      if (inp) inp.value = actDates[fld] || '';
+      const prt = document.getElementById(`fbPrint_${fld}`);
+      if (prt) prt.textContent = (actDates[fld] && actDates[fld].trim()) ? actDates[fld].trim() : '_________________';
+    });
+
+    // Signatures info
+    const fbReportDateEl = document.getElementById('fbReportDate');
+    if (fbReportDateEl) fbReportDateEl.textContent = this.formatDateEnglish(new Date());
+
+    const fbSignSchoolEl = document.getElementById('fbSignSchool');
+    if (fbSignSchoolEl) fbSignSchoolEl.textContent = schoolName;
+
+    const fbSignSchoolTalukaEl = document.getElementById('fbSignSchoolTaluka');
+    if (fbSignSchoolTalukaEl) fbSignSchoolTalukaEl.textContent = talukaName;
+
+    const fbSignSchoolDistrictEl = document.getElementById('fbSignSchoolDistrict');
+    if (fbSignSchoolDistrictEl) fbSignSchoolDistrictEl.textContent = districtName;
+
+    const fbSignCentreEl = document.getElementById('fbSignCentre');
+    if (fbSignCentreEl) fbSignCentreEl.textContent = centreName;
+
+    const fbSignCentre2El = document.getElementById('fbSignCentre2');
+    if (fbSignCentre2El) fbSignCentre2El.textContent = centreName;
+
+    const fbSignCentreTalukaEl = document.getElementById('fbSignCentreTaluka');
+    if (fbSignCentreTalukaEl) fbSignCentreTalukaEl.textContent = talukaName;
+
+    const fbSignCentreDistrictEl = document.getElementById('fbSignCentreDistrict');
+    if (fbSignCentreDistrictEl) fbSignCentreDistrictEl.textContent = districtName;
 
     const tableBody = document.getElementById('formbTableBody');
     if (!tableBody) return;
     tableBody.innerHTML = '';
 
-    const fbItems = Object.keys(this.data.ingredients).map(key => {
-      const ing = this.data.ingredients[key];
-      return {
-        name: ing.name,
-        key: key,
-        rate: this.getIngredientRate(key, this.activeSection),
-        unit: ing.unit,
-        category: ing.category
-      };
-    });
-
     const customDemands = this.getActiveCustomDemands();
 
-    fbItems.forEach((item, idx) => {
+    // Render canonical 20 items in exact proforma sequence
+    this.FORM_B_ITEMS.forEach((item, idx) => {
+      const ing = (this.data.ingredients && this.data.ingredients[item.key]) || item;
+      const itemName = ing.name || item.name;
+      const rate = this.getIngredientRate(item.key, this.activeSection);
+
       const opQty = summary.opening[item.key] || 0;
       const recQty = summary.received[item.key] || 0;
       const totQty = summary.totalAvailable[item.key] || 0;
       const conQty = summary.consumed[item.key] || 0;
       const cloQty = summary.closing[item.key] || 0;
 
-      const dec = item.rate < 0.001 ? 3 : 2;
-      const dec4 = item.rate < 0.001 ? 4 : 2;
+      const dec = rate < 0.001 ? 3 : 2;
+      const dec4 = rate < 0.001 ? 4 : 2;
 
-      const defaultDemand = +(item.rate * pat * 20).toFixed(dec);
+      const defaultDemand = +(rate * pat * 20).toFixed(dec);
       const demandVal = (customDemands && customDemands[yearMonth] && customDemands[yearMonth][item.key] !== undefined)
         ? customDemands[yearMonth][item.key]
         : defaultDemand;
@@ -6329,7 +6555,7 @@ const app = {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="text-center font-weight-bold">${idx + 1}</td>
-        <td><strong>${item.name}</strong></td>
+        <td><strong>${itemName}</strong></td>
         <td class="text-right fb-cell-op">${opQty.toFixed(dec)}</td>
         <td class="text-right fb-cell-rec">${recQty.toFixed(dec)}</td>
         <td class="text-right fb-cell-tot">${totQty.toFixed(dec)}</td>
@@ -6337,7 +6563,7 @@ const app = {
         <td class="text-right fb-cell-clo"><strong>${cloQty.toFixed(dec)}</strong></td>
         <td class="text-right fb-cell-demand font-weight-bold" style="background: #faf5ff;">
           <input type="number" 
-                 step="${item.rate < 0.001 ? '0.001' : '0.01'}" 
+                 step="${rate < 0.001 ? '0.001' : '0.01'}" 
                  min="0" 
                  class="form-control form-control-sm fb-input-demand" 
                  value="${demandVal}" 
@@ -6350,7 +6576,7 @@ const app = {
           <input type="text" 
                  class="form-control form-control-sm fb-input-shera" 
                  value="${remarkVal}" 
-                 placeholder="शेरा..."
+                 placeholder="शेरा..." 
                  data-key="${item.key}"
                  oninput="app.onFormBRemarkChange('${yearMonth}', '${item.key}', this.value)"
                  title="शेरा संपादित करा">
@@ -6413,6 +6639,24 @@ const app = {
     if (input && input.parentElement) {
       const span = input.parentElement.querySelector('.print-val');
       if (span) span.textContent = val;
+    }
+  },
+
+  /**
+   * Handle activity date change in Form B (स्नेह भोजन, तपासणी, इ.)
+   */
+  onFormBActivityDateChange(field, val) {
+    const picker = document.getElementById('formbMonthPicker');
+    if (!picker || !picker.value) return;
+    const yearMonth = picker.value;
+    if (!this.data.formBActivityDates) this.data.formBActivityDates = {};
+    if (!this.data.formBActivityDates[yearMonth]) this.data.formBActivityDates[yearMonth] = {};
+    this.data.formBActivityDates[yearMonth][field] = val;
+    this.saveState();
+
+    const span = document.getElementById(`fbPrint_${field}`);
+    if (span) {
+      span.textContent = (val && val.trim()) ? val.trim() : '_________________';
     }
   },
 
@@ -9707,6 +9951,7 @@ const app = {
       tasteRecords: this.data.tasteRecords || {},
       tasteRecordsUpper: this.data.tasteRecordsUpper || {},
       formBRemarks: this.data.formBRemarks || {},
+      formBActivityDates: this.data.formBActivityDates || {},
       customDemands: this.data.customDemands || {},
       customDemandsUpper: this.data.customDemandsUpper || {},
       auth: authData || undefined,
@@ -9932,6 +10177,7 @@ const app = {
           tasteRecords: dataToRestore.tasteRecords || {},
           tasteRecordsUpper: dataToRestore.tasteRecordsUpper || {},
           formBRemarks: dataToRestore.formBRemarks || {},
+          formBActivityDates: dataToRestore.formBActivityDates || {},
           customDemands: dataToRestore.customDemands || {},
           customDemandsUpper: dataToRestore.customDemandsUpper || {},
           initialSampleLoaded: true,
@@ -10476,6 +10722,7 @@ const app = {
     tableBody.innerHTML = '';
 
     const pulses = Object.keys(this.data.ingredients).filter(k => this.data.ingredients[k].category === 'pulse');
+    const others = Object.keys(this.data.ingredients).filter(k => k !== 'rice' && this.data.ingredients[k].category !== 'pulse');
 
     const dayOptions = [
       { code: 2, name: 'सोमवार' },
@@ -10499,11 +10746,24 @@ const app = {
 
       const isNil = (!m.pulseKey || m.pulseKey === 'nil' || m.pulseKey === 'none');
       let pulseOptionsHtml = `<option value="nil" ${isNil ? 'selected' : ''}>— निरंक / nil (फक्त तांदूळ / डाळ नाही) —</option>`;
+      
+      pulseOptionsHtml += `<optgroup label="कडधान्ये / डाळी">`;
       pulses.forEach(pk => {
         const ing = this.data.ingredients[pk];
         const isSel = (!isNil && m.pulseKey === pk) ? 'selected' : '';
         pulseOptionsHtml += `<option value="${pk}" ${isSel}>${ing.name} (${ing.defaultRate} kg)</option>`;
       });
+      pulseOptionsHtml += `</optgroup>`;
+
+      if (others.length > 0) {
+        pulseOptionsHtml += `<optgroup label="पूरक आहार व इतर साहित्य">`;
+        others.forEach(ok => {
+          const ing = this.data.ingredients[ok];
+          const isSel = (!isNil && m.pulseKey === ok) ? 'selected' : '';
+          pulseOptionsHtml += `<option value="${ok}" ${isSel}>${ing.name} (${ing.defaultRate} kg)</option>`;
+        });
+        pulseOptionsHtml += `</optgroup>`;
+      }
 
       tr.innerHTML = `
         <td>
@@ -10534,7 +10794,7 @@ const app = {
   },
 
   addNewMenuRowInSettings() {
-    const name = prompt('नवीन मेन्यूचे नांव टाका (उदा. गोड भात, नॉन व्हेज, सोयावडी पुलाव, मूगडाळ खिचडी):');
+    const name = prompt('नवीन मेन्यूचे नांव टाका (उदा. गोड भात, पूरक आहार, खीर/दूध, सोयावडी पुलाव, मूगडाळ खिचडी):');
     if (!name || !name.trim()) return;
 
     const trimmed = name.trim();
@@ -10569,7 +10829,13 @@ const app = {
       defaultPulse = 'chana';
     } else if (trimmed.includes('वाटाणा')) {
       defaultPulse = 'vatana';
-    } else if (trimmed.includes('गोड') || trimmed.includes('नॉन') || trimmed.includes('अंडी')) {
+    } else if (trimmed.includes('गोड')) {
+      defaultPulse = 'gul_sakhar';
+    } else if (trimmed.includes('पूरक आहार')) {
+      defaultPulse = 'purak_ahar';
+    } else if (trimmed.includes('दूध') || trimmed.includes('खीर')) {
+      defaultPulse = 'doodh_powder';
+    } else if (trimmed.includes('नॉन') || trimmed.includes('अंडी')) {
       defaultPulse = 'nil';
     }
 

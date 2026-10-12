@@ -26,7 +26,7 @@
     }
   </script>
 
-  <link rel="stylesheet" href="styles.css?v=20261012_4">
+  <link rel="stylesheet" href="styles.css?v=20261012_5">
 </head>
 <body>
 
@@ -1125,6 +1125,9 @@
                 </button>
               </div>
               <input type="month" id="monthlyExcelPicker" class="form-control" onchange="app.onMonthlyExcelChange()">
+              <button class="btn btn-warning" onclick="app.recalculateCurrentMonth()" title="सेटिंग्जमधील नवीन दरांनुसार केवळ चालू महिन्यातील दैनंदिन हिशोबाची पुनर्गणना करा">
+                <span>🔄 चालू महिन्याची पुनर्गणना करा</span>
+              </button>
               <button class="btn btn-outline-primary" onclick="app.openYearlyFromMonthly()">
                 <span>📅 या वर्षाचा वार्षिक अहवाल (Yearly Report)</span>
               </button>
@@ -1163,27 +1166,30 @@
                     <th rowspan="2">आजचा आहार</th>
                     <th rowspan="2">लाभार्थी ↓</th>
                     <th rowspan="2">ताटांची संख्या</th>
-                    <th rowspan="2">तांदूळ</th>
-                    <th rowspan="2">मुगडाळ</th>
-                    <th rowspan="2">तूरडाळ</th>
-                    <th rowspan="2">मसूरडाळ</th>
-                    <th rowspan="2">मटकी</th>
-                    <th rowspan="2">मूग</th>
-                    <th rowspan="2">चवळी</th>
-                    <th rowspan="2">हरभरा</th>
-                    <th rowspan="2">वाटाणा</th>
+                    <th rowspan="2"><span id="exColName_rice">तांदूळ</span></th>
+                    <th rowspan="2"><span id="exColName_moong_dal">मुगडाळ</span></th>
+                    <th rowspan="2"><span id="exColName_tur_dal">तूरडाळ</span></th>
+                    <th rowspan="2"><span id="exColName_masoor_dal">मसूरडाळ</span></th>
+                    <th rowspan="2"><span id="exColName_moong">मूग</span></th>
+                    <th rowspan="2"><span id="exColName_matki">मटकी</span></th>
+                    <th rowspan="2"><span id="exColName_chavali">चवळी</span></th>
+                    <th rowspan="2"><span id="exColName_chana">हरभरा</span></th>
+                    <th rowspan="2"><span id="exColName_vatana">वाटाणा</span></th>
                     <th colspan="4">मसाल्याचे पदार्थ (ग्रॅममध्ये)</th>
-                    <th rowspan="2">सोयाबीन तेल</th>
-                    <th rowspan="2">मीठ</th>
-                    <th rowspan="2">कांदा-लसून मसाला</th>
-                    <th rowspan="2">सोयावडी</th>
+                    <th rowspan="2"><span id="exColName_oil">सोयाबीन तेल</span></th>
+                    <th rowspan="2"><span id="exColName_salt">मीठ</span></th>
+                    <th rowspan="2"><span id="exColName_masala">कांदा म.</span></th>
+                    <th rowspan="2"><span id="exColName_purak_ahar">पूरक आहार</span></th>
+                    <th rowspan="2"><span id="exColName_soyavadi">सोया वडी</span></th>
+                    <th rowspan="2"><span id="exColName_gul_sakhar">गुळ साखर</span></th>
+                    <th rowspan="2"><span id="exColName_doodh_powder">दूध पावडर</span></th>
                     <th rowspan="2">इंधन खर्च</th>
                   </tr>
                   <tr>
-                    <th>जिरे</th>
-                    <th>मोहरी</th>
-                    <th>हळद</th>
-                    <th>मिरची पावडर</th>
+                    <th><span id="exColName_cumin">जिरे</span></th>
+                    <th><span id="exColName_mustard">मोहरी</span></th>
+                    <th><span id="exColName_turmeric">हळद</span></th>
+                    <th><span id="exColName_chilli">मिरची पावडर</span></th>
                   </tr>
                   <tr class="rate-row" id="officialExcelRateRow">
                     <th colspan="3" class="text-right">प्रमाण</th>
@@ -1193,8 +1199,8 @@
                     <th id="exRate_moong_dal">0.02</th>
                     <th id="exRate_tur_dal">0.02</th>
                     <th id="exRate_masoor_dal">0.02</th>
-                    <th id="exRate_matki">0.02</th>
                     <th id="exRate_moong">0.02</th>
+                    <th id="exRate_matki">0.02</th>
                     <th id="exRate_chavali">0.02</th>
                     <th id="exRate_chana">0.02</th>
                     <th id="exRate_vatana">0.02</th>
@@ -1205,11 +1211,14 @@
                     <th id="exRate_oil">0.00500</th>
                     <th id="exRate_salt">0.00070</th>
                     <th id="exRate_masala">0.00090</th>
+                    <th id="exRate_purak_ahar">0.00</th>
                     <th id="exRate_soyavadi">0.02</th>
+                    <th id="exRate_gul_sakhar">0.010</th>
+                    <th id="exRate_doodh_powder">0.015</th>
                     <th id="exRateFuel">1.51</th>
                   </tr>
                   <tr class="col-num-row">
-                    <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th><th>13</th><th>14</th><th>15</th><th>16</th><th>17</th><th>18</th><th>19</th><th>20</th><th>21</th><th>22</th><th>23</th>
+                    <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th><th>13</th><th>14</th><th>15</th><th>16</th><th>17</th><th>18</th><th>19</th><th>20</th><th>21</th><th>22</th><th>23</th><th>24</th><th>25</th><th>26</th>
                   </tr>
                 </thead>
                 <tbody id="officialExcelTableBody">
@@ -1284,44 +1293,64 @@
             </div>
           </div>
 
-          <!-- Printable Form B Document Card (Perfect 1 A4 Size Vertical Fit) -->
+          <!-- Printable Form B Document Card (Perfect 1 A4 Size Vertical Fit - 100% Matching Official Proforma) -->
           <div class="card formb-card" id="printableFormB">
             <div class="formb-header text-center">
-              <h3 class="formb-main-title">शालेय पोषण आहार योजना - प्रपत्र ब (इ. 1 ते 5)</h3>
-              <p class="formb-sub">शाळेने केंद्रप्रमुखांना दरमहा 1 तारखेपर्यंत द्यायचा अहवाल (2 प्रतीत)</p>
-              <div class="formb-school-info">
-                <strong>शाळेचे नांव :</strong> <span id="fbSchoolName">रा.जि.प. प्राथमिक शाळा मेंगाळवाडी</span>, 
-                <strong>केंद्र :</strong> <span id="fbCentre">खांडस</span>, 
-                <strong>ता.</strong> <span id="fbTaluka">कर्जत</span>, 
-                <strong>जि.</strong> <span id="fbDistrict">रायगड</span>
+              <div class="formb-title-banner">
+                <span class="banner-title-text">शालेय पोषण आहार योजना - प्रपत्र ब</span>
+                <span id="fbTitleSection" class="banner-title-section">(इ. 1 ते 5)</span>
+              </div>
+              <div class="formb-sub-title">शाळेने केंद्र प्रमुखांना दरमहा ५ तारखेपर्यंत द्यावयाचा अहवाल (२ प्रतीत)</div>
+              <div class="formb-samiti-line">
+                पंचायत समिती <span id="fbPanchayatSamiti" class="fb-highlight-taluka">कर्जत</span>
+              </div>
+              <div class="formb-school-info-line">
+                <span><strong>शाळेचे नांव :</strong> <span id="fbSchoolName">रा.जि.प. प्राथमिक शाळा मेंगाळवाडी</span></span>
+                <span><strong>केंद्र :</strong> <span id="fbCentre">खांडस</span></span>
+                <span><strong>ता.</strong> <span id="fbTaluka">कर्जत</span></span>
+                <span><strong>जि.</strong> <span id="fbDistrict">रायगड</span></span>
               </div>
             </div>
 
-            <!-- Top Summary Grid of Form B -->
-            <div class="formb-meta-grid">
-              <div class="meta-item">
-                <span class="meta-lbl">महिना व वर्ष:</span>
-                <strong class="meta-val" id="fbMonthYear">डिसेंबर 2019</strong>
+            <!-- Top Summary Grid of Form B (2 Columns Box Matching Official Proforma) -->
+            <div class="formb-meta-box-grid">
+              <div class="formb-meta-col formb-meta-col-left">
+                <div class="meta-row">
+                  <span class="meta-lbl">पटसंख्या :- <span id="fbLevelText">इ. १ ली ते ५ वी</span> :-</span>
+                  <span class="meta-box-val" id="fbPat">9</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-lbl">महिन्यातील एकूण उपस्थित विद्यार्थी :-</span>
+                  <span class="meta-box-val" id="fbTotalPlates">190</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-lbl">तांदूळ प्राप्त दिनांक :-</span>
+                  <span class="meta-box-val" id="fbReceiptDateRice">—</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-lbl">धान्यादी वस्तू प्राप्त दिनांक :-</span>
+                  <span class="meta-box-val" id="fbReceiptDateGrocery">—</span>
+                </div>
+                <div class="meta-row meta-row-month">
+                  <span class="meta-lbl">महिना - <strong id="fbMonthOnly">डिसेंबर</strong></span>
+                  <span class="meta-lbl-right">सन <strong id="fbYearOnly">2026</strong></span>
+                </div>
               </div>
-              <div class="meta-item">
-                <span class="meta-lbl">पटसंख्या:</span>
-                <strong class="meta-val" id="fbPat">9</strong>
-              </div>
-              <div class="meta-item">
-                <span class="meta-lbl">उपस्थित विद्यार्थी (ताटे):</span>
-                <strong class="meta-val" id="fbTotalPlates">190</strong>
-              </div>
-              <div class="meta-item">
-                <span class="meta-lbl">एकूण कार्यदिवस:</span>
-                <strong class="meta-val" id="fbWorkingDays">20</strong>
-              </div>
-              <div class="meta-item">
-                <span class="meta-lbl">अन्न शिजवून दिलेले दिवस:</span>
-                <strong class="meta-val" id="fbMealDays">20</strong>
-              </div>
-              <div class="meta-item meta-item-receipt">
-                <span class="meta-lbl">धान्य प्राप्त दिनांक व पावती क्र.:</span>
-                <strong class="meta-val" id="fbReceiptDate">—</strong>
+              <div class="formb-meta-col formb-meta-col-right">
+                <div class="meta-row">
+                  <span class="meta-lbl">जिल्हा :- <strong id="fbDistrictDisplay">रायगड</strong></span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-lbl">एकूण कामाचे दिवस :-</span>
+                  <span class="meta-box-val" id="fbWorkingDays">20</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-lbl">अन्न शिजवून दिलेले दिवस :-</span>
+                  <span class="meta-box-val" id="fbMealDays">20</span>
+                </div>
+                <div class="meta-row meta-row-year">
+                  <span class="meta-lbl">सन <strong id="fbYearOnly2">2026</strong></span>
+                </div>
               </div>
             </div>
 
@@ -1329,57 +1358,101 @@
               <span>👉 प्रपत्र ब तक्ता पाहण्यासाठी बोटाने आडवे सरकवा (Swipe ↔️)</span>
               <span>↔️</span>
             </div>
-            <!-- Form B Ingredients Table -->
-            <div class="table-responsive mt-3">
+
+            <!-- Form B Ingredients Table (Official 20 Items, 9 Columns) -->
+            <div class="table-responsive mt-1">
               <table class="table table-bordered formb-table" id="formbTable">
                 <thead>
                   <tr class="header-row-primary">
-                    <th style="width: 42px;">अ.क्र.</th>
-                    <th style="min-width: 130px;">वस्तूचे नांव</th>
+                    <th style="width: 36px;">अ.क्र.</th>
+                    <th style="min-width: 115px;">वस्तूचे नांव</th>
                     <th class="fb-col-opening" style="background: #fef9c3; color: #854d0e;">मागील शिल्लक<br><small>(कि.ग्रॅ.)</small></th>
-                    <th class="fb-col-received" style="background: #d1fae5; color: #065f46;">चालू महिन्यात प्राप्त<br><small>(कि.ग्रॅ.)</small></th>
-                    <th class="fb-col-total" style="background: #e0f2fe; color: #0369a1;">एकूण प्राप्त (3+4)<br><small>(कि.ग्रॅ.)</small></th>
-                    <th class="fb-col-consumed" style="background: #e0e7ff; color: #3730a3;">अन्न शिजवण्यासाठी वापरलेल्या वस्तू (कि.ग्रॅ.)</th>
-                    <th class="fb-col-closing" style="background: #fef08a; color: #854d0e; font-weight: 800;">शिल्लक वस्तू (5-6)<br><small>(कि.ग्रॅ.)</small></th>
-                    <th class="fb-col-demand" style="background: #ede9fe; color: #5b21b6; min-width: 110px;">
+                    <th class="fb-col-received" style="background: #d1fae5; color: #065f46;">चालू प्राप्त<br><small>(कि.ग्रॅ.)</small></th>
+                    <th class="fb-col-total" style="background: #e0f2fe; color: #0369a1;">एकूण वस्तू (३+४)<br><small>(कि.ग्रॅ.)</small></th>
+                    <th class="fb-col-consumed" style="background: #e0e7ff; color: #3730a3;">वापरलेल्या वस्तू<br><small>(कि.ग्रॅ.)</small></th>
+                    <th class="fb-col-closing" style="background: #fef08a; color: #854d0e; font-weight: 800;">शिल्लक वस्तू (५-६)<br><small>(कि.ग्रॅ.)</small></th>
+                    <th class="fb-col-demand" style="background: #ede9fe; color: #5b21b6; min-width: 95px;">
                       पुढील महिन्यासाठी मागणी<br><small>(कि.ग्रॅ.)</small>
                     </th>
-                    <th style="width: 80px;">शेरा</th>
+                    <th style="width: 75px;">शेरा</th>
                   </tr>
                   <tr class="col-num-row">
                     <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th>
                   </tr>
                 </thead>
                 <tbody id="formbTableBody">
-                  <!-- Injected by JS -->
+                  <!-- Injected by JS: Exact 20 Rows -->
                 </tbody>
               </table>
             </div>
 
             <div class="formb-notes">
-              <div id="fbDamagedNoteBox" style="display: none; padding: 4px 8px; margin: 3px 0; background: #fffbeb; border: 1pt dashed #d97706; border-radius: 4px; font-size: 8pt; color: #92400e;"></div>
-              <p class="note-line">* मागणी नोंदवताना शाळेकडे वीस दिवसांचा साठा शिल्लक राहील याची दक्षता घेऊन मागणी नोंदवावी. आवश्यकतेपेक्षा जास्त साठा करून धान्य खराब होणार नाही याची दक्षता घ्यावी.</p>
+              <div id="fbDamagedNoteBox" style="display: none; padding: 2px 6px; margin: 2px 0; background: #fffbeb; border: 1pt dashed #d97706; border-radius: 4px; font-size: 7.5pt; color: #92400e;"></div>
               
-              <div class="subsidy-calc-box">
-                <p><strong>1) महिन्यातील एकूण ताटांची संख्या :</strong> <span id="fbFootPlates">190</span></p>
-                <p><strong>2) इंधन व भाजीपाल्यासाठी खर्च केलेले अनुदान रु. :</strong> =<span id="fbFuelTotal">305</span>/- (ताटांची संख्या <span id="fbCalcPlates">190</span> X दर <span id="fbFuelRate">1.61</span>/-) (शासनस्तरावरून निश्चित केल्यानुसार)</p>
-                <p><strong>3) स्वयंपाकी तथा मदतनीस मानधन रु. :</strong> =<span id="fbCookHonorarium">2500</span>/- (रु. <span id="fbCookRate">2500</span> X नेमलेले स्वयंपाकी तथा मदतनीस संख्या: <span id="fbCookCount">1</span>)</p>
+              <div class="formb-warning-note">
+                * मागणी नोंदविताना शाळेकडे वीस दिवसाचा साठा शिल्लक राहील याची दक्षता घेऊन मागणी नोंदवावी . आवश्यकते पेक्षा जास्त साठा करून धान्य खराब होणार नाही याची दक्षता घ्यावी.
               </div>
 
-              <p class="cert-text">प्रमाणित करण्यात येते की, वर नमूद केलेली माहिती दैनंदिन नोंदवहीवरून घेतलेली आहे. ती तपासली आहे व बरोबर आहे.</p>
+              <!-- 3 Subsidy Summary Points Matching Proforma -->
+              <div class="formb-bottom-summary">
+                <div class="summary-line">
+                  <strong>१) महिन्यातील एकूण ताटांची संख्या :</strong> 
+                  <span class="summary-box-val" id="fbFootPlates">190</span>
+                </div>
+                <div class="summary-line">
+                  <strong>२) इंधन व भाजीपाल्यासाठी खर्च केलेले अनुदान रू. :</strong>
+                  <span class="summary-box-val" id="fbFuelTotal">305</span>/-
+                  <span class="summary-desc">(ताटांची संख्या <span id="fbCalcPlates">190</span> X दर <span id="fbFuelRate">1.51</span>/-) (शासनस्तरावरून निश्चित केल्यानुसार)</span>
+                </div>
+                <div class="summary-line">
+                  <strong>३) स्वयंपाकी / मदतनीस मानधन रू. :</strong>
+                  <span class="summary-box-val" id="fbCookHonorarium">2500</span>/-
+                  <span class="summary-desc">(रू. <span id="fbCookRate">2500</span> X नेमलेले स्वयंपाकी मदतनीस संख्या: <span id="fbCookCount">1</span>)</span>
+                </div>
+              </div>
+
+              <!-- 4 Activity Dates Matching Proforma -->
+              <div class="formb-activities-grid">
+                <div class="act-item">
+                  <span class="act-label">स्नेह भोजन तारीख :-</span>
+                  <input type="text" id="fbActInput_snehBhojan" class="fb-act-input form-control form-control-sm" placeholder="दिनांक" onchange="app.onFormBActivityDateChange('snehBhojan', this.value)">
+                  <span class="print-val" id="fbPrint_snehBhojan">_________________</span>
+                </div>
+                <div class="act-item">
+                  <span class="act-label">आरोग्य तपासणी तारीख :-</span>
+                  <input type="text" id="fbActInput_healthCheckup" class="fb-act-input form-control form-control-sm" placeholder="दिनांक" onchange="app.onFormBActivityDateChange('healthCheckup', this.value)">
+                  <span class="print-val" id="fbPrint_healthCheckup">_________________</span>
+                </div>
+                <div class="act-item">
+                  <span class="act-label">जंत नाशक गोळ्या देण्यात आल्याची तारीख :-</span>
+                  <input type="text" id="fbActInput_deworming" class="fb-act-input form-control form-control-sm" placeholder="दिनांक" onchange="app.onFormBActivityDateChange('deworming', this.value)">
+                  <span class="print-val" id="fbPrint_deworming">_________________</span>
+                </div>
+                <div class="act-item">
+                  <span class="act-label">फॉलिक ऍसिड गोळ्या दिल्याची तारीख :-</span>
+                  <input type="text" id="fbActInput_folicAcid" class="fb-act-input form-control form-control-sm" placeholder="दिनांक" onchange="app.onFormBActivityDateChange('folicAcid', this.value)">
+                  <span class="print-val" id="fbPrint_folicAcid">_________________</span>
+                </div>
+              </div>
+
+              <!-- Official Certification Line -->
+              <div class="formb-cert-line">
+                प्रमाणित करण्यात येत आहे की धान्य व धान्यादी माल हा शा. पो. आहार फक्त मुलांच्या आहारासाठी देण्यात आला आहे.
+              </div>
             </div>
 
+            <!-- Signatures: Headmaster & Centre Head with Dynamic Taluka/District -->
             <div class="formb-signatures">
-              <div class="sign-block">
-                <p>दिनांक: <span id="fbReportDate"></span></p>
+              <div class="sign-block text-center">
+                <div class="sign-title"><strong>मुख्याध्यापक / सचिव</strong></div>
+                <div class="sign-sub">शाळा व्यवस्थापन समिती <span id="fbSignSchool">मेंगाळवाडी</span></div>
+                <div class="sign-sub">ता. <span id="fbSignSchoolTaluka">कर्जत</span> जि. <span id="fbSignSchoolDistrict">रायगड</span></div>
               </div>
               <div class="sign-block text-center">
-                <br><br>
-                <p><strong>मुख्याध्यापक / सचिव</strong><br>शाळा व्यवस्थापन समिती <span id="fbSignSchool">मेंगाळवाडी</span></p>
-              </div>
-              <div class="sign-block text-center">
-                <br><br>
-                <p><strong>केंद्रप्रमुख</strong><br>केंद्र: <span id="fbSignCentre2">खांडस</span></p>
+                <div class="sign-title"><strong>केंद्र प्रमुख</strong></div>
+                <div class="sign-sub">केंद्र : <span id="fbSignCentre">खांडस</span></div>
+                <div class="sign-sub">ता. <span id="fbSignCentreTaluka">कर्जत</span> जि. <span id="fbSignCentreDistrict">रायगड</span></div>
+                <span id="fbSignCentre2" style="display:none;"></span>
               </div>
             </div>
 
@@ -3402,10 +3475,10 @@
   <div id="printSlipContainer" class="print-only-slip"></div>
 
   <!-- Application Logic Scripts -->
-  <script src="firebase-config.js?v=20261012_4"></script>
-  <script src="cloud-sync.js?v=20261012_4"></script>
-  <script src="excel-engine.js?v=20261012_4"></script>
-  <script src="test-suite.js?v=20261012_4"></script>
-  <script src="app.js?v=20261012_4"></script>
+  <script src="firebase-config.js?v=20261012_6"></script>
+  <script src="cloud-sync.js?v=20261012_6"></script>
+  <script src="excel-engine.js?v=20261012_6"></script>
+  <script src="test-suite.js?v=20261012_6"></script>
+  <script src="app.js?v=20261012_6"></script>
 </body>
 </html>

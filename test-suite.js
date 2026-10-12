@@ -320,6 +320,60 @@ const testSuite = {
           details: `वर्ष: ${finYear}, एप्रिल शिल्लक: ${op.toFixed(3)} kg, वर्ष प्राप्त: ${rec.toFixed(3)} kg, वर्ष शिजवलेला: ${con.toFixed(3)} kg => मार्च शिल्लक: ${clo.toFixed(3)} kg`
         };
       }
+    },
+    {
+      id: 15,
+      name: "Test 15: प्रपत्र ब (Form B) अधिकृत २० वस्तू व डायनॅमिक तालुका पडताळणी",
+      description: "प्रपत्र ब मधील २० वस्तू अधिकृत शासन क्रमानुसार (तांदूळ ते दूध पावडर) आणि पंचायत समिती तालुका सेटिंग्जशी डायनॅमिक संलग्नता तपासणे.",
+      run() {
+        const has20Items = Array.isArray(app.FORM_B_ITEMS) && app.FORM_B_ITEMS.length === 20;
+        const firstIsRice = has20Items && app.FORM_B_ITEMS[0].key === 'rice' && app.FORM_B_ITEMS[0].name === 'तांदूळ';
+        const eighthIsChana = has20Items && app.FORM_B_ITEMS[7].key === 'chana' && app.FORM_B_ITEMS[7].name === 'हरभरा';
+        const seventeenthIsPurak = has20Items && app.FORM_B_ITEMS[16].key === 'purak_ahar' && app.FORM_B_ITEMS[16].name === 'पूरक आहार';
+        const twentiethIsMilk = has20Items && app.FORM_B_ITEMS[19].key === 'doodh_powder' && app.FORM_B_ITEMS[19].name === 'दूध पावडर';
+        const curTaluka = (app.data && app.data.settings && app.data.settings.taluka) || '';
+        const passed = has20Items && firstIsRice && eighthIsChana && seventeenthIsPurak && twentiethIsMilk && curTaluka !== '';
+
+        return {
+          passed,
+          details: `एकूण वस्तू: ${app.FORM_B_ITEMS ? app.FORM_B_ITEMS.length : 0}/20, क्र. १: ${app.FORM_B_ITEMS[0]?.name}, क्र. ८: ${app.FORM_B_ITEMS[7]?.name}, क्र. १७: ${app.FORM_B_ITEMS[16]?.name}, क्र. २०: ${app.FORM_B_ITEMS[19]?.name}, पंचायत समिती तालुका: ${curTaluka}`
+        };
+      }
+    },
+    {
+      id: 16,
+      name: "Test 16: चालू महिना पुनर्गणना व सर्व २० वस्तूंचे मासिक अहवाल सिंक पडताळणी",
+      description: "मासिक अहवालात 'चालू महिना पुनर्गणना' पद्धत उपलब्ध असणे, प्रपत्र ब चे सर्व २० घटक मासिक अहवालात समाविष्ट असणे आणि मागील महिन्यांचा डेटा १००% सुरक्षित राहणे.",
+      run() {
+        const hasRecalcMethod = typeof app.recalculateCurrentMonth === 'function';
+        const hasStandardMenusMethod = typeof app.ensureStandardMenus === 'function';
+        if (hasStandardMenusMethod) app.ensureStandardMenus();
+        const hasGodBhat = Array.isArray(app.data?.menus) && app.data.menus.some(m => m.name === 'गोड भात' && m.pulseKey === 'gul_sakhar');
+        const hasPurakAhar = Array.isArray(app.data?.menus) && app.data.menus.some(m => m.id === 'purak_ahar' || m.name === 'पूरक आहार');
+        const hasDoodhKheer = Array.isArray(app.data?.menus) && app.data.menus.some(m => m.id === 'doodh_kheer' || m.name.includes('दूध'));
+        
+        // Safety verification: recalculating 2026-10 should NOT touch 2026-09
+        const dummyDateOld = '2026-09-15';
+        const dummyDateCurrent = '2026-10-15';
+        if (!app.data.records) app.data.records = {};
+        app.data.records[dummyDateOld] = { date: dummyDateOld, menuName: 'वरणभात', children: 20, plates: 20, fuelCost: 30.2, quantities: { rice: 2.0, tur_dal: 0.4 }, remarks: 'frozen' };
+        app.data.records[dummyDateCurrent] = { date: dummyDateCurrent, menuName: 'वरणभात', children: 20, plates: 20, fuelCost: 10, quantities: { rice: 1.0, tur_dal: 0.2 }, remarks: 'active' };
+
+        const picker = document.getElementById('monthlyExcelPicker');
+        if (picker) picker.value = '2026-10';
+        
+        app.recalculateCurrentMonth(false); // Run without prompt
+
+        const oldUntouched = app.data.records[dummyDateOld].quantities.rice === 2.0 && app.data.records[dummyDateOld].remarks === 'frozen';
+        const currentUpdated = app.data.records[dummyDateCurrent].quantities.rice === 2.0; // Recalculated with latest 0.10 rate
+
+        const passed = hasRecalcMethod && hasStandardMenusMethod && hasGodBhat && hasPurakAhar && hasDoodhKheer && oldUntouched && currentUpdated;
+
+        return {
+          passed,
+          details: `पुनर्गणना पद्धत: ${hasRecalcMethod ? 'उपलब्ध' : 'गहाळ'}, मानक मेन्यू सिंक: ${hasGodBhat && hasPurakAhar ? 'यशस्वी' : 'त्रुटी'}, मागील महिना (2026-09) सुरक्षित: ${oldUntouched ? 'होय (100% Frozen)' : 'नाही'}, चालू महिना अपडेट: ${currentUpdated ? 'होय' : 'नाही'}`
+        };
+      }
     }
   ],
 
