@@ -1153,6 +1153,8 @@ const app = {
       stockTransfers: [],
       records: {},
       recordsUpper: {},
+      deletedRecordDates: [],
+      deletedRecordDatesUpper: [],
       tasteRecords: {},
       customDemands: {},
       initialSampleLoaded: (udise === '27240304501')
@@ -3088,6 +3090,8 @@ const app = {
           stockTransfers: parsed.stockTransfers || [],
           records: parsed.records || {},
           recordsUpper: parsed.recordsUpper || {},
+          deletedRecordDates: parsed.deletedRecordDates || [],
+          deletedRecordDatesUpper: parsed.deletedRecordDatesUpper || [],
           tasteRecords: parsed.tasteRecords || {},
           tasteRecordsUpper: parsed.tasteRecordsUpper || {},
           customDemands: parsed.customDemands || {},
@@ -3357,6 +3361,8 @@ const app = {
         stockTransfers: this.data.stockTransfers || [],
         records: this.data.records,
         recordsUpper: this.data.recordsUpper || {},
+        deletedRecordDates: this.data.deletedRecordDates || [],
+        deletedRecordDatesUpper: this.data.deletedRecordDatesUpper || [],
         tasteRecords: this.data.tasteRecords,
         tasteRecordsUpper: this.data.tasteRecordsUpper || {},
         customDemands: this.data.customDemands,
@@ -4561,15 +4567,15 @@ const app = {
       section: section,
       dayName: isSunday ? "रविवार" : dayName,
       dayCode: isHoliday && !isSunday ? 0 : dayCode,
-      isHoliday: isHoliday && children === 0,
-      menuName: isSunday ? "सुट्टी" : selectedMenu,
-      children: isHoliday && children === 0 ? 0 : children,
-      plates: isHoliday && children === 0 ? 0 : plates,
-      fuelCost: fuelCost,
+      isHoliday: isHoliday,
+      menuName: (isSunday || isHoliday) ? "सुट्टी" : selectedMenu,
+      children: isHoliday ? 0 : children,
+      plates: isHoliday ? 0 : plates,
+      fuelCost: isHoliday ? 0 : fuelCost,
       remarks: "",
-      quantities: quantities,
-      grainSelectMode: (Array.isArray(customGrainsList) && customGrainsList.length > 0) ? 'manual' : 'auto',
-      selectedGrains: customGrainsList || [],
+      quantities: isHoliday ? {} : quantities,
+      grainSelectMode: isHoliday ? 'auto' : ((Array.isArray(customGrainsList) && customGrainsList.length > 0) ? 'manual' : 'auto'),
+      selectedGrains: isHoliday ? [] : (customGrainsList || []),
       updatedAt: new Date().toISOString()
     };
   },
@@ -5087,9 +5093,15 @@ const app = {
     if (activeSection === 'upper') {
       if (!this.data.recordsUpper) this.data.recordsUpper = {};
       this.data.recordsUpper[dateStr] = record;
+      if (this.data.deletedRecordDatesUpper) {
+        this.data.deletedRecordDatesUpper = this.data.deletedRecordDatesUpper.filter(d => d !== dateStr);
+      }
     } else {
       if (!this.data.records) this.data.records = {};
       this.data.records[dateStr] = record;
+      if (this.data.deletedRecordDates) {
+        this.data.deletedRecordDates = this.data.deletedRecordDates.filter(d => d !== dateStr);
+      }
     }
 
     // स्वयंचलित चव नोंद सिंक: फक्त दैनिक मध्ये नोंद भरल्यावरच चव ऑटो ने भरणे
@@ -5339,6 +5351,59 @@ const app = {
   resetDailyForm() {
     this.onDateChanged();
     this.showToast('फॉर्म पूर्ववत केला आहे.', 'warning');
+  },
+
+  /**
+   * Delete current day's record for active section
+   */
+  deleteCurrentDayRecord() {
+    const dateInput = document.getElementById('entryDate');
+    if (!dateInput || !dateInput.value) {
+      this.showToast('कृपया वैध तारीख निवडा.', 'danger');
+      return;
+    }
+
+    const dateStr = dateInput.value;
+    const activeSection = this.getActiveSection();
+    const isUpper = (activeSection === 'upper');
+    const records = isUpper ? (this.data.recordsUpper || {}) : (this.data.records || {});
+
+    if (!records[dateStr]) {
+      this.showToast(`दि. ${dateStr.split('-').reverse().join('/')} साठी कोणतीही जतन केलेली नोंद अस्तित्वात नाही.`, 'warning');
+      return;
+    }
+
+    const formattedDate = dateStr.split('-').reverse().join('/');
+    const confirmMsg = `तुम्हाला खरोखरच दि. ${formattedDate} ची (${this.getActiveSectionName()}) नोंद पूर्णपणे हटवायची आहे का?\n\nही नोंद हटवल्यास मासिक नोंदवही व ताळेबंदातून ती कायमची वगळली जाईल.`;
+    if (!confirm(confirmMsg)) return;
+
+    if (isUpper) {
+      if (this.data.recordsUpper) delete this.data.recordsUpper[dateStr];
+      if (!this.data.deletedRecordDatesUpper) this.data.deletedRecordDatesUpper = [];
+      if (!this.data.deletedRecordDatesUpper.includes(dateStr)) {
+        this.data.deletedRecordDatesUpper.push(dateStr);
+      }
+    } else {
+      if (this.data.records) delete this.data.records[dateStr];
+      if (!this.data.deletedRecordDates) this.data.deletedRecordDates = [];
+      if (!this.data.deletedRecordDates.includes(dateStr)) {
+        this.data.deletedRecordDates.push(dateStr);
+      }
+    }
+
+    // Auto taste record cleanup
+    const targetTaste = isUpper ? this.getActiveTasteRecords('upper') : this.getActiveTasteRecords('primary');
+    if (targetTaste && targetTaste[dateStr]) {
+      delete targetTaste[dateStr];
+    }
+
+    this.saveState(false, true);
+
+    this.onDateChanged();
+    this.renderRecentDaysRibbon();
+    if (typeof this.renderDailyRegister === 'function') this.renderDailyRegister();
+    if (typeof this.renderMonthlyExcelSheet === 'function') this.renderMonthlyExcelSheet();
+    this.showToast(`दि. ${formattedDate} ची नोंद यशस्वीरीत्या हटवली!`, 'success');
   },
 
   /**
@@ -5816,23 +5881,23 @@ const app = {
         <td class="text-center">${rec.children}</td>
         <td class="text-center">${rec.plates}</td>
         <td class="text-right">${isHoliday ? '0' : (q.rice || 0).toFixed(3)}</td>
-        <td class="text-right">${q.moong_dal ? q.moong_dal.toFixed(3) : '—'}</td>
-        <td class="text-right">${q.tur_dal ? q.tur_dal.toFixed(3) : '—'}</td>
-        <td class="text-right">${q.masoor_dal ? q.masoor_dal.toFixed(3) : '—'}</td>
-        <td class="text-right">${q.matki ? q.matki.toFixed(3) : '—'}</td>
-        <td class="text-right">${q.moong ? q.moong.toFixed(3) : '—'}</td>
-        <td class="text-right">${q.chavali ? q.chavali.toFixed(3) : '—'}</td>
-        <td class="text-right">${q.chana ? q.chana.toFixed(3) : '—'}</td>
-        <td class="text-right">${q.vatana ? q.vatana.toFixed(3) : '—'}</td>
-        <td class="text-right">${q.soyavadi ? q.soyavadi.toFixed(3) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.moong_dal ? q.moong_dal.toFixed(3) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.tur_dal ? q.tur_dal.toFixed(3) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.masoor_dal ? q.masoor_dal.toFixed(3) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.matki ? q.matki.toFixed(3) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.moong ? q.moong.toFixed(3) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.chavali ? q.chavali.toFixed(3) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.chana ? q.chana.toFixed(3) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.vatana ? q.vatana.toFixed(3) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.soyavadi ? q.soyavadi.toFixed(3) : '—'}</td>
         <td class="text-right"><strong>${isHoliday ? '0' : pulseDaily.toFixed(3)}</strong></td>
-        <td class="text-right">${q.cumin ? (q.cumin * 1000).toFixed(1) : '—'}</td>
-        <td class="text-right">${q.mustard ? (q.mustard * 1000).toFixed(1) : '—'}</td>
-        <td class="text-right">${q.turmeric ? (q.turmeric * 1000).toFixed(1) : '—'}</td>
-        <td class="text-right">${q.chilli ? (q.chilli * 1000).toFixed(1) : '—'}</td>
-        <td class="text-right">${q.oil ? (q.oil * 1000).toFixed(0) : '—'}</td>
-        <td class="text-right">${q.salt ? (q.salt * 1000).toFixed(1) : '—'}</td>
-        <td class="text-right">${q.masala ? (q.masala * 1000).toFixed(1) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.cumin ? (q.cumin * 1000).toFixed(1) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.mustard ? (q.mustard * 1000).toFixed(1) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.turmeric ? (q.turmeric * 1000).toFixed(1) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.chilli ? (q.chilli * 1000).toFixed(1) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.oil ? (q.oil * 1000).toFixed(0) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.salt ? (q.salt * 1000).toFixed(1) : '—'}</td>
+        <td class="text-right">${!isHoliday && q.masala ? (q.masala * 1000).toFixed(1) : '—'}</td>
         <td class="text-right">${isHoliday ? '0' : rec.fuelCost}</td>
         <td><small>${rec.remarks || ''}</small></td>
         <td class="no-print text-center">
@@ -6088,8 +6153,11 @@ const app = {
       if (isHoliday) tr.style.background = '#fef2f2';
 
       const dailyColsHtml = this.FORM_B_ITEMS.map(item => {
+        if (isHoliday) {
+          return item.key === 'rice' ? `<td>0</td>` : `<td></td>`;
+        }
         if (item.key === 'rice') {
-          return `<td>${isHoliday ? '0' : (q.rice || 0).toFixed(2)}</td>`;
+          return `<td>${(q.rice || 0).toFixed(2)}</td>`;
         }
         return `<td>${formatDailyCell(item.key, q[item.key])}</td>`;
       }).join('');

@@ -860,6 +860,9 @@
                       <button type="button" class="btn btn-outline-primary flex-1" id="btnDailyPrintSlip" onclick="app.printDailySlip()">
                         <span>🖨️ स्लिप प्रिंट</span>
                       </button>
+                      <button type="button" class="btn btn-outline-danger" id="btnDailyDelete" style="min-width: 95px;" onclick="app.deleteCurrentDayRecord()">
+                        <span>🗑️ नोंद हटवा</span>
+                      </button>
                       <button type="button" class="btn btn-outline-secondary" id="btnDailyReset" style="min-width: 85px;" onclick="app.resetDailyForm()">
                         <span>🔄 रीसेट</span>
                       </button>
@@ -2737,7 +2740,7 @@
           <div class="panel-header">
             <div class="panel-title-group">
               <h2 class="panel-title">स्वयंचलित चाचणी व पडताळणी कक्ष (Verification Test Suite)</h2>
-              <p class="panel-desc">प्रश्नावलीतील सर्व 8 टेस्ट केसेसचे स्वयंचलित मूल्यमापन</p>
+              <p class="panel-desc">प्रणालीतील सर्व १७ टेस्ट केसेसचे स्वयंचलित मूल्यमापन</p>
             </div>
             <div class="panel-actions">
               <button class="btn btn-primary" onclick="testSuite.runAllTests()">
@@ -3475,10 +3478,10 @@
   <div id="printSlipContainer" class="print-only-slip"></div>
 
   <!-- Application Logic Scripts -->
-  <script src="firebase-config.js?v=20261012_6"></script>
-  <script src="cloud-sync.js?v=20261012_6"></script>
-  <script src="excel-engine.js?v=20261012_6"></script>
-  <script src="test-suite.js?v=20261012_6"></script>
-  <script src="app.js?v=20261012_6"></script>
+  <script src="firebase-config.js?v=20261013_1"></script>
+  <script src="cloud-sync.js?v=20261013_1"></script>
+  <script src="excel-engine.js?v=20261013_1"></script>
+  <script src="test-suite.js?v=20261013_1"></script>
+  <script src="app.js?v=20261013_1"></script>
 </body>
 </html>

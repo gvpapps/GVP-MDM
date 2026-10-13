@@ -374,6 +374,37 @@ const testSuite = {
           details: `पुनर्गणना पद्धत: ${hasRecalcMethod ? 'उपलब्ध' : 'गहाळ'}, मानक मेन्यू सिंक: ${hasGodBhat && hasPurakAhar ? 'यशस्वी' : 'त्रुटी'}, मागील महिना (2026-09) सुरक्षित: ${oldUntouched ? 'होय (100% Frozen)' : 'नाही'}, चालू महिना अपडेट: ${currentUpdated ? 'होय' : 'नाही'}`
         };
       }
+    },
+    {
+      id: 17,
+      name: "Test 17: नोंद संपादन (सुट्टी/० मुले) व नोंद हटवणे (Tombstone Protection) पडताळणी",
+      description: "नोंद संपादन करताना सुट्टी दिल्यास सर्व २० घटकांचे प्रमाण व इंधन शून्य होणे आणि नोंद हटवल्यास क्लाऊड रीस्टोअर न होता कायमस्वरूपी वगळली जाणे.",
+      run() {
+        const testDate = "2026-10-15";
+        // 1. calculateDay with holiday/0 kids
+        const holCalc = app.calculateDay(testDate, 0, "सुट्टी");
+        const isHolZero = holCalc.isHoliday === true && holCalc.children === 0 && holCalc.fuelCost === 0 && Object.keys(holCalc.quantities).length === 0;
+
+        // 2. cloudSync mergeDayRecord conflict resolution
+        const remoteOld = { date: testDate, children: 45, isHoliday: false, quantities: { rice: 4.5, tur_dal: 0.9 }, updatedAt: '2026-10-15T10:00:00.000Z' };
+        const localEdited = { date: testDate, children: 0, isHoliday: true, quantities: {}, updatedAt: '2026-10-15T12:00:00.000Z' };
+        const mergedRec = cloudSync.mergeDayRecord(localEdited, remoteOld, true);
+        const mergeWins = mergedRec && mergedRec.isHoliday === true && mergedRec.children === 0;
+
+        // 3. Tombstone exclusion from cloud map
+        const mergedMap = cloudSync.mergeDayRecordsMap({}, { [testDate]: remoteOld }, true, [testDate]);
+        const tombstoneDrops = (mergedMap[testDate] === undefined);
+
+        // 4. app.deleteCurrentDayRecord function availability
+        const hasDeleteMethod = typeof app.deleteCurrentDayRecord === 'function';
+
+        const passed = isHolZero && mergeWins && tombstoneDrops && hasDeleteMethod;
+
+        return {
+          passed,
+          details: `सुट्टी/० मुले परिपूर्ण शून्य: ${isHolZero ? 'होय' : 'नाही'}, नवीन संपादनाला क्लाऊडवर प्राधान्य: ${mergeWins ? 'होय' : 'नाही'}, हटवलेली नोंद वगळली (Tombstone): ${tombstoneDrops ? 'होय' : 'नाही'}, हटवा बटण पद्धत: ${hasDeleteMethod ? 'उपलब्ध' : 'नाही'}`
+        };
+      }
     }
   ],
 

@@ -333,15 +333,21 @@ const cloudSync = {
     const timeA = new Date(recA.updatedAt || recA.savedAt || 0).getTime();
     const timeB = new Date(recB.updatedAt || recB.savedAt || 0).getTime();
 
-    // If both have explicit timestamps, the record with the newer timestamp strictly wins!
-    if (timeA > 0 && timeB > 0 && Math.abs(timeA - timeB) > 2000) {
-      return (timeA >= timeB) ? Object.assign({}, recB, recA) : Object.assign({}, recA, recB);
+    // 1. Strict Timestamp Authority: The record with the strictly newer timestamp ALWAYS wins
+    if (timeA > 0 && timeB > 0) {
+      if (timeA > timeB) return Object.assign({}, recB, recA);
+      if (timeB > timeA) return Object.assign({}, recA, recB);
+    } else if (timeA > 0 && (!timeB || timeB === 0)) {
+      return Object.assign({}, recB, recA);
+    } else if (timeB > 0 && (!timeA || timeA === 0)) {
+      return Object.assign({}, recA, recB);
     }
 
+    // 2. Only if both timestamps are completely equal or absent:
+    // If one is an active working day and the other is an uninitialized blank, keep the data.
     const aHasData = (!recA.isHoliday && ((parseInt(recA.children) || 0) > 0 || (recA.quantities && Object.values(recA.quantities).some(v => parseFloat(v) > 0))));
     const bHasData = (!recB.isHoliday && ((parseInt(recB.children) || 0) > 0 || (recB.quantities && Object.values(recB.quantities).some(v => parseFloat(v) > 0))));
 
-    // If timestamps are tied or missing, prefer populated data over completely blank placeholder
     if (aHasData && !bHasData) return Object.assign({}, recB, recA);
     if (!aHasData && bHasData) return Object.assign({}, recA, recB);
 
@@ -351,13 +357,15 @@ const cloudSync = {
   /**
    * Smart Conflict-Free Merge for daily records dictionary
    */
-  mergeDayRecordsMap(mapA, mapB, preferA = true) {
+  mergeDayRecordsMap(mapA, mapB, preferA = true, deletedDates = []) {
     const result = {};
     const keysA = Object.keys(mapA || {});
     const keysB = Object.keys(mapB || {});
     const allKeys = new Set([...keysA, ...keysB]);
+    const delSet = new Set(Array.isArray(deletedDates) ? deletedDates : []);
 
     allKeys.forEach(k => {
+      if (delSet.has(k)) return; // Strictly exclude deleted dates from merge
       const recA = mapA ? mapA[k] : null;
       const recB = mapB ? mapB[k] : null;
       const merged = this.mergeDayRecord(recA, recB, preferA);
@@ -695,8 +703,19 @@ const cloudSync = {
       // GUARD 2: Smart Conflict-Free Merge before push so any missing remote dates/receipts are combined
       if (existingRemote && existingRemote.appData) {
         const remoteData = existingRemote.appData;
-        const mergedRecords = this.mergeDayRecordsMap(dataToPush.records, remoteData.records, true);
-        const mergedRecordsUpper = this.mergeDayRecordsMap(dataToPush.recordsUpper, remoteData.recordsUpper, true);
+
+        // Union of deleted record date tombstones
+        const mergedDeletedRecordDates = Array.from(new Set([
+          ...(dataToPush.deletedRecordDates || []),
+          ...(remoteData.deletedRecordDates || [])
+        ]));
+        const mergedDeletedRecordDatesUpper = Array.from(new Set([
+          ...(dataToPush.deletedRecordDatesUpper || []),
+          ...(remoteData.deletedRecordDatesUpper || [])
+        ]));
+
+        const mergedRecords = this.mergeDayRecordsMap(dataToPush.records, remoteData.records, true, mergedDeletedRecordDates);
+        const mergedRecordsUpper = this.mergeDayRecordsMap(dataToPush.recordsUpper, remoteData.recordsUpper, true, mergedDeletedRecordDatesUpper);
         const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, dataToPush.tasteRecords || {});
         const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, dataToPush.tasteRecordsUpper || {});
         const mergedStock = this.mergeStockBalances(dataToPush.initialStock, remoteData.initialStock);
@@ -733,6 +752,8 @@ const cloudSync = {
         dataToPush = Object.assign({}, dataToPush, {
           records: mergedRecords,
           recordsUpper: mergedRecordsUpper,
+          deletedRecordDates: mergedDeletedRecordDates,
+          deletedRecordDatesUpper: mergedDeletedRecordDatesUpper,
           tasteRecords: mergedTaste,
           tasteRecordsUpper: mergedTasteUpper,
           initialStock: mergedStock,
@@ -752,6 +773,8 @@ const cloudSync = {
         if (typeof app !== 'undefined' && app.data && (typeof app.getActiveUdise === 'function' && app.getActiveUdise() === currentUdise)) {
           app.data.records = mergedRecords;
           app.data.recordsUpper = mergedRecordsUpper;
+          app.data.deletedRecordDates = mergedDeletedRecordDates;
+          app.data.deletedRecordDatesUpper = mergedDeletedRecordDatesUpper;
           app.data.tasteRecords = mergedTaste;
           app.data.tasteRecordsUpper = mergedTasteUpper;
           app.data.initialStock = mergedStock;
@@ -938,9 +961,19 @@ const cloudSync = {
               }
             }
 
+            // Union of deleted record date tombstones
+            const mergedDeletedRecordDates = Array.from(new Set([
+              ...(baseData.deletedRecordDates || []),
+              ...(remoteData.deletedRecordDates || [])
+            ]));
+            const mergedDeletedRecordDatesUpper = Array.from(new Set([
+              ...(baseData.deletedRecordDatesUpper || []),
+              ...(remoteData.deletedRecordDatesUpper || [])
+            ]));
+
             // Smart Conflict-Free Merge: Local + Remote (Protects local populated data from being wiped)
-            const mergedRecords = this.mergeDayRecordsMap(baseData.records, remoteRecords, false);
-            const mergedRecordsUpper = this.mergeDayRecordsMap(baseData.recordsUpper, remoteData.recordsUpper || {}, false);
+            const mergedRecords = this.mergeDayRecordsMap(baseData.records, remoteRecords, false, mergedDeletedRecordDates);
+            const mergedRecordsUpper = this.mergeDayRecordsMap(baseData.recordsUpper, remoteData.recordsUpper || {}, false, mergedDeletedRecordDatesUpper);
             const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, baseData.tasteRecords || {});
             const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, baseData.tasteRecordsUpper || {});
             const mergedStock = this.mergeStockBalances(baseData.initialStock, remoteData.initialStock);
@@ -976,6 +1009,8 @@ const cloudSync = {
             const mergedTarget = Object.assign({}, baseData, {
               records: mergedRecords,
               recordsUpper: mergedRecordsUpper,
+              deletedRecordDates: mergedDeletedRecordDates,
+              deletedRecordDatesUpper: mergedDeletedRecordDatesUpper,
               tasteRecords: mergedTaste,
               tasteRecordsUpper: mergedTasteUpper,
               initialStock: mergedStock,
