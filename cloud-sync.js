@@ -413,35 +413,52 @@ const cloudSync = {
   },
 
   /**
-   * Robust Deduplicating & Tombstone-Aware Merge for Damaged Stock
+   * Helper: compute deterministic signature for damaged stock
    */
-  mergeDamagedStockList(localList, remoteList, deletedIds = []) {
+  getDamagedSignature(item) {
+    if (!item || typeof item !== 'object') return '';
+    const dateSig = (item.date || '').trim();
+    const secSig = item.section || 'primary';
+    const itemsKeys = Object.keys(item.items || {}).filter(k => parseFloat(item.items[k]) > 0).sort();
+    const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
+    return `${dateSig}#${secSig}#${itemsSig}`;
+  },
+
+  /**
+   * Robust Deduplicating & Tombstone-Aware Merge for Damaged Stock
+   * Uses both unique IDs and deterministic content signatures
+   */
+  mergeDamagedStockList(localList, remoteList, deletedIds = [], deletedSigs = []) {
     const l = Array.isArray(localList) ? localList : [];
     const r = Array.isArray(remoteList) ? remoteList : [];
     const delSet = new Set(Array.isArray(deletedIds) ? deletedIds : []);
+    const delSigSet = new Set(Array.isArray(deletedSigs) ? deletedSigs : []);
 
-    const combined = [...r, ...l].filter(item => item && typeof item === 'object' && (!item.id || !delSet.has(item.id)));
+    const combined = [...r, ...l].filter(item => {
+      if (!item || typeof item !== 'object') return false;
+      if (item.id && delSet.has(item.id)) return false;
+      const sig = this.getDamagedSignature(item);
+      if (sig && delSigSet.has(sig)) return false;
+      return true;
+    });
+
     const seenIds = new Set();
     const seenSigs = new Set();
     const result = [];
 
     combined.forEach(item => {
+      const sig = this.getDamagedSignature(item);
+      if (sig && delSigSet.has(sig)) return;
+
       if (!item.id) {
-        item.id = 'dmg_' + (item.date ? item.date.replace(/-/g, '') : 'old') + '_' + Math.random().toString(36).substr(2, 6);
+        item.id = 'dmg_' + (sig ? sig.replace(/[^a-zA-Z0-9_-]/g, '_') : Date.now());
       }
+      if (delSet.has(item.id)) return;
       if (seenIds.has(item.id)) return;
-
-      const itemsKeys = Object.keys(item.items || {}).filter(k => parseFloat(item.items[k]) > 0).sort();
-      const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
-      const reasonSig = (item.reason || '').trim().toLowerCase();
-      const dateSig = (item.date || '').trim();
-      const secSig = item.section || 'primary';
-      const sig = `${dateSig}#${reasonSig}#${secSig}#${itemsSig}`;
-
-      if (seenSigs.has(sig)) return;
+      if (sig && seenSigs.has(sig)) return;
 
       seenIds.add(item.id);
-      seenSigs.add(sig);
+      if (sig) seenSigs.add(sig);
       result.push(item);
     });
 
@@ -450,21 +467,38 @@ const cloudSync = {
 
   /**
    * Smart Merge for Initial Stock balances (1 April stock)
-   * Never overwrites positive balances with 0 or undefined
+   * Truly respects deliberate user edits (including setting stock to 0) using strict timestamp authority
    */
-  mergeStockBalances(stockA, stockB) {
-    const merged = Object.assign({}, stockA || {});
-    const b = stockB || {};
-    Object.keys(b).forEach(item => {
-      const valA = parseFloat(merged[item] || 0);
-      const valB = parseFloat(b[item] || 0);
-      if (valB > 0 && valA === 0) {
-        merged[item] = valB;
-      } else if (valA > 0 && valB > 0) {
-        merged[item] = valA;
-      }
-    });
-    return merged;
+  mergeStockBalances(stockA, stockB, preferA = true) {
+    if (!stockA && !stockB) return {};
+    if (!stockA) return Object.assign({}, stockB);
+    if (!stockB) return Object.assign({}, stockA);
+
+    const timeA = stockA._updatedAt ? new Date(stockA._updatedAt).getTime() : 0;
+    const timeB = stockB._updatedAt ? new Date(stockB._updatedAt).getTime() : 0;
+
+    // Strict Timestamp Authority
+    if (timeA > 0 && timeB > 0) {
+      if (timeA > timeB) return Object.assign({}, stockB, stockA);
+      if (timeB > timeA) return Object.assign({}, stockA, stockB);
+    } else if (timeA > 0 && (!timeB || timeB === 0)) {
+      return Object.assign({}, stockB, stockA);
+    } else if (timeB > 0 && (!timeA || timeA === 0)) {
+      return Object.assign({}, stockA, stockB);
+    }
+
+    // Fallback if timestamps are absent on both sides:
+    const keysA = Object.keys(stockA).filter(k => !k.startsWith('_'));
+    const keysB = Object.keys(stockB).filter(k => !k.startsWith('_'));
+    if (keysA.length > 0 && keysB.length === 0) return Object.assign({}, stockA);
+    if (keysB.length > 0 && keysA.length === 0) return Object.assign({}, stockB);
+
+    // If preferA (e.g. pushing local updates), local values win
+    if (preferA) {
+      return Object.assign({}, stockB, stockA);
+    } else {
+      return Object.assign({}, stockA, stockB);
+    }
   },
 
   /**
@@ -718,8 +752,8 @@ const cloudSync = {
         const mergedRecordsUpper = this.mergeDayRecordsMap(dataToPush.recordsUpper, remoteData.recordsUpper, true, mergedDeletedRecordDatesUpper);
         const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, dataToPush.tasteRecords || {});
         const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, dataToPush.tasteRecordsUpper || {});
-        const mergedStock = this.mergeStockBalances(dataToPush.initialStock, remoteData.initialStock);
-        const mergedStockUpper = this.mergeStockBalances(dataToPush.initialStockUpper, remoteData.initialStockUpper);
+        const mergedStock = this.mergeStockBalances(dataToPush.initialStock, remoteData.initialStock, true);
+        const mergedStockUpper = this.mergeStockBalances(dataToPush.initialStockUpper, remoteData.initialStockUpper, true);
         const mergedSettings = this.mergeSettings(dataToPush.settings, remoteData.settings, currentUdise, false);
         
         // Union of deleted tombstones
@@ -731,12 +765,16 @@ const cloudSync = {
           ...(dataToPush.deletedDamagedIds || []),
           ...(remoteData.deletedDamagedIds || [])
         ]));
+        const mergedDeletedDamagedSigs = Array.from(new Set([
+          ...(dataToPush.deletedDamagedSigs || []),
+          ...(remoteData.deletedDamagedSigs || [])
+        ]));
 
         // Stock receipts and damaged stock with deduplication & tombstone protection
         const mergedReceipts = this.mergeStockReceiptsList(dataToPush.stockReceipts, remoteData.stockReceipts, mergedDeletedReceipts);
         const mergedReceiptsUpper = this.mergeStockReceiptsList(dataToPush.stockReceiptsUpper, remoteData.stockReceiptsUpper, mergedDeletedReceipts);
-        const mergedDamaged = this.mergeDamagedStockList(dataToPush.damagedStock, remoteData.damagedStock, mergedDeletedDamaged);
-        const mergedDamagedUpper = this.mergeDamagedStockList(dataToPush.damagedStockUpper, remoteData.damagedStockUpper, mergedDeletedDamaged);
+        const mergedDamaged = this.mergeDamagedStockList(dataToPush.damagedStock, remoteData.damagedStock, mergedDeletedDamaged, mergedDeletedDamagedSigs);
+        const mergedDamagedUpper = this.mergeDamagedStockList(dataToPush.damagedStockUpper, remoteData.damagedStockUpper, mergedDeletedDamaged, mergedDeletedDamagedSigs);
 
         // Stock transfers union (Inter-Section Loans)
         const mergedTransfers = [...(remoteData.stockTransfers || [])];
@@ -767,6 +805,7 @@ const cloudSync = {
           damagedStock: mergedDamaged,
           damagedStockUpper: mergedDamagedUpper,
           deletedDamagedIds: mergedDeletedDamaged,
+          deletedDamagedSigs: mergedDeletedDamagedSigs,
           stockTransfers: mergedTransfers
         });
 
@@ -788,6 +827,7 @@ const cloudSync = {
           app.data.damagedStock = mergedDamaged;
           app.data.damagedStockUpper = mergedDamagedUpper;
           app.data.deletedDamagedIds = mergedDeletedDamaged;
+          app.data.deletedDamagedSigs = mergedDeletedDamagedSigs;
           app.data.stockTransfers = mergedTransfers;
           if (typeof app.saveState === 'function') app.saveState(true);
         } else if (typeof localStorage !== 'undefined') {
@@ -976,8 +1016,8 @@ const cloudSync = {
             const mergedRecordsUpper = this.mergeDayRecordsMap(baseData.recordsUpper, remoteData.recordsUpper || {}, false, mergedDeletedRecordDatesUpper);
             const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, baseData.tasteRecords || {});
             const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, baseData.tasteRecordsUpper || {});
-            const mergedStock = this.mergeStockBalances(baseData.initialStock, remoteData.initialStock);
-            const mergedStockUpper = this.mergeStockBalances(baseData.initialStockUpper, remoteData.initialStockUpper);
+            const mergedStock = this.mergeStockBalances(baseData.initialStock, remoteData.initialStock, false);
+            const mergedStockUpper = this.mergeStockBalances(baseData.initialStockUpper, remoteData.initialStockUpper, false);
             const mergedSettings = this.mergeSettings(baseData.settings, remoteData.settings, currentUdise, true);
             const mergedIngredients = this.mergeIngredients(baseData.ingredients, remoteData.ingredients, true);
             const mergedMenus = this.mergeMenus(baseData.menus, remoteData.menus, true);
@@ -991,12 +1031,16 @@ const cloudSync = {
               ...(baseData.deletedDamagedIds || []),
               ...(remoteData.deletedDamagedIds || [])
             ]));
+            const mergedDeletedDamagedSigs = Array.from(new Set([
+              ...(baseData.deletedDamagedSigs || []),
+              ...(remoteData.deletedDamagedSigs || [])
+            ]));
 
             // Stock receipts and damaged stock with deduplication & tombstone protection
             const mergedReceipts = this.mergeStockReceiptsList(baseData.stockReceipts, remoteData.stockReceipts, mergedDeletedReceipts);
             const mergedReceiptsUpper = this.mergeStockReceiptsList(baseData.stockReceiptsUpper, remoteData.stockReceiptsUpper, mergedDeletedReceipts);
-            const mergedDamaged = this.mergeDamagedStockList(baseData.damagedStock, remoteData.damagedStock, mergedDeletedDamaged);
-            const mergedDamagedUpper = this.mergeDamagedStockList(baseData.damagedStockUpper, remoteData.damagedStockUpper, mergedDeletedDamaged);
+            const mergedDamaged = this.mergeDamagedStockList(baseData.damagedStock, remoteData.damagedStock, mergedDeletedDamaged, mergedDeletedDamagedSigs);
+            const mergedDamagedUpper = this.mergeDamagedStockList(baseData.damagedStockUpper, remoteData.damagedStockUpper, mergedDeletedDamaged, mergedDeletedDamagedSigs);
 
             // Stock transfers union (Inter-Section Loans)
             const mergedTransfers = [...(remoteData.stockTransfers || [])];
@@ -1024,6 +1068,7 @@ const cloudSync = {
               damagedStock: mergedDamaged,
               damagedStockUpper: mergedDamagedUpper,
               deletedDamagedIds: mergedDeletedDamaged,
+              deletedDamagedSigs: mergedDeletedDamagedSigs,
               stockTransfers: mergedTransfers,
               customDemands: Object.assign({}, baseData.customDemands || {}, remoteData.customDemands || {}),
               customDemandsUpper: Object.assign({}, baseData.customDemandsUpper || {}, remoteData.customDemandsUpper || {}),
@@ -1605,4 +1650,8 @@ const cloudSync = {
     }
   }
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = cloudSync;
+}
 

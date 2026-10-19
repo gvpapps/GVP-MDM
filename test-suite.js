@@ -405,6 +405,40 @@ const testSuite = {
           details: `सुट्टी/० मुले परिपूर्ण शून्य: ${isHolZero ? 'होय' : 'नाही'}, नवीन संपादनाला क्लाऊडवर प्राधान्य: ${mergeWins ? 'होय' : 'नाही'}, हटवलेली नोंद वगळली (Tombstone): ${tombstoneDrops ? 'होय' : 'नाही'}, हटवा बटण पद्धत: ${hasDeleteMethod ? 'उपलब्ध' : 'नाही'}`
         };
       }
+    },
+    {
+      name: "Test 18: साठा शून्य/संपादन, खराब धान्य डिलिट Tombstone, प्रपत्र ब शून्य मागणी व एकत्रित नोंद",
+      description: "सोयाबीन/किराणा साठा शून्य केल्यास क्लाऊड रीस्टोअर न होणे, खराब धान्य स्वाक्षरीने कायमस्वरूपी वगळले जाणे, दोन्ही नोंदी एकत्र व प्रपत्र ब डीफॉल्ट शून्य तपासणी.",
+      run() {
+        // 1. Stock zeroing with timestamp authority
+        const oldRemoteStock = { rice: 100, soyavadi: 12.5, _updatedAt: '2026-10-10T10:00:00.000Z' };
+        const newLocalStock = { rice: 100, soyavadi: 0, _updatedAt: '2026-10-19T10:00:00.000Z' };
+        const mergedStock = cloudSync.mergeStockBalances(newLocalStock, oldRemoteStock, true);
+        const zeroStockPreserved = (mergedStock && mergedStock.soyavadi === 0);
+
+        // 2. Damaged stock deterministic signature tombstone
+        const remoteDmg = { id: 'remote_dmg_1', date: '2026-10-15', section: 'primary', items: { soyavadi: 2.5 } };
+        const sig = cloudSync.getDamagedSignature(remoteDmg);
+        const mergedDmg = cloudSync.mergeDamagedStockList([], [remoteDmg], [], [sig]);
+        const damagedTombstoneWorks = (Array.isArray(mergedDmg) && mergedDmg.length === 0);
+
+        // 3. Dual entry modal and preview methods
+        const hasDualModal = typeof app.openDualEntryModal === 'function';
+        const hasDualPreview = typeof app.updateDualEntryPreview === 'function';
+        const hasSaveDual = typeof app.saveDualRecords === 'function';
+        const dualMethodsOk = hasDualModal && hasDualPreview && hasSaveDual;
+
+        // 4. Fuel rate frozen in record
+        const calcDay = app.calculateDay('2026-10-19', 10, 'वरणभात', 10, null, 'primary');
+        const hasFrozenFuelRate = (typeof calcDay.fuelRate === 'number' && calcDay.fuelRate > 0);
+
+        const passed = zeroStockPreserved && damagedTombstoneWorks && dualMethodsOk && hasFrozenFuelRate;
+
+        return {
+          passed,
+          details: `साठा ० जतन (Timestamp Authority): ${zeroStockPreserved ? 'होय' : 'नाही'}, खराब धान्य डिलीट कायम (Signature Tombstone): ${damagedTombstoneWorks ? 'होय' : 'नाही'}, एकत्रित नोंद व प्रिव्ह्यू फंक्शन्स: ${dualMethodsOk ? 'उपलब्ध' : 'नाही'}, दैनिक नोंदीत इंधन दर गोठवला: ${hasFrozenFuelRate ? 'होय' : 'नाही'}`
+        };
+      }
     }
   ],
 

@@ -1155,6 +1155,7 @@ const app = {
       recordsUpper: {},
       deletedRecordDates: [],
       deletedRecordDatesUpper: [],
+      deletedDamagedSigs: [],
       tasteRecords: {},
       customDemands: {},
       initialSampleLoaded: (udise === '27240304501')
@@ -3087,6 +3088,7 @@ const app = {
           damagedStock: parsed.damagedStock || [],
           damagedStockUpper: parsed.damagedStockUpper || [],
           deletedDamagedIds: parsed.deletedDamagedIds || [],
+          deletedDamagedSigs: parsed.deletedDamagedSigs || [],
           stockTransfers: parsed.stockTransfers || [],
           records: parsed.records || {},
           recordsUpper: parsed.recordsUpper || {},
@@ -3358,6 +3360,7 @@ const app = {
         damagedStock: this.data.damagedStock,
         damagedStockUpper: this.data.damagedStockUpper || [],
         deletedDamagedIds: this.data.deletedDamagedIds || [],
+        deletedDamagedSigs: this.data.deletedDamagedSigs || [],
         stockTransfers: this.data.stockTransfers || [],
         records: this.data.records,
         recordsUpper: this.data.recordsUpper || {},
@@ -4572,6 +4575,7 @@ const app = {
       children: isHoliday ? 0 : children,
       plates: isHoliday ? 0 : plates,
       fuelCost: isHoliday ? 0 : fuelCost,
+      fuelRate: isHoliday ? 0 : activeFuelRate,
       remarks: "",
       quantities: isHoliday ? {} : quantities,
       grainSelectMode: isHoliday ? 'auto' : ((Array.isArray(customGrainsList) && customGrainsList.length > 0) ? 'manual' : 'auto'),
@@ -5166,7 +5170,7 @@ const app = {
   /**
    * Open Dual Quick Entry Modal (१ ते ५ आणि ६ ते ८ एकाच वेळी)
    */
-  openDualEntryModal() {
+  openDualEntryModal(dateOverride = null) {
     const level = (this.data && this.data.settings && this.data.settings.schoolLevel) || 'both';
     if (level !== 'both') {
       this.showToast('⚠️ ही शाळा संयुक्त (१ ते ८) नाही. दोन्ही एकत्र नोंद फक्त १ ते ८ संयुक्त शाळेसाठी उपलब्ध आहे.', 'warning');
@@ -5174,22 +5178,163 @@ const app = {
     }
     const modal = document.getElementById('dualEntryModal');
     if (!modal) return;
-    const dateInput = document.getElementById('entryDate');
-    const dateStr = dateInput ? dateInput.value : new Date().toISOString().substring(0, 10);
 
-    const modalDate = document.getElementById('dualEntryDateDisplay');
-    if (modalDate) modalDate.textContent = dateStr;
+    const dateInput = document.getElementById('entryDate');
+    const dateStr = dateOverride || (dateInput ? dateInput.value : '') || new Date().toISOString().substring(0, 10);
+
+    const modalDateInp = document.getElementById('dualEntryDate');
+    if (modalDateInp) modalDateInp.value = dateStr;
+
+    const modalDateDisplay = document.getElementById('dualEntryDateDisplay');
+    if (modalDateDisplay) modalDateDisplay.textContent = dateStr.split('-').reverse().join('/');
 
     const pRec = this.data.records && this.data.records[dateStr];
     const uRec = this.data.recordsUpper && this.data.recordsUpper[dateStr];
 
+    const pPatEl = document.getElementById('dualEntryPrimaryPat');
+    const uPatEl = document.getElementById('dualEntryUpperPat');
+    if (pPatEl) pPatEl.textContent = this.getActivePat('primary');
+    if (uPatEl) uPatEl.textContent = this.getActivePat('upper');
+
     const pInp = document.getElementById('dualEntryPrimaryChildren');
     const uInp = document.getElementById('dualEntryUpperChildren');
+    const pPlatesInp = document.getElementById('dualEntryPrimaryPlates');
+    const uPlatesInp = document.getElementById('dualEntryUpperPlates');
 
     if (pInp) pInp.value = pRec ? pRec.children : this.getActivePat('primary');
     if (uInp) uInp.value = uRec ? uRec.children : this.getActivePat('upper');
+    if (pPlatesInp) pPlatesInp.value = pRec ? (pRec.plates || pRec.children) : '';
+    if (uPlatesInp) uPlatesInp.value = uRec ? (uRec.plates || uRec.children) : '';
 
+    // Populate Menu Dropdown dynamically
+    const menuSel = document.getElementById('dualEntryMenuSelect');
+    if (menuSel) {
+      menuSel.innerHTML = '';
+      
+      const defOption = document.createElement('option');
+      defOption.value = "";
+      defOption.textContent = "-- मेनू निवडा (Select Menu) --";
+      menuSel.appendChild(defOption);
+
+      (this.data.menus || []).forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.name;
+        opt.textContent = `${m.name} (${m.dayName || ''})`;
+        menuSel.appendChild(opt);
+      });
+
+      const optCustom = document.createElement('option');
+      optCustom.value = '__custom__';
+      optCustom.textContent = 'इतर मेन्यू (स्वतः नाव टाका)';
+      menuSel.appendChild(optCustom);
+
+      const targetMenu = (pRec && pRec.menuName && pRec.menuName !== 'सुट्टी')
+        ? pRec.menuName
+        : ((uRec && uRec.menuName && uRec.menuName !== 'सुट्टी')
+          ? uRec.menuName
+          : (this.getDefaultMenuForDay(dateStr) || 'वरणभात'));
+
+      const isKnown = (this.data.menus || []).some(m => m.name === targetMenu);
+      const customRow = document.getElementById('dualEntryCustomMenuRow');
+      const customInp = document.getElementById('dualEntryCustomMenuName');
+
+      if (isKnown) {
+        menuSel.value = targetMenu;
+        if (customRow) customRow.style.display = 'none';
+      } else if (targetMenu && targetMenu !== 'सुट्टी') {
+        menuSel.value = '__custom__';
+        if (customRow) customRow.style.display = 'block';
+        if (customInp) customInp.value = targetMenu;
+      } else {
+        menuSel.value = this.getDefaultMenuForDay(dateStr) || 'वरणभात';
+        if (customRow) customRow.style.display = 'none';
+      }
+    }
+
+    // Holiday resolution
+    const isSunday = (this.getDayCode(dateStr) === 1);
+    const isHol = isSunday || (pRec && pRec.isHoliday) || (uRec && uRec.isHoliday);
+    const holCheck = document.getElementById('dualEntryHolidayCheck');
+    const holReason = document.getElementById('dualEntryHolidayReason');
+    if (holCheck) holCheck.checked = !!isHol;
+    if (holReason) {
+      holReason.style.display = isHol ? 'block' : 'none';
+      holReason.value = (pRec?.remarks || uRec?.remarks || (isSunday ? 'रविवार' : ''));
+    }
+
+    // Remarks & Cook
+    const remInp = document.getElementById('dualEntryRemarks');
+    if (remInp) remInp.value = (pRec && pRec.remarks) || (uRec && uRec.remarks) || '';
+    const cookInp = document.getElementById('dualEntryCook');
+    if (cookInp) cookInp.value = this.data.settings.cookName || '';
+
+    this.updateDualEntryPreview();
     modal.style.display = 'flex';
+  },
+
+  onDualEntryMenuChanged() {
+    const menuSel = document.getElementById('dualEntryMenuSelect');
+    const customRow = document.getElementById('dualEntryCustomMenuRow');
+    if (customRow && menuSel) {
+      customRow.style.display = (menuSel.value === '__custom__') ? 'block' : 'none';
+    }
+    this.updateDualEntryPreview();
+  },
+
+  onDualEntryHolidayToggled() {
+    const holCheck = document.getElementById('dualEntryHolidayCheck');
+    const holReason = document.getElementById('dualEntryHolidayReason');
+    const pInp = document.getElementById('dualEntryPrimaryChildren');
+    const uInp = document.getElementById('dualEntryUpperChildren');
+    const isChecked = holCheck ? holCheck.checked : false;
+
+    if (holReason) holReason.style.display = isChecked ? 'block' : 'none';
+    if (isChecked) {
+      if (pInp) pInp.value = 0;
+      if (uInp) uInp.value = 0;
+    } else {
+      if (pInp && parseInt(pInp.value) === 0) pInp.value = this.getActivePat('primary');
+      if (uInp && parseInt(uInp.value) === 0) uInp.value = this.getActivePat('upper');
+    }
+    this.updateDualEntryPreview();
+  },
+
+  updateDualEntryPreview() {
+    const dateInput = document.getElementById('dualEntryDate');
+    const dateStr = dateInput ? dateInput.value : '';
+    const holCheck = document.getElementById('dualEntryHolidayCheck');
+    const isHoliday = holCheck ? holCheck.checked : false;
+    const menuSel = document.getElementById('dualEntryMenuSelect');
+    const customInp = document.getElementById('dualEntryCustomMenuName');
+
+    let selectedMenu = (menuSel?.value === '__custom__') 
+      ? (customInp?.value.trim() || 'इतर मेन्यू') 
+      : (menuSel?.value || 'वरणभात');
+
+    const pKids = isHoliday ? 0 : Math.max(0, parseInt(document.getElementById('dualEntryPrimaryChildren')?.value) || 0);
+    const uKids = isHoliday ? 0 : Math.max(0, parseInt(document.getElementById('dualEntryUpperChildren')?.value) || 0);
+
+    const calcP = this.calculateDay(dateStr, pKids, isHoliday ? 'सुट्टी' : selectedMenu, null, null, 'primary');
+    const calcU = this.calculateDay(dateStr, uKids, isHoliday ? 'सुट्टी' : selectedMenu, null, null, 'upper');
+
+    const totalKids = pKids + uKids;
+    const totalRice = (calcP.quantities?.rice || 0) + (calcU.quantities?.rice || 0);
+    
+    const getPulseSum = (q = {}) => (q.moong_dal || 0) + (q.tur_dal || 0) + (q.masoor_dal || 0) + (q.matki || 0) + (q.moong || 0) + (q.chavali || 0) + (q.chana || 0) + (q.vatana || 0) + (q.soyavadi || 0);
+    const totalPulse = getPulseSum(calcP.quantities) + getPulseSum(calcU.quantities);
+    const totalFuel = (calcP.fuelCost || 0) + (calcU.fuelCost || 0);
+
+    const elKids = document.getElementById('dualPreviewTotalKids');
+    const elRice = document.getElementById('dualPreviewTotalRice');
+    const elPulse = document.getElementById('dualPreviewTotalPulse');
+    const elFuel = document.getElementById('dualPreviewTotalFuel');
+    const elMenuBadge = document.getElementById('dualPreviewMenuBadge');
+
+    if (elKids) elKids.textContent = `${totalKids} मुले`;
+    if (elRice) elRice.textContent = `${totalRice.toFixed(2)} kg`;
+    if (elPulse) elPulse.textContent = `${totalPulse.toFixed(2)} kg`;
+    if (elFuel) elFuel.textContent = `₹${totalFuel.toFixed(2)}`;
+    if (elMenuBadge) elMenuBadge.textContent = isHoliday ? 'सुट्टी' : `मेनू: ${selectedMenu}`;
   },
 
   closeDualEntryModal() {
@@ -5262,42 +5407,63 @@ const app = {
   },
 
   saveDualRecords() {
-    const dateInput = document.getElementById('entryDate');
-    if (!dateInput || !dateInput.value) return;
-    const dateStr = dateInput.value;
+    const modalDateInput = document.getElementById('dualEntryDate');
+    const mainDateInput = document.getElementById('entryDate');
+    const dateStr = (modalDateInput && modalDateInput.value) ? modalDateInput.value : (mainDateInput?.value || '');
+    if (!dateStr) {
+      this.showToast('कृपया वैध तारीख निवडा.', 'danger');
+      return;
+    }
 
     const pInp = document.getElementById('dualEntryPrimaryChildren');
+    const pPlatesInp = document.getElementById('dualEntryPrimaryPlates');
     const uInp = document.getElementById('dualEntryUpperChildren');
-    const menuSelect = document.getElementById('entryMenu');
-    const customMenuInput = document.getElementById('entryCustomMenuName');
+    const uPlatesInp = document.getElementById('dualEntryUpperPlates');
+    const menuSelect = document.getElementById('dualEntryMenuSelect') || document.getElementById('entryMenu');
+    const customMenuInput = document.getElementById('dualEntryCustomMenuName') || document.getElementById('entryCustomMenuName');
+    const holidayCheck = document.getElementById('dualEntryHolidayCheck');
     const holidayToggle = document.getElementById('entryHolidayToggle');
-    const remarksInput = document.getElementById('entryRemarks');
+    const remarksInput = document.getElementById('dualEntryRemarks') || document.getElementById('entryRemarks');
+    const cookInput = document.getElementById('dualEntryCook') || document.getElementById('entryCook');
 
     const pChildren = Math.max(0, parseInt(pInp?.value) || 0);
+    const pPlates = (pPlatesInp && pPlatesInp.value !== '') ? Math.max(0, parseInt(pPlatesInp.value) || 0) : pChildren;
     const uChildren = Math.max(0, parseInt(uInp?.value) || 0);
-    const isHoliday = (holidayToggle && holidayToggle.value === 'holiday');
+    const uPlates = (uPlatesInp && uPlatesInp.value !== '') ? Math.max(0, parseInt(uPlatesInp.value) || 0) : uChildren;
+    const isHoliday = holidayCheck ? holidayCheck.checked : (holidayToggle && holidayToggle.value === 'holiday');
 
     let menuName = "वरणभात";
     if (isHoliday) {
       menuName = "सुट्टी";
     } else if (menuSelect && menuSelect.value === '__custom__') {
       menuName = (customMenuInput && customMenuInput.value.trim()) ? customMenuInput.value.trim() : "इतर मेन्यू";
-    } else if (menuSelect) {
+    } else if (menuSelect && menuSelect.value) {
       menuName = menuSelect.value;
     }
 
     const remarks = remarksInput ? remarksInput.value.trim() : '';
+    const cookName = cookInput ? cookInput.value.trim() : '';
+
+    // Remove tombstones for this date so newly saved records aren't discarded on cloud sync
+    if (this.data.deletedRecordDates && Array.isArray(this.data.deletedRecordDates)) {
+      this.data.deletedRecordDates = this.data.deletedRecordDates.filter(d => d !== dateStr);
+    }
+    if (this.data.deletedRecordDatesUpper && Array.isArray(this.data.deletedRecordDatesUpper)) {
+      this.data.deletedRecordDatesUpper = this.data.deletedRecordDatesUpper.filter(d => d !== dateStr);
+    }
 
     // 1. Primary Record (1-5)
-    const recPrimary = this.calculateDay(dateStr, isHoliday ? 0 : pChildren, menuName, isHoliday ? 0 : pChildren, null, 'primary');
+    const recPrimary = this.calculateDay(dateStr, isHoliday ? 0 : pChildren, menuName, isHoliday ? 0 : pPlates, null, 'primary');
     recPrimary.remarks = remarks;
+    if (cookName) recPrimary.cookName = cookName;
     if (!isHoliday && pChildren > 0) recPrimary.menuName = this.getDisplayMenuName(recPrimary);
     if (!this.data.records) this.data.records = {};
     this.data.records[dateStr] = recPrimary;
 
     // 2. Upper Primary Record (6-8)
-    const recUpper = this.calculateDay(dateStr, isHoliday ? 0 : uChildren, menuName, isHoliday ? 0 : uChildren, null, 'upper');
+    const recUpper = this.calculateDay(dateStr, isHoliday ? 0 : uChildren, menuName, isHoliday ? 0 : uPlates, null, 'upper');
     recUpper.remarks = remarks;
+    if (cookName) recUpper.cookName = cookName;
     if (!isHoliday && uChildren > 0) recUpper.menuName = this.getDisplayMenuName(recUpper);
     if (!this.data.recordsUpper) this.data.recordsUpper = {};
     this.data.recordsUpper[dateStr] = recUpper;
@@ -5339,6 +5505,9 @@ const app = {
     }
 
     this.saveState(false, true);
+    if (typeof cloudSync !== 'undefined' && cloudSync.pushToCloud) {
+      cloudSync.pushToCloud(true);
+    }
     this.closeDualEntryModal();
     this.showToast(`✅ दि. ${dateStr} ची १-५ (${pChildren} मुले) आणि ६-८ (${uChildren} मुले) दोन्ही नोंदी यशस्वीरित्या जतन झाल्या!`, 'success');
     this.refreshAllViews();
@@ -6508,10 +6677,13 @@ const app = {
     const fbCalcPlatesEl = document.getElementById('fbCalcPlates');
     if (fbCalcPlatesEl) fbCalcPlatesEl.textContent = summary.totalPlates;
 
+    const effectiveFuelRate = (summary.totalPlates > 0 && summary.totalFuel > 0) 
+      ? +(summary.totalFuel / summary.totalPlates).toFixed(2) 
+      : fuelRate;
     const fbFuelRateEl = document.getElementById('fbFuelRate');
-    if (fbFuelRateEl) fbFuelRateEl.textContent = fuelRate;
+    if (fbFuelRateEl) fbFuelRateEl.textContent = effectiveFuelRate;
 
-    const fuelAmt = Math.round(summary.totalPlates * fuelRate);
+    const fuelAmt = Math.round(summary.totalFuel);
     const fbFuelTotalEl = document.getElementById('fbFuelTotal');
     if (fbFuelTotalEl) fbFuelTotalEl.textContent = fuelAmt;
 
@@ -6611,10 +6783,10 @@ const app = {
       const dec = rate < 0.001 ? 3 : 2;
       const dec4 = rate < 0.001 ? 4 : 2;
 
-      const defaultDemand = +(rate * pat * 20).toFixed(dec);
+      const defaultDemand = 0;
       const demandVal = (customDemands && customDemands[yearMonth] && customDemands[yearMonth][item.key] !== undefined)
         ? customDemands[yearMonth][item.key]
-        : defaultDemand;
+        : 0;
 
       const remarkVal = (this.data.formBRemarks && this.data.formBRemarks[yearMonth] && this.data.formBRemarks[yearMonth][item.key])
         ? this.data.formBRemarks[yearMonth][item.key]
@@ -6748,7 +6920,7 @@ const app = {
       }
     }
     this.renderFormB();
-    this.showToast('✅ पुढील महिन्याची मागणी 20 दिवसांच्या नियमानुसार पूर्ववत केली!', 'success');
+    this.showToast('✅ पुढील महिन्याची धान्य मागणी शून्य (०) पूर्ववत केली!', 'success');
   },
 
   printFormB() {
@@ -8674,7 +8846,9 @@ const app = {
       } else {
         dmgs.forEach((d, idx) => {
           if (!d.id) {
-            d.id = 'dmg_' + (d.date ? d.date.replace(/-/g, '') : 'old') + '_' + idx + '_' + Math.random().toString(36).substr(2, 6);
+            const itemsKeys = Object.keys(d.items || {}).filter(k => parseFloat(d.items[k]) > 0).sort();
+            const itemsSig = itemsKeys.map(k => `${k}_${parseFloat(d.items[k])}`).join('_');
+            d.id = 'dmg_' + (d.date ? d.date.replace(/-/g, '') : 'old') + '_' + (d.section || filter || 'primary') + '_' + (itemsSig || idx);
           }
           const itemsList = Object.keys(d.items || {})
             .filter(k => parseFloat(d.items[k]) > 0)
@@ -9313,11 +9487,15 @@ const app = {
 
     const sec = this.currentDamagedStockModalSection;
     const targetDamaged = this.getActiveDamaged(sec);
+    const dateVal = dateInput.value;
+    const itemsKeys = Object.keys(items).sort();
+    const itemsSig = itemsKeys.map(k => `${k}:${items[k]}`).join('|');
+    const autoId = `dmg_${dateVal.replace(/-/g, '')}_${sec}_${Date.now()}`;
 
     targetDamaged.push({
-      id: 'dmg_' + Date.now(),
+      id: autoId,
       section: sec,
-      date: dateInput.value,
+      date: dateVal,
       reason: reasonInput ? (reasonInput.value.trim() || 'खराब / मुदत संपलेले धान्य') : 'खराब धान्य',
       items: items,
       recordedBy: this.data.settings.headmaster || 'मुख्याध्यापक',
@@ -9325,6 +9503,9 @@ const app = {
     });
 
     this.saveState(false, true);
+    if (typeof cloudSync !== 'undefined' && typeof cloudSync.pushToCloud === 'function') {
+      cloudSync.pushToCloud(true);
+    }
     this.closeAddDamagedStockModal();
     this.refreshAllViews();
     this.showToast(`✅ ${sec === 'upper' ? 'इ. ६ ते ८' : 'इ. १ ते ५'} खराब धान्य नोंदवले गेले व वापरात आपोआप जोडले गेले!`, 'success');
@@ -9334,6 +9515,15 @@ const app = {
     if (confirm('तुम्हाला खात्री आहे का? ही खराब धान्याची नोंद हटवायची आहे?')) {
       const targetDamaged = (section === 'upper') ? this.data.damagedStockUpper : this.data.damagedStock;
       if (!targetDamaged) return;
+
+      const getDamagedSig = (item, secName) => {
+        if (!item) return '';
+        const dDate = (item.date || '').trim();
+        const dSec = item.section || secName || 'primary';
+        const dKeys = Object.keys(item.items || {}).filter(k => parseFloat(item.items[k]) > 0).sort();
+        const dItems = dKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
+        return `${dDate}#${dSec}#${dItems}`;
+      };
 
       let index = -1;
       if (typeof idOrIdx === 'string' && isNaN(Number(idOrIdx))) {
@@ -9356,12 +9546,20 @@ const app = {
           if (aIdx !== -1) {
             const delItem = altDamaged[aIdx];
             const delId = delItem.id || ('dmg_' + (delItem.date || ''));
+            const delSig = getDamagedSig(delItem, altSec);
             if (!this.data.deletedDamagedIds) this.data.deletedDamagedIds = [];
             if (!this.data.deletedDamagedIds.includes(delId)) {
               this.data.deletedDamagedIds.push(delId);
             }
+            if (!this.data.deletedDamagedSigs) this.data.deletedDamagedSigs = [];
+            if (delSig && !this.data.deletedDamagedSigs.includes(delSig)) {
+              this.data.deletedDamagedSigs.push(delSig);
+            }
             altDamaged.splice(aIdx, 1);
             this.saveState(false, true);
+            if (typeof cloudSync !== 'undefined' && typeof cloudSync.pushToCloud === 'function') {
+              cloudSync.pushToCloud(true);
+            }
             this.refreshAllViews();
             this.showToast('खराब धान्याची नोंद हटवण्यात आली.', 'warning');
             return;
@@ -9372,12 +9570,20 @@ const app = {
       if (index !== -1 && targetDamaged[index]) {
         const delItem = targetDamaged[index];
         const delId = delItem.id || ('dmg_' + (delItem.date || ''));
+        const delSig = getDamagedSig(delItem, section);
         if (!this.data.deletedDamagedIds) this.data.deletedDamagedIds = [];
         if (!this.data.deletedDamagedIds.includes(delId)) {
           this.data.deletedDamagedIds.push(delId);
         }
+        if (!this.data.deletedDamagedSigs) this.data.deletedDamagedSigs = [];
+        if (delSig && !this.data.deletedDamagedSigs.includes(delSig)) {
+          this.data.deletedDamagedSigs.push(delSig);
+        }
         targetDamaged.splice(index, 1);
         this.saveState(false, true);
+        if (typeof cloudSync !== 'undefined' && typeof cloudSync.pushToCloud === 'function') {
+          cloudSync.pushToCloud(true);
+        }
         this.refreshAllViews();
         this.showToast('खराब धान्याची नोंद हटवण्यात आली.', 'warning');
       }
@@ -9727,7 +9933,18 @@ const app = {
       }
     });
 
+    const nowIso = new Date().toISOString();
+    targetStock._updatedAt = nowIso;
+    if (sec === 'upper') {
+      this.data.initialStockUpperUpdatedAt = nowIso;
+    } else {
+      this.data.initialStockUpdatedAt = nowIso;
+    }
+
     this.saveState(false, true);
+    if (typeof cloudSync !== 'undefined' && typeof cloudSync.pushToCloud === 'function') {
+      cloudSync.pushToCloud(true);
+    }
     this.closeEditOldStockModal();
     this.refreshAllViews();
     this.showToast(`✅ १ एप्रिल रोजी शिल्लक धान्य साठा (${sec === 'upper' ? 'इ. ६ ते ८' : 'इ. १ ते ५'}) यशस्वीरित्या जतन झाला!`, 'success');
@@ -9906,7 +10123,14 @@ const app = {
       }
     });
 
+    const nowIso = new Date().toISOString();
+    this.data.initialStock._updatedAt = nowIso;
+    this.data.initialStockUpdatedAt = nowIso;
+
     this.saveState(false, true);
+    if (typeof cloudSync !== 'undefined' && typeof cloudSync.pushToCloud === 'function') {
+      cloudSync.pushToCloud(true);
+    }
     this.refreshAllViews();
     this.showToast('✅ सेटिंग्जमधून १ एप्रिल रोजी शिल्लक साठा सर्व पानांवर यशस्वीरित्या जतन झाला!', 'success');
   },
@@ -10576,6 +10800,7 @@ const app = {
       const val = parseFloat(input.value);
       if (!isNaN(val)) {
         this.data.initialStock[key] = val;
+        this.data.initialStock._updatedAt = new Date().toISOString();
         this.saveState();
         this.renderStockView();
         this.renderDailyRegister();
@@ -11093,6 +11318,8 @@ const app = {
 
     const nowIso = new Date().toISOString();
     this.data.settings.updatedAt = nowIso;
+    this.data.initialStock._updatedAt = nowIso;
+    this.data.initialStockUpdatedAt = nowIso;
 
     this.saveState(false, true);
     this.refreshAllViews();
