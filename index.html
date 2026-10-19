@@ -2879,7 +2879,7 @@
     </div>
     <!-- Modal: Dual Section Simultaneous Entry (१ ते ५ आणि ६ ते ८ एकत्र नोंद) -->
     <div id="dualEntryModal" class="modal-backdrop" style="display: none; z-index: 1000008;">
-      <div class="modal-dialog" style="max-width: 650px;">
+      <div class="modal-dialog" style="max-width: 680px;">
         <div class="modal-content shadow-lg">
           <div class="modal-header" style="background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff;">
             <div>
@@ -2903,13 +2903,41 @@
                   <small class="text-muted" id="dualEntryDateDisplay"></small>
                 </div>
                 <div class="form-group flex-2 mb-0">
-                  <label for="dualEntryMenuSelect" class="form-label font-weight-bold">🍲 आजचा मेनू</label>
+                  <label for="dualEntryMenuSelect" class="form-label font-weight-bold d-flex justify-content-between align-items-center">
+                    <span>🍲 आजचा मेनू</span>
+                    <span class="selection-mode-toggle" style="font-size: 0.75rem;">
+                      <label class="radio-pill" style="padding: 2px 6px; font-size: 0.75rem; cursor: pointer;">
+                        <input type="radio" name="dualGrainSelectMode" id="dualGrainModeAuto" value="auto" checked onchange="app.onDualGrainModeChange('auto')">
+                        <span>आपोआप</span>
+                      </label>
+                      <label class="radio-pill" style="padding: 2px 6px; font-size: 0.75rem; cursor: pointer;">
+                        <input type="radio" name="dualGrainSelectMode" id="dualGrainModeManual" value="manual" onchange="app.onDualGrainModeChange('manual')">
+                        <span>डाळ निवडा</span>
+                      </label>
+                    </span>
+                  </label>
                   <select id="dualEntryMenuSelect" class="form-control" onchange="app.onDualEntryMenuChanged()">
                     <!-- Populated dynamically -->
                   </select>
                   <div id="dualEntryCustomMenuRow" style="display: none; margin-top: 6px;">
                     <input type="text" id="dualEntryCustomMenuName" class="form-control form-control-sm" placeholder="स्वतःच्या मेनूचे नाव लिहा..." oninput="app.updateDualEntryPreview()">
                   </div>
+                </div>
+              </div>
+
+              <!-- Dual Manual Grains / Dal Selection Box -->
+              <div id="dualManualGrainsBox" class="manual-grains-box mb-3" style="display: none; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 10px;">
+                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                  <div class="d-flex align-items-center gap-2">
+                    <span style="font-weight: 800; color: #166534; font-size: 0.88rem;">🥣 डाळ / कडधान्य निवडा:</span>
+                    <select id="dualEntryDalSelect" class="form-select form-select-sm" style="font-size: 0.84rem; font-weight: 700; max-width: 230px; border-color: #86efac; color: #166534;" onchange="app.onDualDalDropdownChanged()">
+                      <!-- Populated dynamically via JS -->
+                    </select>
+                  </div>
+                  <small class="text-muted" style="font-size: 0.75rem;">(१-५ व ६-८ दोन्ही वर्गांना हेच धान्य लागू होईल)</small>
+                </div>
+                <div class="grains-checkbox-grid" id="dualManualGrainsCheckboxGrid" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  <!-- Populated dynamically via JS -->
                 </div>
               </div>
 
@@ -3507,10 +3535,10 @@
   <div id="printSlipContainer" class="print-only-slip"></div>
 
   <!-- Application Logic Scripts -->
-  <script src="firebase-config.js?v=20261019_1"></script>
-  <script src="cloud-sync.js?v=20261019_1"></script>
-  <script src="excel-engine.js?v=20261019_1"></script>
-  <script src="test-suite.js?v=20261019_1"></script>
-  <script src="app.js?v=20261019_1"></script>
+  <script src="firebase-config.js?v=20261020_4"></script>
+  <script src="cloud-sync.js?v=20261020_4"></script>
+  <script src="excel-engine.js?v=20261020_4"></script>
+  <script src="test-suite.js?v=20261020_4"></script>
+  <script src="app.js?v=20261020_4"></script>
 </body>
 </html>

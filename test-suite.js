@@ -439,6 +439,264 @@ const testSuite = {
           details: `साठा ० जतन (Timestamp Authority): ${zeroStockPreserved ? 'होय' : 'नाही'}, खराब धान्य डिलीट कायम (Signature Tombstone): ${damagedTombstoneWorks ? 'होय' : 'नाही'}, एकत्रित नोंद व प्रिव्ह्यू फंक्शन्स: ${dualMethodsOk ? 'उपलब्ध' : 'नाही'}, दैनिक नोंदीत इंधन दर गोठवला: ${hasFrozenFuelRate ? 'होय' : 'नाही'}`
         };
       }
+    },
+    {
+      name: "Test 19: ड्युअल नोंद स्तर स्वातंत्र्य, खराब धान्य थेट क्लाऊड डिलीट, २-वे मॅन्युअल सिंक व इंधन फॉलबॅक",
+      description: "प्राथमिक शाळेतही दोन्ही नोंदी एकत्र मॉडेल उघडणे, थेट क्लाऊडवरून खराब धान्य पुसले जाणे, मॅन्युअल सिंकने २-वे सिंक होणे आणि जुन्या नोंदींवरही अचूक इंधन खर्च येणे.",
+      run() {
+        // 1. Dual Entry Modal works even when schoolLevel was 'primary'
+        const origLevel = app.data?.settings?.schoolLevel;
+        if (app.data && app.data.settings) app.data.settings.schoolLevel = 'primary';
+        let dualOpenedSafely = false;
+        try {
+          app.openDualEntryModal();
+          const modal = document.getElementById('dualEntryModal');
+          dualOpenedSafely = (modal && modal.style.display !== 'none');
+          app.closeDualEntryModal();
+        } catch (e) {
+          dualOpenedSafely = false;
+        } finally {
+          if (app.data && app.data.settings && origLevel) app.data.settings.schoolLevel = origLevel;
+        }
+
+        // 2. Direct cloud purge method exists
+        const hasCloudPurge = typeof cloudSync.deleteDamagedStockFromCloud === 'function';
+
+        // 3. Relaxed signature works
+        const testDmg = { date: '2026-08-15', section: 'primary', items: { soyavadi: 5 } };
+        const relSig = cloudSync.getDamagedRelaxedSignature(testDmg);
+        const relSigMatches = (relSig === '2026-08-15#soyavadi:5');
+
+        // 4. Two-way manual sync function exists
+        const hasManualSync = typeof app.handleCloudStatusClick === 'function';
+
+        // 5. Monthly stock computes fuel even if legacy record lacks fuelCost
+        const fakeRecord = { date: '2026-10-01', children: 20, plates: 20, isHoliday: false, quantities: { rice: 2.0 } };
+        const savedRec = app.data?.records ? app.data.records['2026-10-01'] : null;
+        if (!app.data.records) app.data.records = {};
+        app.data.records['2026-10-01'] = fakeRecord;
+        const monthSummary = app.computeMonthlyStock('2026-10', 'primary');
+        const fuelFallbackWorks = (typeof monthSummary.totalFuel === 'number' && monthSummary.totalFuel > 0);
+        if (savedRec) app.data.records['2026-10-01'] = savedRec; else delete app.data.records['2026-10-01'];
+
+        const passed = dualOpenedSafely && hasCloudPurge && relSigMatches && hasManualSync && fuelFallbackWorks;
+
+        return {
+          passed,
+          details: `प्राथमिक शाळेत ड्युअल मॉडेल उघडले: ${dualOpenedSafely ? 'होय' : 'नाही'}, थेट क्लाऊड डिलीट पद्धत: ${hasCloudPurge ? 'उपलब्ध' : 'नाही'}, रिलॅक्स स्वाक्षरी जुळली: ${relSigMatches ? 'होय' : 'नाही'}, २-वे मॅन्युअल सिंक: ${hasManualSync ? 'सक्षम' : 'नाही'}, इंधन फॉलबॅक कार्य: ${fuelFallbackWorks ? 'होय' : 'नाही'}`
+        };
+      }
+    },
+    {
+      name: "Test 20: calculateDay सुट्टी/शून्य उपस्थिती सुरक्षितता व ड्युअल नोंद प्रिव्ह्यू",
+      description: "सुट्टी, ० उपस्थिती, प्राथमिक आणि उच्च प्राथमिक स्तरावर calculateDay न अडखळता चालणे (activeFuelRate स्कोप त्रुटी कायमस्वरूपी दूर).",
+      run() {
+        let holSafe = false;
+        let zeroSafe = false;
+        let primSafe = false;
+        let upperSafe = false;
+
+        try {
+          const resHol = app.calculateDay('2026-10-18', 0, 'सुट्टी');
+          holSafe = (resHol && resHol.isHoliday === true && resHol.fuelRate === 0 && resHol.fuelCost === 0);
+        } catch (e) {
+          holSafe = false;
+        }
+
+        try {
+          const resZero = app.calculateDay('2026-10-20', 0, 'वरणभात');
+          zeroSafe = (resZero && resZero.isHoliday === true && resZero.fuelRate === 0 && resZero.fuelCost === 0);
+        } catch (e) {
+          zeroSafe = false;
+        }
+
+        try {
+          const resPrim = app.calculateDay('2026-10-20', 10, 'वरणभात', null, null, 'primary');
+          primSafe = (resPrim && resPrim.isHoliday === false && resPrim.fuelRate > 0 && resPrim.fuelCost > 0);
+        } catch (e) {
+          primSafe = false;
+        }
+
+        try {
+          const resUpper = app.calculateDay('2026-10-20', 10, 'वरणभात', null, null, 'upper');
+          upperSafe = (resUpper && resUpper.isHoliday === false && resUpper.fuelRate > 0 && resUpper.fuelCost > 0);
+        } catch (e) {
+          upperSafe = false;
+        }
+
+        const passed = holSafe && zeroSafe && primSafe && upperSafe;
+        return {
+          passed,
+          details: `सुट्टी गणना: ${holSafe ? 'यशस्वी' : 'त्रुटी'}, शून्य उपस्थिती: ${zeroSafe ? 'यशस्वी' : 'त्रुटी'}, प्राथमिक गणना: ${primSafe ? 'यशस्वी' : 'त्रुटी'}, उच्च प्राथमिक गणना: ${upperSafe ? 'यशस्वी' : 'त्रुटी'}`
+        };
+      }
+    },
+    {
+      name: "Test 21: ड्युअल नोंद (दोन्ही एकत्र नोंद) डाळ निवड पर्याय पडताळणी",
+      description: "१ ते ५ आणि ६ ते ८ एकत्र नोंद करताना 'डाळ निवडा' पर्याय (Manual Dal Selection), कस्टम डाळ निवडणे आणि अचूक धान्य व मेनू नाव जतन होणे.",
+      run() {
+        // 1. Verify helper methods exist
+        const hasPopulate = typeof app.populateDualDalDropdown === 'function';
+        const hasRenderCheckboxes = typeof app.renderDualManualGrainsCheckboxes === 'function';
+        const hasDalDropdownChange = typeof app.onDualDalDropdownChanged === 'function';
+        const hasModeChange = typeof app.onDualGrainModeChange === 'function';
+
+        // 2. Test manual grains calculation for dual entry
+        const testDate = '2026-10-21';
+        const pKids = 10;
+        const uKids = 15;
+        const customGrains = ['rice', 'moong_dal'];
+        const reflectedMenu = app.getReflectedMenuName('वरणभात', false, '', customGrains);
+
+        const calcP = app.calculateDay(testDate, pKids, reflectedMenu, pKids, customGrains, 'primary');
+        const calcU = app.calculateDay(testDate, uKids, reflectedMenu, uKids, customGrains, 'upper');
+
+        const primaryHasMoong = calcP.quantities && calcP.quantities.moong_dal > 0 && !calcP.quantities.tur_dal;
+        const upperHasMoong = calcU.quantities && calcU.quantities.moong_dal > 0 && !calcU.quantities.tur_dal;
+        const correctRice = (calcP.quantities?.rice === 1.0) && (calcU.quantities?.rice === 2.25);
+        const correctMoong = (calcP.quantities?.moong_dal === 0.20) && (calcU.quantities?.moong_dal === 0.45);
+
+        const passed = hasPopulate && hasRenderCheckboxes && hasDalDropdownChange && hasModeChange &&
+                       primaryHasMoong && upperHasMoong && correctRice && correctMoong;
+
+        return {
+          passed,
+          details: `फंक्शन्स उपलब्ध: ${hasPopulate && hasRenderCheckboxes ? 'होय' : 'नाही'}, प्राथमिक मूगडाळ गणना: ${primaryHasMoong ? 'अचूक' : 'चूक'}, उच्च प्राथमिक मूगडाळ: ${upperHasMoong ? 'अचूक' : 'चूक'}, तांदूळ/डाळ प्रमाण: ${correctRice && correctMoong ? 'तंतोतंत' : 'विसंगत'}`
+        };
+      }
+    },
+    {
+      name: "Test 22: एप्रिल अखेरचा तांदूळ साठा आणि मे सुरुवातीचा तांदूळ साठा तंतोतंत जुळणी (Month Transition Parity)",
+      description: "एप्रिल महिन्याचा अखेरचा शिल्लक तांदूळ साठा (Closing Balance) आणि १ मे चा सुरुवातीचा साठा (Opening Balance) तंतोतंत जुळणे, सुट्टीच्या दिवसातील तांदूळ वजा न होणे.",
+      run() {
+        if (typeof app === 'undefined') return { passed: false, details: "app ऑब्जेक्ट उपलब्ध नाही" };
+
+        const origRecs = JSON.parse(JSON.stringify(app.data.records || {}));
+        const origInit = JSON.parse(JSON.stringify(app.data.initialStock || {}));
+        const origRcpt = JSON.parse(JSON.stringify(app.data.stockReceipts || []));
+        const origDmg = JSON.parse(JSON.stringify(app.data.damagedStock || []));
+
+        try {
+          // Setup controlled test scenario
+          app.data.initialStock = { rice: 100.0 };
+          app.data.stockReceipts = [
+            { id: 'rcpt_apr_1', date: '2026-04-05', items: { rice: 50.0 } }
+          ];
+          app.data.damagedStock = [
+            { id: 'dmg_apr_1', date: '2026-04-15', items: { rice: 5.0 }, section: 'primary' }
+          ];
+          app.data.records = {
+            // Working day 1: 50 children = 5.0 kg rice
+            '2026-04-01': { date: '2026-04-01', children: 50, plates: 50, isHoliday: false, quantities: { rice: 5.0 } },
+            // Holiday with residual ghost quantities (6.4 kg): must NOT be deducted
+            '2026-04-03': { date: '2026-04-03', children: 0, plates: 0, isHoliday: true, quantities: { rice: 6.4 } },
+            // Working day 2: 60 children = 6.0 kg rice
+            '2026-04-10': { date: '2026-04-10', children: 60, plates: 60, isHoliday: false, quantities: { rice: 6.0 } }
+          };
+
+          // Compute April Month Summary:
+          // Initial = 100, Received = 50 -> Available = 150
+          // Consumed = 5.0 + 6.0 (cooking) + 5.0 (damaged) = 16.0
+          // Expected April Closing = 150 - 16 = 134.0
+          const aprStock = app.computeMonthlyStock('2026-04', 'primary');
+          const aprCloseRice = +(aprStock.closing?.rice || 0);
+
+          // Compute May 1st Opening Balance
+          const mayOpenRice = +(app.computeStockForDate('2026-05-01', 'primary').rice || 0);
+
+          const exactlyEqual = Math.abs(aprCloseRice - mayOpenRice) < 0.0001;
+          const matchesExpected = Math.abs(aprCloseRice - 134.0) < 0.0001;
+          const passed = exactlyEqual && matchesExpected;
+
+          return {
+            passed,
+            details: `एप्रिल अखेर शिल्लक: ${aprCloseRice.toFixed(3)} kg, मे १ सुरुवातीचा साठा: ${mayOpenRice.toFixed(3)} kg, फरक: ${(aprCloseRice - mayOpenRice).toFixed(4)} kg, अपेक्षित: 134.000 kg`
+          };
+        } finally {
+          app.data.records = origRecs;
+          app.data.initialStock = origInit;
+          app.data.stockReceipts = origRcpt;
+          app.data.damagedStock = origDmg;
+        }
+      }
+    },
+    {
+      name: "Test 23: खराब धान्य नोंद हटवणे व क्लाऊड सिंक सुरक्षा (Damaged Stock Tombstone & Anti-Resurrection)",
+      description: "खराब धान्याची नोंद हटवल्यानंतर (Primary/Upper/Legacy without section) ती क्लाऊड सिंक किंवा रीफ्रेश झाल्यावर पुन्हा न येणे (Anti-Resurrection Tombstone).",
+      run() {
+        if (typeof cloudSync === 'undefined') return { passed: false, details: "cloudSync उपलब्ध नाही" };
+
+        const testItem = {
+          id: 'dmg_test_20260410_001',
+          date: '2026-04-10',
+          items: { rice: 5.5 },
+          reason: 'किड लागलेले'
+        };
+
+        const strictSig = cloudSync.getDamagedSignature(testItem, 'upper');
+        const relSig = cloudSync.getDamagedRelaxedSignature(testItem);
+
+        // Simulate remote having legacy damaged item WITHOUT section property
+        const remoteItemWithoutSection = {
+          date: '2026-04-10',
+          items: { rice: 5.5 },
+          reason: 'किड लागलेले'
+        };
+
+        const remoteList = [remoteItemWithoutSection];
+        const localList = [];
+        const deletedIds = [testItem.id];
+        const deletedSigs = [strictSig, relSig];
+
+        const merged = cloudSync.mergeDamagedStockList(localList, remoteList, deletedIds, deletedSigs);
+        const resurrectionPrevented = merged.length === 0;
+
+        return {
+          passed: resurrectionPrevented,
+          details: `खराब धान्य रिमोट पुनरुत्थान रोखले: ${resurrectionPrevented ? 'होय (0 नोंदी पुनरुत्थान)' : 'नाही (पुन्हा आले)'}, शिग्नेचर मॅच: ${strictSig} & ${relSig}`
+        };
+      }
+    },
+    {
+      name: "Test 24: धान्य उचल / उसनवार नोंद हटवणे व क्लाऊड सिंक संरक्षण (Stock Transfer Tombstone & Anti-Resurrection)",
+      description: "उसनवार नोंद हटवल्यानंतर (Primary/Upper Stock Transfer) टोंबस्टोन तयार होणे व क्लाऊड सिंक किंवा रीफ्रेश झाल्यावर नोंद पुन्हा न येणे.",
+      run() {
+        if (typeof cloudSync === 'undefined') return { passed: false, details: "cloudSync उपलब्ध नाही" };
+
+        const testTransfer = {
+          id: 'trf_test_20261013_001',
+          date: '2026-10-13',
+          direction: 'upper_to_primary',
+          fromSection: 'upper',
+          toSection: 'primary',
+          items: { rice: 20 },
+          reason: 'उचल / उसनवारी नोंद'
+        };
+
+        const strictSig = cloudSync.getTransferSignature(testTransfer);
+        const relSig = cloudSync.getTransferRelaxedSignature(testTransfer);
+
+        // Remote has the transfer
+        const remoteTransfer = {
+          id: 'trf_test_20261013_001',
+          date: '2026-10-13',
+          direction: 'upper_to_primary',
+          items: { rice: 20 }
+        };
+
+        const remoteList = [remoteTransfer];
+        const localList = [];
+        const deletedIds = [testTransfer.id];
+        const deletedSigs = [strictSig, relSig];
+
+        const merged = cloudSync.mergeStockTransfersList(localList, remoteList, deletedIds, deletedSigs);
+        const resurrectionPrevented = merged.length === 0;
+
+        return {
+          passed: resurrectionPrevented,
+          details: `उसनवार नोंद रिमोट पुनरुत्थान रोखले: ${resurrectionPrevented ? 'होय (0 नोंदी पुनरुत्थान)' : 'नाही (पुन्हा आली)'}, शिग्नेचर: ${strictSig} & ${relSig}`
+        };
+      }
     }
   ],
 
@@ -490,3 +748,7 @@ const testSuite = {
   }
 
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = testSuite;
+}

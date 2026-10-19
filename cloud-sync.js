@@ -415,18 +415,26 @@ const cloudSync = {
   /**
    * Helper: compute deterministic signature for damaged stock
    */
-  getDamagedSignature(item) {
+  getDamagedSignature(item, sectionFallback = 'primary') {
     if (!item || typeof item !== 'object') return '';
     const dateSig = (item.date || '').trim();
-    const secSig = item.section || 'primary';
+    const secSig = item.section || sectionFallback || 'primary';
     const itemsKeys = Object.keys(item.items || {}).filter(k => parseFloat(item.items[k]) > 0).sort();
     const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
     return `${dateSig}#${secSig}#${itemsSig}`;
   },
 
+  getDamagedRelaxedSignature(item) {
+    if (!item || typeof item !== 'object') return '';
+    const dateSig = (item.date || '').trim();
+    const itemsKeys = Object.keys(item.items || {}).filter(k => parseFloat(item.items[k]) > 0).sort();
+    const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
+    return `${dateSig}#${itemsSig}`;
+  },
+
   /**
    * Robust Deduplicating & Tombstone-Aware Merge for Damaged Stock
-   * Uses both unique IDs and deterministic content signatures
+   * Uses both unique IDs and deterministic content signatures (strict & relaxed)
    */
   mergeDamagedStockList(localList, remoteList, deletedIds = [], deletedSigs = []) {
     const l = Array.isArray(localList) ? localList : [];
@@ -434,22 +442,40 @@ const cloudSync = {
     const delSet = new Set(Array.isArray(deletedIds) ? deletedIds : []);
     const delSigSet = new Set(Array.isArray(deletedSigs) ? deletedSigs : []);
 
-    const combined = [...r, ...l].filter(item => {
-      if (!item || typeof item !== 'object') return false;
-      if (item.id && delSet.has(item.id)) return false;
-      const sig = this.getDamagedSignature(item);
-      if (sig && delSigSet.has(sig)) return false;
-      return true;
+    // Also build a set of relaxed signatures (date#items) from all deleted signatures
+    const relaxedDelSigSet = new Set();
+    delSigSet.forEach(s => {
+      if (s) {
+        relaxedDelSigSet.add(s);
+        const parts = s.split('#');
+        if (parts.length === 3) {
+          relaxedDelSigSet.add(`${parts[0]}#${parts[2]}`);
+        }
+      }
     });
+
+    const isDeleted = (item) => {
+      if (!item || typeof item !== 'object') return true;
+      if (item.id && delSet.has(item.id)) return true;
+      const sig = this.getDamagedSignature(item);
+      if (sig && delSigSet.has(sig)) return true;
+      const sigUpper = this.getDamagedSignature(item, 'upper');
+      if (sigUpper && delSigSet.has(sigUpper)) return true;
+      const relSig = this.getDamagedRelaxedSignature(item);
+      if (relSig && (delSigSet.has(relSig) || relaxedDelSigSet.has(relSig))) return true;
+      return false;
+    };
+
+    const combined = [...r, ...l].filter(item => !isDeleted(item));
 
     const seenIds = new Set();
     const seenSigs = new Set();
     const result = [];
 
     combined.forEach(item => {
-      const sig = this.getDamagedSignature(item);
-      if (sig && delSigSet.has(sig)) return;
+      if (isDeleted(item)) return;
 
+      const sig = this.getDamagedSignature(item);
       if (!item.id) {
         item.id = 'dmg_' + (sig ? sig.replace(/[^a-zA-Z0-9_-]/g, '_') : Date.now());
       }
@@ -463,6 +489,81 @@ const cloudSync = {
     });
 
     return result;
+  },
+
+  /**
+   * Helper: compute deterministic signature for inter-section stock transfers / loans
+   */
+  getTransferSignature(item) {
+    if (!item || typeof item !== 'object') return '';
+    const dateSig = (item.date || '').trim();
+    const dirSig = item.direction || `${item.fromSection || ''}_to_${item.toSection || ''}`;
+    const itemsKeys = Object.keys(item.items || {}).filter(k => parseFloat(item.items[k]) > 0).sort();
+    const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
+    return `${dateSig}#${dirSig}#${itemsSig}`;
+  },
+
+  getTransferRelaxedSignature(item) {
+    if (!item || typeof item !== 'object') return '';
+    const dateSig = (item.date || '').trim();
+    const itemsKeys = Object.keys(item.items || {}).filter(k => parseFloat(item.items[k]) > 0).sort();
+    const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
+    return `${dateSig}#${itemsSig}`;
+  },
+
+  /**
+   * Robust Deduplicating & Tombstone-Aware Merge for Stock Transfers (उसनवार / धान्य उचल)
+   */
+  mergeStockTransfersList(localList, remoteList, deletedIds = [], deletedSigs = []) {
+    const l = Array.isArray(localList) ? localList : [];
+    const r = Array.isArray(remoteList) ? remoteList : [];
+    const delSet = new Set(Array.isArray(deletedIds) ? deletedIds : []);
+    const delSigSet = new Set(Array.isArray(deletedSigs) ? deletedSigs : []);
+
+    const relaxedDelSigSet = new Set();
+    delSigSet.forEach(s => {
+      if (s) {
+        relaxedDelSigSet.add(s);
+        const parts = s.split('#');
+        if (parts.length === 3) {
+          relaxedDelSigSet.add(`${parts[0]}#${parts[2]}`);
+        }
+      }
+    });
+
+    const isDeleted = (item) => {
+      if (!item || typeof item !== 'object') return true;
+      if (item.id && delSet.has(item.id)) return true;
+      const sig = this.getTransferSignature(item);
+      if (sig && delSigSet.has(sig)) return true;
+      const relSig = this.getTransferRelaxedSignature(item);
+      if (relSig && (delSigSet.has(relSig) || relaxedDelSigSet.has(relSig))) return true;
+      return false;
+    };
+
+    const combined = [...r, ...l].filter(item => !isDeleted(item));
+
+    const seenIds = new Set();
+    const seenSigs = new Set();
+    const result = [];
+
+    combined.forEach(item => {
+      if (isDeleted(item)) return;
+
+      const sig = this.getTransferSignature(item);
+      if (!item.id) {
+        item.id = 'trf_' + (sig ? sig.replace(/[^a-zA-Z0-9_-]/g, '_') : Date.now());
+      }
+      if (delSet.has(item.id)) return;
+      if (seenIds.has(item.id)) return;
+      if (sig && seenSigs.has(sig)) return;
+
+      seenIds.add(item.id);
+      if (sig) seenSigs.add(sig);
+      result.push(item);
+    });
+
+    return result.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   },
 
   /**
@@ -769,20 +870,21 @@ const cloudSync = {
           ...(dataToPush.deletedDamagedSigs || []),
           ...(remoteData.deletedDamagedSigs || [])
         ]));
+        const mergedDeletedTransfers = Array.from(new Set([
+          ...(dataToPush.deletedStockTransferIds || []),
+          ...(remoteData.deletedStockTransferIds || [])
+        ]));
+        const mergedDeletedTransferSigs = Array.from(new Set([
+          ...(dataToPush.deletedStockTransferSigs || []),
+          ...(remoteData.deletedStockTransferSigs || [])
+        ]));
 
-        // Stock receipts and damaged stock with deduplication & tombstone protection
+        // Stock receipts, damaged stock, and stock transfers with deduplication & tombstone protection
         const mergedReceipts = this.mergeStockReceiptsList(dataToPush.stockReceipts, remoteData.stockReceipts, mergedDeletedReceipts);
         const mergedReceiptsUpper = this.mergeStockReceiptsList(dataToPush.stockReceiptsUpper, remoteData.stockReceiptsUpper, mergedDeletedReceipts);
         const mergedDamaged = this.mergeDamagedStockList(dataToPush.damagedStock, remoteData.damagedStock, mergedDeletedDamaged, mergedDeletedDamagedSigs);
         const mergedDamagedUpper = this.mergeDamagedStockList(dataToPush.damagedStockUpper, remoteData.damagedStockUpper, mergedDeletedDamaged, mergedDeletedDamagedSigs);
-
-        // Stock transfers union (Inter-Section Loans)
-        const mergedTransfers = [...(remoteData.stockTransfers || [])];
-        (dataToPush.stockTransfers || []).forEach(lt => {
-          if (!mergedTransfers.some(mt => mt.id === lt.id || (mt.date === lt.date && mt.direction === lt.direction && JSON.stringify(mt.items) === JSON.stringify(lt.items)))) {
-            mergedTransfers.push(lt);
-          }
-        });
+        const mergedTransfers = this.mergeStockTransfersList(dataToPush.stockTransfers, remoteData.stockTransfers, mergedDeletedTransfers, mergedDeletedTransferSigs);
 
         const mergedIngredients = this.mergeIngredients(dataToPush.ingredients, remoteData.ingredients, false);
         const mergedMenus = this.mergeMenus(dataToPush.menus, remoteData.menus, false);
@@ -806,7 +908,9 @@ const cloudSync = {
           damagedStockUpper: mergedDamagedUpper,
           deletedDamagedIds: mergedDeletedDamaged,
           deletedDamagedSigs: mergedDeletedDamagedSigs,
-          stockTransfers: mergedTransfers
+          stockTransfers: mergedTransfers,
+          deletedStockTransferIds: mergedDeletedTransfers,
+          deletedStockTransferSigs: mergedDeletedTransferSigs
         });
 
         if (typeof app !== 'undefined' && app.data && (typeof app.getActiveUdise === 'function' && app.getActiveUdise() === currentUdise)) {
@@ -829,6 +933,8 @@ const cloudSync = {
           app.data.deletedDamagedIds = mergedDeletedDamaged;
           app.data.deletedDamagedSigs = mergedDeletedDamagedSigs;
           app.data.stockTransfers = mergedTransfers;
+          app.data.deletedStockTransferIds = mergedDeletedTransfers;
+          app.data.deletedStockTransferSigs = mergedDeletedTransferSigs;
           if (typeof app.saveState === 'function') app.saveState(true);
         } else if (typeof localStorage !== 'undefined') {
           const sKey = (typeof app !== 'undefined' && app.getSchoolStorageKey) ? app.getSchoolStorageKey(currentUdise) : `MDM_SCHOOL_DATA_${currentUdise}`;
@@ -1035,20 +1141,21 @@ const cloudSync = {
               ...(baseData.deletedDamagedSigs || []),
               ...(remoteData.deletedDamagedSigs || [])
             ]));
+            const mergedDeletedTransfers = Array.from(new Set([
+              ...(baseData.deletedStockTransferIds || []),
+              ...(remoteData.deletedStockTransferIds || [])
+            ]));
+            const mergedDeletedTransferSigs = Array.from(new Set([
+              ...(baseData.deletedStockTransferSigs || []),
+              ...(remoteData.deletedStockTransferSigs || [])
+            ]));
 
-            // Stock receipts and damaged stock with deduplication & tombstone protection
+            // Stock receipts, damaged stock, and stock transfers with deduplication & tombstone protection
             const mergedReceipts = this.mergeStockReceiptsList(baseData.stockReceipts, remoteData.stockReceipts, mergedDeletedReceipts);
             const mergedReceiptsUpper = this.mergeStockReceiptsList(baseData.stockReceiptsUpper, remoteData.stockReceiptsUpper, mergedDeletedReceipts);
             const mergedDamaged = this.mergeDamagedStockList(baseData.damagedStock, remoteData.damagedStock, mergedDeletedDamaged, mergedDeletedDamagedSigs);
             const mergedDamagedUpper = this.mergeDamagedStockList(baseData.damagedStockUpper, remoteData.damagedStockUpper, mergedDeletedDamaged, mergedDeletedDamagedSigs);
-
-            // Stock transfers union (Inter-Section Loans)
-            const mergedTransfers = [...(remoteData.stockTransfers || [])];
-            (baseData.stockTransfers || []).forEach(lt => {
-              if (!mergedTransfers.some(mt => mt.id === lt.id || (mt.date === lt.date && mt.direction === lt.direction && JSON.stringify(mt.items) === JSON.stringify(lt.items)))) {
-                mergedTransfers.push(lt);
-              }
-            });
+            const mergedTransfers = this.mergeStockTransfersList(baseData.stockTransfers, remoteData.stockTransfers, mergedDeletedTransfers, mergedDeletedTransferSigs);
 
             const mergedTarget = Object.assign({}, baseData, {
               records: mergedRecords,
@@ -1070,6 +1177,8 @@ const cloudSync = {
               deletedDamagedIds: mergedDeletedDamaged,
               deletedDamagedSigs: mergedDeletedDamagedSigs,
               stockTransfers: mergedTransfers,
+              deletedStockTransferIds: mergedDeletedTransfers,
+              deletedStockTransferSigs: mergedDeletedTransferSigs,
               customDemands: Object.assign({}, baseData.customDemands || {}, remoteData.customDemands || {}),
               customDemandsUpper: Object.assign({}, baseData.customDemandsUpper || {}, remoteData.customDemandsUpper || {}),
               formBRemarks: Object.assign({}, baseData.formBRemarks || {}, remoteData.formBRemarks || {}),
@@ -1646,6 +1755,192 @@ const cloudSync = {
       return true;
     } catch(e) {
       console.warn("Could not delete school from cloud:", e);
+      return false;
+    }
+  },
+
+  /**
+   * Direct instant purge of a deleted damaged stock record from Firebase RTDB
+   * Guarantees zero resurrection by updating remote arrays and saving tombstones
+   */
+  async deleteDamagedStockFromCloud(udise, delId, delSig = null, delRelSig = null) {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl || !udise) return false;
+    const cleanUdise = String(udise).trim();
+    const cloudKey = this.getCloudKey(cleanUdise);
+
+    try {
+      const getRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData.json`, {}, 6000);
+      if (getRes.ok) {
+        const remoteAppData = await getRes.json();
+        if (remoteAppData) {
+          // Helper to check if item matches deletion criteria
+          const matchesDel = (d, sectionContext) => {
+            if (!d || typeof d !== 'object') return false;
+            if (delId && d.id === delId) return true;
+            if (delSig && (this.getDamagedSignature(d, sectionContext) === delSig || this.getDamagedSignature(d) === delSig)) return true;
+            if (delRelSig && this.getDamagedRelaxedSignature(d) === delRelSig) return true;
+            if (delSig) {
+              const sigParts = delSig.split('#');
+              const dParts = this.getDamagedSignature(d, sectionContext).split('#');
+              if (sigParts.length === 3 && dParts.length === 3) {
+                // Same date and same items
+                if (sigParts[0] === dParts[0] && sigParts[2] === dParts[2]) return true;
+              }
+            }
+            if (delRelSig) {
+              const rParts = delRelSig.split('#');
+              const dRel = this.getDamagedRelaxedSignature(d).split('#');
+              if (rParts.length === 2 && dRel.length === 2) {
+                if (rParts[0] === dRel[0] && rParts[1] === dRel[1]) return true;
+              }
+            }
+            return false;
+          };
+
+          // Filter Primary damaged stock
+          if (Array.isArray(remoteAppData.damagedStock)) {
+            const filtered = remoteAppData.damagedStock.filter(d => !matchesDel(d, 'primary'));
+            remoteAppData.damagedStock = filtered;
+          }
+
+          // Filter Upper damaged stock
+          if (Array.isArray(remoteAppData.damagedStockUpper)) {
+            const filteredU = remoteAppData.damagedStockUpper.filter(d => !matchesDel(d, 'upper'));
+            remoteAppData.damagedStockUpper = filteredU;
+          }
+
+          // Generate all signature variants for tombstones
+          const sigVariants = [delSig, delRelSig].filter(Boolean);
+          if (delSig) {
+            const parts = delSig.split('#');
+            if (parts.length === 3) {
+              sigVariants.push(`${parts[0]}#primary#${parts[2]}`);
+              sigVariants.push(`${parts[0]}#upper#${parts[2]}`);
+              sigVariants.push(`${parts[0]}#${parts[2]}`);
+            }
+          }
+          if (delRelSig) {
+            const rParts = delRelSig.split('#');
+            if (rParts.length === 2) {
+              sigVariants.push(`${rParts[0]}#primary#${rParts[1]}`);
+              sigVariants.push(`${rParts[0]}#upper#${rParts[1]}`);
+            }
+          }
+
+          // Append tombstones
+          const delIds = Array.from(new Set([...(remoteAppData.deletedDamagedIds || []), delId].filter(Boolean)));
+          const delSigs = Array.from(new Set([...(remoteAppData.deletedDamagedSigs || []), ...sigVariants].filter(Boolean)));
+          remoteAppData.deletedDamagedIds = delIds;
+          remoteAppData.deletedDamagedSigs = delSigs;
+
+          await Promise.allSettled([
+            this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/damagedStock.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(remoteAppData.damagedStock || [])
+            }, 6000),
+            this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/damagedStockUpper.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(remoteAppData.damagedStockUpper || [])
+            }, 6000),
+            this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/deletedDamagedIds.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(delIds)
+            }, 6000),
+            this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/deletedDamagedSigs.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(delSigs)
+            }, 6000)
+          ]);
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn("Direct cloud damaged stock delete error:", e);
+      return false;
+    }
+  },
+
+  /**
+   * Direct instant purge of a deleted stock transfer / loan from Firebase RTDB
+   * Guarantees zero resurrection by updating remote arrays and saving tombstones
+   */
+  async deleteStockTransferFromCloud(udise, delId, delSig = null, delRelSig = null) {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl || !udise) return false;
+    const cleanUdise = String(udise).trim();
+    const cloudKey = this.getCloudKey(cleanUdise);
+
+    try {
+      const getRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData.json`, {}, 6000);
+      if (getRes.ok) {
+        const remoteAppData = await getRes.json();
+        if (remoteAppData) {
+          const matchesDel = (t) => {
+            if (!t || typeof t !== 'object') return false;
+            if (delId && t.id === delId) return true;
+            if (delSig && this.getTransferSignature(t) === delSig) return true;
+            if (delRelSig && this.getTransferRelaxedSignature(t) === delRelSig) return true;
+            if (delSig) {
+              const sigParts = delSig.split('#');
+              const tParts = this.getTransferSignature(t).split('#');
+              if (sigParts.length === 3 && tParts.length === 3) {
+                if (sigParts[0] === tParts[0] && sigParts[2] === tParts[2]) return true;
+              }
+            }
+            if (delRelSig) {
+              const rParts = delRelSig.split('#');
+              const tRel = this.getTransferRelaxedSignature(t).split('#');
+              if (rParts.length === 2 && tRel.length === 2) {
+                if (rParts[0] === tRel[0] && rParts[1] === tRel[1]) return true;
+              }
+            }
+            return false;
+          };
+
+          if (Array.isArray(remoteAppData.stockTransfers)) {
+            remoteAppData.stockTransfers = remoteAppData.stockTransfers.filter(t => !matchesDel(t));
+          }
+
+          const sigVariants = [delSig, delRelSig].filter(Boolean);
+          if (delSig) {
+            const parts = delSig.split('#');
+            if (parts.length === 3) {
+              sigVariants.push(`${parts[0]}#${parts[2]}`);
+            }
+          }
+
+          const delIds = Array.from(new Set([...(remoteAppData.deletedStockTransferIds || []), delId].filter(Boolean)));
+          const delSigs = Array.from(new Set([...(remoteAppData.deletedStockTransferSigs || []), ...sigVariants].filter(Boolean)));
+          remoteAppData.deletedStockTransferIds = delIds;
+          remoteAppData.deletedStockTransferSigs = delSigs;
+
+          await Promise.allSettled([
+            this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/stockTransfers.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(remoteAppData.stockTransfers || [])
+            }, 6000),
+            this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/deletedStockTransferIds.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(delIds)
+            }, 6000),
+            this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/deletedStockTransferSigs.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(delSigs)
+            }, 6000)
+          ]);
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn("Direct cloud stock transfer delete error:", e);
       return false;
     }
   }
