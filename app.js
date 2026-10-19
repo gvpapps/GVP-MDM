@@ -83,6 +83,9 @@ const app = {
       doodh_powder: { id: "doodh_powder", name: "दूध पावडर", defaultRate: 0.015, ratePrimary: 0.015, rateUpper: 0.020, unit: "kg", category: "grain" }
     },
 
+    // Historical / Month-specific Frozen Rates: { [yearMonth]: { [key]: { ratePrimary, rateUpper } } }
+    monthlyRates: {},
+
     // Master Menus & Associated Ingredients (4-Week Cyclic Timetable)
     menus: [
       { id: "veg_pulav", name: "व्हेजिटेबल पुलाव", pulseKey: "vatana", dayCode: 2, dayName: "सोमवार (आठवडा 1, 3)" },
@@ -398,9 +401,35 @@ const app = {
   },
 
   /**
-   * Get Ingredient Grammage Rate (kg per student) for active or specified section
+   * Get Ingredient Grammage Rate (kg per student) for active or specified section,
+   * with full historical month-awareness (dateOrMonth parameter).
    */
-  getIngredientRate(key, section = this.activeSection) {
+  getIngredientRate(key, section = this.activeSection, dateOrMonth = null) {
+    let ym = null;
+    if (typeof dateOrMonth === 'string' && dateOrMonth.length >= 7) {
+      ym = dateOrMonth.substring(0, 7);
+    }
+
+    // 1. Check if an explicit rate is defined in monthlyRates for this year-month
+    if (ym && this.data && this.data.monthlyRates && this.data.monthlyRates[ym]) {
+      const mItem = this.data.monthlyRates[ym][key];
+      if (mItem !== undefined && mItem !== null) {
+        if (typeof mItem === 'number') {
+          return mItem;
+        }
+        if (typeof mItem === 'object') {
+          if (section === 'upper' && mItem.rateUpper !== undefined) {
+            return mItem.rateUpper;
+          }
+          if (section !== 'upper' && mItem.ratePrimary !== undefined) {
+            return mItem.ratePrimary;
+          }
+          if (mItem.rate !== undefined) return mItem.rate;
+        }
+      }
+    }
+
+    // 2. Fallback to active/global settings in this.data.ingredients
     const ing = this.data && this.data.ingredients && this.data.ingredients[key];
     if (!ing) return 0;
     if (section === 'upper') {
@@ -1163,6 +1192,7 @@ const app = {
       deletedDamagedSigs: [],
       tasteRecords: {},
       customDemands: {},
+      monthlyRates: {},
       initialSampleLoaded: (udise === '27240304501')
     };
   },
@@ -3107,6 +3137,7 @@ const app = {
           customDemandsUpper: parsed.customDemandsUpper || {},
           formBRemarks: parsed.formBRemarks || {},
           formBActivityDates: parsed.formBActivityDates || {},
+          monthlyRates: parsed.monthlyRates || {},
           initialSampleLoaded: (parsed.initialSampleLoaded === true)
         };
       } else {
@@ -3181,6 +3212,7 @@ const app = {
       if (!this.data.damagedStockUpper) this.data.damagedStockUpper = [];
       if (!this.data.customDemandsUpper) this.data.customDemandsUpper = {};
       if (!this.data.initialStockUpper) this.data.initialStockUpper = {};
+      if (!this.data.monthlyRates) this.data.monthlyRates = {};
       if (!this.data.settings) this.data.settings = {};
 
       // Ensure active UDISE is set on settings
@@ -3379,6 +3411,7 @@ const app = {
         tasteRecordsUpper: this.data.tasteRecordsUpper || {},
         customDemands: this.data.customDemands,
         customDemandsUpper: this.data.customDemandsUpper || {},
+        monthlyRates: this.data.monthlyRates || {},
         initialSampleLoaded: this.data.initialSampleLoaded,
         savedAt: new Date().toISOString()
       };
@@ -4515,7 +4548,7 @@ const app = {
       if (Array.isArray(customGrainsList) && customGrainsList.length > 0) {
         // MANUAL MODE: Calculate only explicitly selected grains/pulses using section rate
         customGrainsList.forEach(key => {
-          const rate = this.getIngredientRate(key, section);
+          const rate = this.getIngredientRate(key, section, dateStr);
           if (rate > 0) {
             quantities[key] = +(children * rate).toFixed(4);
           }
@@ -4523,7 +4556,7 @@ const app = {
       } else {
         // AUTO MODE: Derive grains based on Menu configuration
         // 1. Rice (तांदूळ)
-        const riceRate = this.getIngredientRate('rice', section);
+        const riceRate = this.getIngredientRate('rice', section, dateStr);
         quantities.rice = +(children * riceRate).toFixed(4);
 
         // 2. Pulse / Dal based on Menu
@@ -4555,7 +4588,7 @@ const app = {
         } else {
           const pulseKey = menuObj ? menuObj.pulseKey : "tur_dal";
           if (pulseKey && pulseKey !== 'nil' && pulseKey !== 'none' && this.data.ingredients[pulseKey]) {
-            const pulseRate = this.getIngredientRate(pulseKey, section);
+            const pulseRate = this.getIngredientRate(pulseKey, section, dateStr);
             quantities[pulseKey] = +(children * pulseRate).toFixed(4);
           }
         }
@@ -4565,7 +4598,7 @@ const app = {
       Object.keys(this.data.ingredients).forEach(key => {
         const ing = this.data.ingredients[key];
         if (ing && (ing.category === 'spice' || ing.category === 'oil' || ing.category === 'salt')) {
-          const rate = this.getIngredientRate(key, section);
+          const rate = this.getIngredientRate(key, section, dateStr);
           quantities[key] = +(children * rate).toFixed(5);
         }
       });
@@ -6486,7 +6519,7 @@ const app = {
       }
       const rateEl = document.getElementById(`exRate_${item.key}`);
       if (rateEl) {
-        rateEl.textContent = this.getIngredientRate(item.key, this.activeSection);
+        rateEl.textContent = this.getIngredientRate(item.key, this.activeSection, yearMonth);
       }
     });
 
@@ -7018,7 +7051,7 @@ const app = {
     this.FORM_B_ITEMS.forEach((item, idx) => {
       const ing = (this.data.ingredients && this.data.ingredients[item.key]) || item;
       const itemName = ing.name || item.name;
-      const rate = this.getIngredientRate(item.key, this.activeSection);
+      const rate = this.getIngredientRate(item.key, this.activeSection, yearMonth);
 
       const opQty = summary.opening[item.key] || 0;
       const recQty = summary.received[item.key] || 0;

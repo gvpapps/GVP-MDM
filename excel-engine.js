@@ -228,7 +228,7 @@ const excelEngine = {
     // Row 5: Rates (प्रमाण)
     const getRate = (k) => {
       if (typeof app !== 'undefined' && app.getIngredientRate) {
-        return app.getIngredientRate(k, section);
+        return app.getIngredientRate(k, section, yearMonth);
       }
       const ing = (appData.ingredients || {})[k];
       if (!ing) return 0;
@@ -555,7 +555,7 @@ const excelEngine = {
       const usedQty = consumed[item.key] || 0;
       const balQty = closing[item.key] || 0;
       const itemRate = (typeof app !== 'undefined' && app.getIngredientRate)
-        ? app.getIngredientRate(item.key, section)
+        ? app.getIngredientRate(item.key, section, yearMonth)
         : (isUpper ? +(item.rate * 1.5).toFixed(5) : item.rate);
 
       const defaultDemand = +(itemRate * pat * 20).toFixed(3);
@@ -678,8 +678,8 @@ const excelEngine = {
 
     Object.keys(appData.ingredients || {}).forEach(k => {
       const ing = appData.ingredients[k];
-      const rP = (typeof app !== 'undefined' && app.getIngredientRate) ? app.getIngredientRate(k, 'primary') : (ing.ratePrimary || ing.defaultRate);
-      const rU = (typeof app !== 'undefined' && app.getIngredientRate) ? app.getIngredientRate(k, 'upper') : (ing.rateUpper || +(rP * 1.5).toFixed(5));
+      const rP = (typeof app !== 'undefined' && app.getIngredientRate) ? app.getIngredientRate(k, 'primary', yearMonth) : (ing.ratePrimary || ing.defaultRate);
+      const rU = (typeof app !== 'undefined' && app.getIngredientRate) ? app.getIngredientRate(k, 'upper', yearMonth) : (ing.rateUpper || +(rP * 1.5).toFixed(5));
       rulesData.push([
         k,
         ing.name,

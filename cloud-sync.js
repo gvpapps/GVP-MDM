@@ -888,6 +888,7 @@ const cloudSync = {
 
         const mergedIngredients = this.mergeIngredients(dataToPush.ingredients, remoteData.ingredients, false);
         const mergedMenus = this.mergeMenus(dataToPush.menus, remoteData.menus, false);
+        const mergedMonthlyRates = Object.assign({}, remoteData.monthlyRates || {}, dataToPush.monthlyRates || {});
 
         dataToPush = Object.assign({}, dataToPush, {
           records: mergedRecords,
@@ -901,6 +902,7 @@ const cloudSync = {
           settings: mergedSettings,
           ingredients: mergedIngredients,
           menus: mergedMenus,
+          monthlyRates: mergedMonthlyRates,
           stockReceipts: mergedReceipts,
           stockReceiptsUpper: mergedReceiptsUpper,
           deletedStockReceiptIds: mergedDeletedReceipts,
@@ -925,6 +927,7 @@ const cloudSync = {
           app.data.settings = mergedSettings;
           app.data.ingredients = mergedIngredients;
           app.data.menus = mergedMenus;
+          app.data.monthlyRates = mergedMonthlyRates;
           app.data.stockReceipts = mergedReceipts;
           app.data.stockReceiptsUpper = mergedReceiptsUpper;
           app.data.deletedStockReceiptIds = mergedDeletedReceipts;
@@ -1182,7 +1185,8 @@ const cloudSync = {
               customDemands: Object.assign({}, baseData.customDemands || {}, remoteData.customDemands || {}),
               customDemandsUpper: Object.assign({}, baseData.customDemandsUpper || {}, remoteData.customDemandsUpper || {}),
               formBRemarks: Object.assign({}, baseData.formBRemarks || {}, remoteData.formBRemarks || {}),
-              formBActivityDates: Object.assign({}, baseData.formBActivityDates || {}, remoteData.formBActivityDates || {})
+              formBActivityDates: Object.assign({}, baseData.formBActivityDates || {}, remoteData.formBActivityDates || {}),
+              monthlyRates: Object.assign({}, baseData.monthlyRates || {}, remoteData.monthlyRates || {})
             });
 
             // Save to localStorage for this specific school

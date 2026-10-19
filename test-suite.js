@@ -697,6 +697,64 @@ const testSuite = {
           details: `उसनवार नोंद रिमोट पुनरुत्थान रोखले: ${resurrectionPrevented ? 'होय (0 नोंदी पुनरुत्थान)' : 'नाही (पुन्हा आली)'}, शिग्नेचर: ${strictSig} & ${relSig}`
         };
       }
+    },
+    {
+      id: 25,
+      name: "Test 25: ऐतिहासिक महिनानिहाय धान्य/मसाले प्रमाण संरक्षण (Historical Month Rates Immutability)",
+      description: "एप्रिल २०२६ (प्राथमिक: जिरे ०.०००५, मिरची ०.००२, मीठ ०.००१५; उच्च प्राथमिक: जिरे ०.०००२, मिरची ०.००५, मीठ ०.०००३) व जून २०२६ (चालू सेटिंग्ज) चे स्वतंत्र व अपरिवर्तनीय प्रमाण पडताळणी.",
+      run() {
+        if (!app.data.monthlyRates) app.data.monthlyRates = {};
+        
+        // Setup explicit April rates
+        app.data.monthlyRates['2026-04'] = {
+          cumin: { ratePrimary: 0.0005, rateUpper: 0.0002 },
+          mustard: { ratePrimary: 0.0005, rateUpper: 0.0002 },
+          turmeric: { ratePrimary: 0.0005, rateUpper: 0.0002 },
+          chilli: { ratePrimary: 0.0020, rateUpper: 0.0050 },
+          oil: { ratePrimary: 0.0050, rateUpper: 0.0075 },
+          salt: { ratePrimary: 0.0015, rateUpper: 0.0003 },
+          masala: { ratePrimary: 0.0020, rateUpper: 0.0050 }
+        };
+
+        // 1. Verify getIngredientRate with month parameter
+        const cuminAprP = app.getIngredientRate('cumin', 'primary', '2026-04');
+        const cuminAprU = app.getIngredientRate('cumin', 'upper', '2026-04');
+        const chilliAprP = app.getIngredientRate('chilli', 'primary', '2026-04');
+        const chilliAprU = app.getIngredientRate('chilli', 'upper', '2026-04');
+        const saltAprP = app.getIngredientRate('salt', 'primary', '2026-04');
+        const saltAprU = app.getIngredientRate('salt', 'upper', '2026-04');
+
+        const passAprP = (cuminAprP === 0.0005 && chilliAprP === 0.0020 && saltAprP === 0.0015);
+        const passAprU = (cuminAprU === 0.0002 && chilliAprU === 0.0050 && saltAprU === 0.0003);
+
+        // 2. Verify calculateDay for April date uses April rates
+        const calcAprP = app.calculateDay('2026-04-15', 66, 'मूगडाळ खिचडी', 66, null, 'primary');
+        const calcAprU = app.calculateDay('2026-04-15', 40, 'मूगडाळ खिचडी', 40, null, 'upper');
+
+        const passCalcP = (
+          Math.abs(calcAprP.quantities.cumin - 0.0330) < 0.0001 &&
+          Math.abs(calcAprP.quantities.chilli - 0.1320) < 0.0001 &&
+          Math.abs(calcAprP.quantities.salt - 0.0990) < 0.0001
+        );
+
+        const passCalcU = (
+          Math.abs(calcAprU.quantities.cumin - 0.0080) < 0.0001 &&
+          Math.abs(calcAprU.quantities.chilli - 0.2000) < 0.0001 &&
+          Math.abs(calcAprU.quantities.salt - 0.0120) < 0.0001
+        );
+
+        // 3. Verify June calculation uses global settings
+        const calcJunP = app.calculateDay('2026-06-15', 66, 'मूगडाळ खिचडी', 66, null, 'primary');
+        const globalCumin = app.getIngredientRate('cumin', 'primary');
+        const passJunCalc = (Math.abs(calcJunP.quantities.cumin - (66 * globalCumin)) < 0.0001);
+
+        const passed = passAprP && passAprU && passCalcP && passCalcU && passJunCalc;
+
+        return {
+          passed,
+          details: `एप्रिल १-५ (जिरे: ${cuminAprP}, मिरची: ${chilliAprP}, मीठ: ${saltAprP}), एप्रिल ६-८ (जिरे: ${cuminAprU}, मिरची: ${chilliAprU}, मीठ: ${saltAprU}), एप्रिल दैनिक हिशोब: ${passCalcP && passCalcU ? 'अचूक' : 'त्रुटी'}, जून स्वातंत्र्य: ${passJunCalc ? 'सुरक्षित' : 'त्रुटी'}`
+        };
+      }
     }
   ],
 
