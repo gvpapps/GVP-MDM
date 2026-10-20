@@ -1200,6 +1200,20 @@ const cloudSync = {
               }
             }
 
+            // Sync authoritative remote license from Firebase
+            const remoteLic = (json && json.license) || (remoteData && remoteData.license);
+            if (remoteLic && remoteLic.status) {
+              if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(`MDM_SCHOOL_LICENSE_${currentUdise}`, JSON.stringify(remoteLic));
+              }
+              if (typeof app !== 'undefined' && typeof app.saveSchoolLicense === 'function') {
+                app.saveSchoolLicense(currentUdise, remoteLic);
+              }
+              if (isActiveSchool && typeof app !== 'undefined' && typeof app.updateDailyEntryPaywallState === 'function') {
+                app.updateDailyEntryPaywallState(remoteLic);
+              }
+            }
+
             if (isActiveSchool) {
               app.data = mergedTarget;
               if (typeof app.applySchoolLevelMode === 'function') app.applySchoolLevelMode(app.data.settings?.schoolLevel);
@@ -1555,6 +1569,9 @@ const cloudSync = {
       if (res.ok) {
         const remoteLic = await res.json();
         if (remoteLic && remoteLic.status) {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(`MDM_SCHOOL_LICENSE_${cleanUdise}`, JSON.stringify(remoteLic));
+          }
           if (typeof app !== 'undefined' && app.saveSchoolLicense) {
             app.saveSchoolLicense(cleanUdise, remoteLic);
           }

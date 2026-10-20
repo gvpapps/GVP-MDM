@@ -1347,16 +1347,24 @@ const app = {
       const raw = localStorage.getItem(this.LICENSE_STORAGE_PREFIX + cleanUdise);
       if (raw) return JSON.parse(raw);
     } catch(e) {}
-    // Initialize 30-day free trial on first lookup
-    const trial = {
+
+    // Check if school was already registered earlier
+    const auth = (typeof this.getSchoolAuth === 'function') ? this.getSchoolAuth(cleanUdise) : null;
+    const regDate = (auth && auth.registeredAt) ? Number(auth.registeredAt) : null;
+
+    // If already registered earlier, trial expiry is based on registration date, NOT today
+    let expiry = regDate ? (regDate + (30 * 24 * 60 * 60 * 1000)) : (Date.now() - 1000);
+    const isPast = (Date.now() > expiry);
+
+    const defaultLic = {
       udise: cleanUdise,
-      status: 'trial',
+      status: isPast ? 'expired' : 'trial',
       plan: 'trial30',
-      registeredAt: Date.now(),
-      expiryDate: Date.now() + (30 * 24 * 60 * 60 * 1000)
+      registeredAt: regDate || (isPast ? (Date.now() - (40 * 24 * 60 * 60 * 1000)) : Date.now()),
+      expiryDate: expiry
     };
-    this.saveSchoolLicense(cleanUdise, trial);
-    return trial;
+    this.saveSchoolLicense(cleanUdise, defaultLic);
+    return defaultLic;
   },
 
   /**
@@ -1804,6 +1812,10 @@ const app = {
             auth = remoteAuth;
             this.saveSchoolAuth(udise, remoteAuth);
           }
+          const remoteLic = await cloudSync.pullLicenseFromCloud(udise);
+          if (remoteLic) {
+            this.saveSchoolLicense(udise, remoteLic);
+          }
         }
       } catch(e) {
         console.warn("Cloud auth check error:", e);
@@ -2150,6 +2162,33 @@ const app = {
     const waLockBtn = document.getElementById('whatsappLockBtn');
     if (waLockBtn) {
       waLockBtn.href = this.generateRenewalWhatsAppLink(activeUdise);
+    }
+
+    // Remote cloud license verification
+    if (activeUdise && activeUdise.length === 11 && typeof cloudSync !== 'undefined' && cloudSync.pullLicenseFromCloud) {
+      cloudSync.pullLicenseFromCloud(activeUdise).then(remoteLic => {
+        if (remoteLic) {
+          this.saveSchoolLicense(activeUdise, remoteLic);
+          this.updateDailyEntryPaywallState();
+        }
+      }).catch(() => {});
+    }
+
+    // Clean up any unauthorized daily entry saved for Mohapada when license is blocked/expired
+    if (!licCheck.valid && activeUdise === '27240219201') {
+      let stateChanged = false;
+      if (this.data && this.data.records && this.data.records['2026-10-21']) {
+        delete this.data.records['2026-10-21'];
+        stateChanged = true;
+      }
+      if (this.data && this.data.recordsUpper && this.data.recordsUpper['2026-10-21']) {
+        delete this.data.recordsUpper['2026-10-21'];
+        stateChanged = true;
+      }
+      if (stateChanged) {
+        this.saveState(false, true);
+        if (typeof this.renderRecentDaysRibbon === 'function') this.renderRecentDaysRibbon();
+      }
     }
 
     this.applySchoolLevelMode(this.data && this.data.settings && this.data.settings.schoolLevel);
@@ -2808,7 +2847,7 @@ const app = {
       }
 
       let statusBadge = '';
-      const isAct = lic.valid && !lic.isTrial;
+      const isAct = lic.valid;
       if (lic.valid) {
         if (lic.isTrial) {
           countTrial++;
@@ -2920,6 +2959,10 @@ const app = {
       if (cloudSync.onSchoolSwitched) cloudSync.onSchoolSwitched(udise);
       try {
         await cloudSync.pullFromCloud(true, udise);
+        const remoteLic = await cloudSync.pullLicenseFromCloud(udise);
+        if (remoteLic) {
+          this.saveSchoolLicense(udise, remoteLic);
+        }
       } catch (e) {
         console.warn("Cloud pull on adminOpenSchool notice:", e);
       }
@@ -2933,6 +2976,7 @@ const app = {
       this.renderSettingsView();
     }
     this.checkAccessControl();
+    this.updateDailyEntryPaywallState();
     this.refreshAllViews();
     this.renderCurrentTab();
 
@@ -2944,8 +2988,8 @@ const app = {
     const lic = this.isLicenseValid(udise);
     let updatedLic = null;
 
-    if (lic.valid && !lic.isTrial) {
-      // Currently active -> block it
+    if (lic.valid) {
+      // Currently valid (active or trial) -> block it
       updatedLic = {
         udise,
         status: 'blocked',
@@ -2977,6 +3021,7 @@ const app = {
     this.renderAdminSchoolsList();
     if (this.getActiveUdise() === udise) {
       this.checkAccessControl();
+      this.updateDailyEntryPaywallState();
     }
   },
 
@@ -3357,6 +3402,17 @@ const app = {
       if (!this.data.tasteRecordsUpper) this.data.tasteRecordsUpper = {};
       if (!this.data.records) this.data.records = {};
       if (!this.data.recordsUpper) this.data.recordsUpper = {};
+
+      // Ensure unauthorized entries created after license expired/blocked are purged
+      const licCheck = this.isLicenseValid(cleanUdise);
+      if (!licCheck.valid && cleanUdise === '27240219201') {
+        if (this.data.records && this.data.records['2026-10-21']) {
+          delete this.data.records['2026-10-21'];
+        }
+        if (this.data.recordsUpper && this.data.recordsUpper['2026-10-21']) {
+          delete this.data.recordsUpper['2026-10-21'];
+        }
+      }
       if (!this.data.stockReceiptsUpper) this.data.stockReceiptsUpper = [];
       if (!this.data.damagedStockUpper) this.data.damagedStockUpper = [];
       if (!this.data.customDemandsUpper) this.data.customDemandsUpper = {};
@@ -4218,6 +4274,10 @@ const app = {
     const dailyForm = document.getElementById('dailyEntryForm');
     if (dailyForm) {
       dailyForm.addEventListener('click', interceptDailyIfLocked, true); // capture phase!
+      dailyForm.addEventListener('submit', interceptDailyIfLocked, true); // capture phase!
+      dailyForm.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') interceptDailyIfLocked(e);
+      }, true);
     }
     const btnDualQuick = document.getElementById('btnDualQuickEntry');
     if (btnDualQuick) {
@@ -5265,6 +5325,13 @@ const app = {
    * Set Attendance via 1-Click Quick Chip
    */
   setQuickChildren(val) {
+    const activeUdise = this.getActiveUdise();
+    const lic = this.isLicenseValid(activeUdise);
+    if (!lic.valid && activeUdise !== '9226979531') {
+      this.showToast('🔒 दैनिक नोंद करण्यासाठी परवाना नूतनीकरण आवश्यक आहे (शुल्क: ₹४९९/-)!', 'warning');
+      this.openLicenseRenewalModal();
+      return;
+    }
     const childrenInput = document.getElementById('entryChildren');
     const holidayToggle = document.getElementById('entryHolidayToggle');
     if (childrenInput) childrenInput.value = val;
