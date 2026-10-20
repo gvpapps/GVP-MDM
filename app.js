@@ -26,6 +26,7 @@ const app = {
   SAFE_BACKUP_PREFIX: 'MDM_SAFE_BACKUP_',
   MASTER_KEY_SECRET_SALT: 'GVP_PM_POSHAN_SECURE_SALT_2026',
   ADMIN_CONTACT_NUMBER: '9226979531',
+  ADMIN_UPI_ID: '9226979531@ptaxis',
 
   // Current Active Tab
   currentTab: 'daily',
@@ -1391,12 +1392,22 @@ const app = {
   },
 
   /**
-   * Generate 1-click WhatsApp link with pre-filled school information
+   * Generate 1-click WhatsApp link with pre-filled school information & payment details
    */
   generateWhatsAppLink(udise = null, schoolName = null) {
-    const cleanUdise = udise || this.getActiveUdise();
+    const cleanUdise = udise || this.getActiveUdise() || '';
     const cleanName = schoolName || (this.data && this.data.settings && this.data.settings.schoolName) || 'शाळा';
-    const text = `नमस्कार सर, मला शालेय पोषण आहार (PM POSHAN) ॲपसाठी अधिकृत ॲक्टिव्हेशन की हवी आहे.\n\n🏫 शाळेचे नाव: ${cleanName}\n🔢 UDISE कोड: ${cleanUdise}\n📱 संपर्क क्रमांक: 9226979531\n\nकृपया मला १ वर्षाची ॲक्टिव्हेशन की पाठवावी. धन्यवाद!`;
+    const text = `Hi Admin, I want to buy software license.\n\nशाळेचे नाव: ${cleanName}\nUDISE कोड: ${cleanUdise}\nआम्ही ${this.ADMIN_UPI_ID} या UPI वर ₹४९९ पेमेंट केले असून स्क्रीनशॉट जोडत आहोत. कृपया आमच्या शाळेचा परवाना (License: Approved) सक्रिय करावा. धन्यवाद!`;
+    return `https://wa.me/91${this.ADMIN_CONTACT_NUMBER}?text=${encodeURIComponent(text)}`;
+  },
+
+  /**
+   * Generate 1-click WhatsApp link with ₹499 annual renewal request & payment details
+   */
+  generateRenewalWhatsAppLink(udise = null, schoolName = null) {
+    const cleanUdise = udise || this.getActiveUdise() || '';
+    const cleanName = schoolName || (this.data && this.data.settings && this.data.settings.schoolName) || 'शाळा';
+    const text = `Hi Admin, I want to buy software license.\n\nशाळेचे नाव: ${cleanName}\nUDISE कोड: ${cleanUdise}\nआम्ही ${this.ADMIN_UPI_ID} या UPI वर ₹४९९ पेमेंट केले असून स्क्रीनशॉट जोडत आहोत. कृपया आमच्या शाळेचा परवाना (License: Approved) सक्रिय करावा. धन्यवाद!`;
     return `https://wa.me/91${this.ADMIN_CONTACT_NUMBER}?text=${encodeURIComponent(text)}`;
   },
 
@@ -1519,13 +1530,20 @@ const app = {
   },
 
   /**
+   * Helper: Check if master admin is currently logged in
+   */
+  isAdmin() {
+    const activeUdise = this.getActiveUdise();
+    return (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('MDM_ADMIN_LOGGED_IN') === 'true') || 
+           (this.isAdminLoggedIn === true) || 
+           (activeUdise === '9226979531');
+  },
+
+  /**
    * Update visibility of Master Admin tabs/buttons based on session login
    */
   updateAdminVisibility() {
-    const activeUdise = this.getActiveUdise();
-    const isAdmin = (sessionStorage.getItem('MDM_ADMIN_LOGGED_IN') === 'true') || 
-                    (this.isAdminLoggedIn === true) || 
-                    (activeUdise === '9226979531');
+    const isAdmin = this.isAdmin();
     const navBtn = document.getElementById('navTabAdmin');
     const headerBtn = document.getElementById('headerAdminBtn');
     const drawerBtn = document.getElementById('drawerAdminBtn');
@@ -2086,27 +2104,8 @@ const app = {
 
     // 2. Check Trial & License Status
     const licCheck = this.isLicenseValid(activeUdise);
-    if (!licCheck.valid && !isAdmin) {
-      // Trial or License Expired!
-      if (loginScreen) loginScreen.style.display = 'none';
-      if (appWrapper) appWrapper.style.display = 'none';
-      if (lockScreen) lockScreen.style.display = 'flex';
 
-      const lockName = document.getElementById('lockSchoolName');
-      const lockCode = document.getElementById('lockSchoolUdise');
-      const waBtn = document.getElementById('whatsappLockBtn');
-
-      const sName = (this.data && this.data.settings && this.data.settings.schoolName) || 'शाळा';
-      if (lockName) lockName.textContent = sName;
-      if (lockCode) lockCode.textContent = activeUdise;
-      if (waBtn) waBtn.href = this.generateWhatsAppLink(activeUdise, sName);
-
-      const keyInp = document.getElementById('activationKeyInput');
-      if (keyInp) setTimeout(() => keyInp.focus(), 200);
-      return false;
-    }
-
-    // 3. Valid Session & Valid License (or Admin Mode)! Show Main App
+    // 3. Valid Session! Always show main app so school can view old reports & data
     if (loginScreen) loginScreen.style.display = 'none';
     if (lockScreen) lockScreen.style.display = 'none';
     if (appWrapper) appWrapper.style.display = 'flex';
@@ -2116,23 +2115,144 @@ const app = {
     const trialBadge = document.getElementById('headerTrialBadge');
     const trialText = document.getElementById('headerTrialText');
     if (trialBadge && trialText) {
-      if (licCheck.isTrial) {
+      if (!licCheck.valid && !isAdmin) {
+        trialBadge.className = 'meta-pill license-expired cursor-pointer';
+        trialText.textContent = `🔴 परवाना संपला (नूतनीकरण करा)`;
+        trialBadge.title = `शाळेचा परवाना संपला किंवा बंद केलेला आहे. नवीन दैनिक नोंद करण्यासाठी ₹४९९/- भरून नूतनीकरण करा.`;
+        trialBadge.onclick = () => app.openLicenseRenewalModal();
+      } else if (licCheck.isTrial) {
         trialBadge.className = 'meta-pill trial-pill cursor-pointer';
         trialText.textContent = `🟢 मोफत डेमो: ${licCheck.daysRemaining} दिवस`;
         trialBadge.title = `तुमचा मोफत डेमो सुरू आहे. अजून ${licCheck.daysRemaining} दिवस शिल्लक आहेत.`;
+        trialBadge.onclick = () => app.showTrialInfo();
       } else {
         trialBadge.className = 'meta-pill license-active cursor-pointer';
         trialText.textContent = `⭐ परवाना सक्रिय`;
         trialBadge.title = `अधिकृत परवाना सक्रिय आहे (अजून ${licCheck.daysRemaining} दिवस).`;
+        trialBadge.onclick = () => app.showTrialInfo();
       }
     }
 
     const hUdise = document.getElementById('headerUdiseCode');
     if (hUdise) hUdise.textContent = activeUdise;
 
+    const waLockBtn = document.getElementById('whatsappLockBtn');
+    if (waLockBtn) {
+      waLockBtn.href = this.generateRenewalWhatsAppLink(activeUdise);
+    }
+
     this.applySchoolLevelMode(this.data && this.data.settings && this.data.settings.schoolLevel);
     this.updateHeaderMeta();
+    this.updateDailyEntryPaywallState(licCheck);
     return true;
+  },
+
+  /**
+   * Update Daily Entry Paywall banner & form lock state
+   */
+  updateDailyEntryPaywallState(licCheck = null) {
+    const activeUdise = this.getActiveUdise();
+    const lic = licCheck || this.isLicenseValid(activeUdise);
+    const isAdmin = (sessionStorage.getItem('MDM_ADMIN_LOGGED_IN') === 'true') || 
+                    (this.isAdminLoggedIn === true) || 
+                    (activeUdise === '9226979531');
+    const isLocked = !lic.valid && !isAdmin;
+
+    const banner = document.getElementById('licenseExpiredDailyBanner');
+    const waBtn = document.getElementById('paywallWhatsAppBtn');
+    const btnSave = document.getElementById('btnSaveDaily');
+
+    if (banner) {
+      banner.style.display = isLocked ? 'block' : 'none';
+      if (isLocked) {
+        const sName = (this.data && this.data.settings && this.data.settings.schoolName) || 'शाळा';
+        if (waBtn) {
+          waBtn.href = this.generateRenewalWhatsAppLink(activeUdise, sName);
+        }
+      }
+    }
+
+    // Toggle disabled status for daily entry controls when locked
+    const formInputs = document.querySelectorAll('#dailyEntryForm input:not(#entryDate), #dailyEntryForm select, #dailyEntryForm textarea');
+    formInputs.forEach(el => {
+      if (isLocked) {
+        el.setAttribute('data-locked-paywall', '1');
+        el.disabled = true;
+      } else if (el.getAttribute('data-locked-paywall') === '1') {
+        el.removeAttribute('data-locked-paywall');
+        el.disabled = false;
+      }
+    });
+
+    if (btnSave) {
+      if (isLocked) {
+        btnSave.disabled = true;
+        btnSave.innerHTML = '<span>🔒 परवाना नूतनीकरण आवश्यक (₹499)</span>';
+        btnSave.classList.add('btn-locked-paywall');
+      } else {
+        btnSave.disabled = false;
+        btnSave.innerHTML = '<span>💾 उपस्थिती व आहार नोंद जतन करा</span>';
+        btnSave.classList.remove('btn-locked-paywall');
+      }
+    }
+  },
+
+  /**
+   * Open License Renewal Modal (₹499 Annual Renewal)
+   */
+  openLicenseRenewalModal() {
+    const modal = document.getElementById('licenseRenewalModal');
+    if (!modal) return;
+    const activeUdise = this.getActiveUdise();
+    const sName = (this.data && this.data.settings && this.data.settings.schoolName) || 'शाळा';
+    
+    const nameEl = document.getElementById('renewalModalSchoolName');
+    const udiseEl = document.getElementById('renewalModalSchoolUdise');
+    const waBtn = document.getElementById('renewalModalWhatsAppBtn');
+    const keyInp = document.getElementById('renewalActivationKeyInput');
+
+    if (nameEl) nameEl.textContent = sName;
+    if (udiseEl) udiseEl.textContent = activeUdise;
+    if (waBtn) waBtn.href = this.generateRenewalWhatsAppLink(activeUdise, sName);
+    if (keyInp) keyInp.value = '';
+
+    modal.style.display = 'flex';
+    if (keyInp) setTimeout(() => keyInp.focus(), 200);
+  },
+
+  /**
+   * Close License Renewal Modal
+   */
+  closeLicenseRenewalModal() {
+    const modal = document.getElementById('licenseRenewalModal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  /**
+   * Submit Renewal Activation Key (from Daily Paywall banner or Renewal Modal)
+   */
+  submitRenewalActivationKey(inputId = 'renewalActivationKeyInput') {
+    const inputEl = document.getElementById(inputId);
+    const key = (inputEl ? inputEl.value : '').trim();
+    const activeUdise = this.getActiveUdise();
+
+    if (!key) {
+      this.showToast('❌ कृपया ॲक्टिव्हेशन की प्रविष्ट करा.', 'warning');
+      if (inputEl) inputEl.focus();
+      return;
+    }
+
+    const res = this.verifyActivationKey(key, activeUdise);
+    if (res.success) {
+      if (inputEl) inputEl.value = '';
+      this.closeLicenseRenewalModal();
+      this.showToast(`🎉 अभिनंदन! शाळेचा वार्षिक परवाना यशस्वीरीत्या १ वर्षासाठी सक्रिय झाला आहे!`, 'success');
+      this.checkAccessControl();
+      this.refreshAllViews();
+    } else {
+      this.showToast('❌ अमान्य ॲक्टिव्हेशन की! कृपया 9226979531 वर संपर्क साधा.', 'danger');
+      if (inputEl) inputEl.focus();
+    }
   },
 
   /**
@@ -2141,13 +2261,17 @@ const app = {
   showTrialInfo() {
     const udise = this.getActiveUdise();
     const lic = this.isLicenseValid(udise);
-    const waLink = this.generateWhatsAppLink();
+    if (!lic.valid) {
+      this.openLicenseRenewalModal();
+      return;
+    }
+    const waLink = this.generateRenewalWhatsAppLink();
     if (lic.isTrial) {
-      if (confirm(`🎁 शालेय पोषण आहार (PM POSHAN) - ३० दिवस मोफत डेमो\n\nशाळा: ${this.data.settings.schoolName}\nUDISE: ${udise}\nउर्वरित कालावधी: ${lic.daysRemaining} दिवस शिल्लक\n\nतुम्हाला १ वर्षाचा अधिकृत परवाना घेण्यासाठी व्हॉट्सअॅपवर संपर्क करायचा आहे का?`)) {
+      if (confirm(`🎁 शालेय पोषण आहार (PM POSHAN) - ३० दिवस मोफत डेमो\n\nशाळा: ${this.data.settings.schoolName}\nUDISE: ${udise}\nउर्वरित कालावधी: ${lic.daysRemaining} दिवस शिल्लक\n\nवार्षिक परवाना शुल्क: ₹499/- प्रति वर्ष\n\nतुम्हाला १ वर्षाचा अधिकृत परवाना घेण्यासाठी व्हॉट्सअॅपवर संपर्क करायचा आहे का?`)) {
         window.open(waLink, '_blank');
       }
     } else {
-      alert(`⭐ अधिकृत परवाना सक्रिय!\n\nशाळा: ${this.data.settings.schoolName}\nUDISE: ${udise}\nवैधता: अजून ${lic.daysRemaining} दिवस वैध.\n\nअधिक मदतीसाठी संपर्क: 9226979531 (श्री गणेश विलास पष्टे)`);
+      alert(`⭐ अधिकृत परवाना सक्रिय!\n\nशाळा: ${this.data.settings.schoolName}\nUDISE: ${udise}\nवैधता: अजून ${lic.daysRemaining} दिवस वैध.\nवार्षिक परवाना शुल्क: ₹499/- प्रति वर्ष\n\nअधिक मदतीसाठी संपर्क: 9226979531 (श्री गणेश विलास पष्टे)`);
     }
   },
 
@@ -4306,6 +4430,9 @@ const app = {
     });
 
     this.renderCurrentTab();
+    if (tabId === 'daily') {
+      this.updateDailyEntryPaywallState();
+    }
   },
 
   /**
@@ -5089,6 +5216,14 @@ const app = {
    * Save the current Daily Entry form to state & storage
    */
   saveCurrentRecord() {
+    const activeUdise = this.getActiveUdise();
+    const lic = this.isLicenseValid(activeUdise);
+    if (!lic.valid && !this.isAdmin()) {
+      this.showToast('⚠️ परवाना संपलेला आहे! नवीन नोंद करण्यासाठी कृपया ₹४९९/- भरून वार्षिक परवाना नूतनीकरण करा.', 'danger');
+      this.openLicenseRenewalModal();
+      return;
+    }
+
     const dateInput = document.getElementById('entryDate');
     const childrenInput = document.getElementById('entryChildren');
     const menuSelect = document.getElementById('entryMenu');
@@ -5214,6 +5349,14 @@ const app = {
    */
   openDualEntryModal(dateOverride = null) {
     try {
+      const activeUdise = this.getActiveUdise();
+      const lic = this.isLicenseValid(activeUdise);
+      if (!lic.valid && !this.isAdmin()) {
+        this.showToast('⚠️ परवाना संपलेला आहे! नवीन नोंद करण्यासाठी कृपया ₹४९९/- भरून वार्षिक परवाना नूतनीकरण करा.', 'danger');
+        this.openLicenseRenewalModal();
+        return;
+      }
+
       // Auto-enable composite / both classes mode if user desires dual quick entry
       if (this.data && this.data.settings && this.data.settings.schoolLevel !== 'both') {
         this.data.settings.schoolLevel = 'both';
@@ -5654,6 +5797,14 @@ const app = {
   },
 
   saveDualRecords() {
+    const activeUdise = this.getActiveUdise();
+    const lic = this.isLicenseValid(activeUdise);
+    if (!lic.valid && !this.isAdmin()) {
+      this.showToast('⚠️ परवाना संपलेला आहे! नवीन नोंद करण्यासाठी कृपया ₹४९९/- भरून वार्षिक परवाना नूतनीकरण करा.', 'danger');
+      this.openLicenseRenewalModal();
+      return;
+    }
+
     const modalDateInput = document.getElementById('dualEntryDate');
     const mainDateInput = document.getElementById('entryDate');
     const dateStr = (modalDateInput && modalDateInput.value) ? modalDateInput.value : (mainDateInput?.value || '');

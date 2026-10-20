@@ -755,6 +755,74 @@ const testSuite = {
           details: `एप्रिल १-५ (जिरे: ${cuminAprP}, मिरची: ${chilliAprP}, मीठ: ${saltAprP}), एप्रिल ६-८ (जिरे: ${cuminAprU}, मिरची: ${chilliAprU}, मीठ: ${saltAprU}), एप्रिल दैनिक हिशोब: ${passCalcP && passCalcU ? 'अचूक' : 'त्रुटी'}, जून स्वातंत्र्य: ${passJunCalc ? 'सुरक्षित' : 'त्रुटी'}`
         };
       }
+    },
+    {
+      id: 26,
+      name: "Test 26: परवाना संपल्यास/बंद केल्यास लॉगिन परवानगी, दैनिक नोंद ब्लॉक व ₹४९९/- वार्षिक नूतनीकरण पडताळणी",
+      description: "शाळेचा परवाना संपल्यावर/बंद केल्यावर लॉगिन यशस्वी होणे, अहवाल पाहता येणे, मात्र दैनिक नोंद सेव्ह रोखली जाणे, ₹४९९/- व्हॉट्सॲप मेसेज लिंक तयार होणे व ॲक्टिव्हेशन की द्वारे १ वर्षासाठी अनलॉक होणे.",
+      run() {
+        const testUdise = "27240304501";
+        
+        // 1. Generate Renewal WhatsApp link with ₹499 & UPI info
+        const waLink = app.generateRenewalWhatsAppLink(testUdise, "रा.जि.प. शाळा मेंगाळवाडी");
+        const decodedWaLink = decodeURIComponent(waLink);
+        const passWaLink = waLink.includes("9226979531") && 
+                           decodedWaLink.includes("9226979531@ptaxis") && 
+                           decodedWaLink.includes("Hi Admin, I want to buy software license.") &&
+                           decodedWaLink.includes("₹४९९") && 
+                           decodedWaLink.includes("License: Approved") && 
+                           waLink.includes("27240304501");
+
+        // 2. Mock expired license
+        const origLic = app.getSchoolLicense(testUdise);
+        const expiredLic = {
+          udise: testUdise,
+          status: 'expired',
+          expiryDate: Date.now() - 5000
+        };
+        app.saveSchoolLicense(testUdise, expiredLic);
+
+        const checkExpired = app.isLicenseValid(testUdise);
+        const passExpiredDetected = (checkExpired.valid === false);
+
+        // 3. Verify checkAccessControl allows login into app
+        if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('MDM_ADMIN_LOGGED_IN');
+        app.isAdminLoggedIn = false;
+        localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, testUdise);
+        const loginAllowed = app.checkAccessControl();
+
+        // 4. Verify saveCurrentRecord is blocked when expired
+        let toastMsg = "";
+        const origShowToast = app.showToast;
+        app.showToast = (msg, type) => { toastMsg = msg; };
+        
+        let renewalModalOpened = false;
+        const origOpenModal = app.openLicenseRenewalModal;
+        app.openLicenseRenewalModal = () => { renewalModalOpened = true; };
+
+        // Attempt save
+        app.saveCurrentRecord();
+        const passSaveBlocked = renewalModalOpened && (toastMsg.includes("४९९") || toastMsg.includes("परवाना"));
+
+        // 5. Verify valid key activation unlocks 365 days
+        const validKey = app.generateAdminKey(testUdise, '1year');
+        const actRes = app.verifyActivationKey(validKey, testUdise);
+        const passActivation = actRes.success === true;
+        const checkActive = app.isLicenseValid(testUdise);
+        const passActiveNow = (checkActive.valid === true) && (checkActive.daysRemaining >= 364);
+
+        // Restore mocks
+        app.showToast = origShowToast;
+        app.openLicenseRenewalModal = origOpenModal;
+        if (origLic) app.saveSchoolLicense(testUdise, origLic);
+
+        const passed = passWaLink && passExpiredDetected && loginAllowed && passSaveBlocked && passActivation && passActiveNow;
+
+        return {
+          passed,
+          details: `WhatsApp ₹४९९ लिंक: ${passWaLink ? 'अचूक' : 'त्रुटी'}, परवाना समाप्ती ओळख: ${passExpiredDetected ? 'होय' : 'नाही'}, लॉगिन परवानगी: ${loginAllowed ? 'यशस्वी' : 'अडकले'}, दैनिक नोंद बंदी: ${passSaveBlocked ? 'यशस्वीरित्या रोखली' : 'रोखली नाही'}, की अनलॉक: ${passActiveNow ? '१ वर्ष सक्रिय' : 'त्रुटी'}`
+        };
+      }
     }
   ],
 

@@ -6233,5 +6233,173 @@ body.level-mode-both #headerSchoolLevelBadge {
   }
 }
 
+/* ==========================================================================
+   LICENSE EXPIRED PAYWALL BANNER & RENEWAL MODAL (₹499/YEAR)
+   ========================================================================== */
+.license-expired-paywall-card {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border: 2px solid #fb923c;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 6px 20px rgba(234, 88, 12, 0.15);
+  animation: fadeIn 0.3s ease-in-out;
+}
+.paywall-header {
+  text-align: center;
+  margin-bottom: 0.85rem;
+}
+.paywall-badge-pill {
+  display: inline-block;
+  background: #dc2626;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.82rem;
+  padding: 4px 14px;
+  border-radius: 50px;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3);
+  margin-bottom: 0.5rem;
+}
+.paywall-title {
+  color: #9a3412;
+  font-size: 1.22rem;
+  font-weight: 800;
+  margin: 0.25rem 0 0.5rem 0;
+}
+.paywall-desc {
+  color: #475569;
+  font-size: 0.88rem;
+  max-width: 660px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+.paywall-pricing-box {
+  background: #fff;
+  border: 2px dashed #f97316;
+  border-radius: 12px;
+  padding: 0.85rem 1.25rem;
+  text-align: center;
+  margin: 0.85rem auto;
+  max-width: 480px;
+}
+.price-highlight {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 4px;
+  color: #ea580c;
+  font-weight: 900;
+}
+.price-currency {
+  font-size: 1.6rem;
+}
+.price-amount {
+  font-size: 2.8rem;
+  line-height: 1;
+}
+.price-period {
+  font-size: 1.1rem;
+  color: #64748b;
+  font-weight: 700;
+}
+.price-tagline {
+  font-size: 0.88rem;
+  color: #166534;
+  font-weight: 700;
+  margin-top: 0.25rem;
+}
+.paywall-features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.5rem 0.75rem;
+  max-width: 680px;
+  margin: 0.85rem auto;
+  font-size: 0.84rem;
+  color: #1e293b;
+  font-weight: 600;
+}
+.paywall-feature-item {
+  background: rgba(255, 255, 255, 0.75);
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(251, 146, 60, 0.35);
+}
+.paywall-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.15rem 0 0.85rem 0;
+}
+.btn-paywall-whatsapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #25d366;
+  color: #fff !important;
+  font-weight: 800;
+  font-size: 1.02rem;
+  padding: 10px 22px;
+  border-radius: 8px;
+  text-decoration: none !important;
+  box-shadow: 0 4px 14px rgba(37, 211, 102, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-paywall-whatsapp:hover {
+  background: #20ba5a;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(37, 211, 102, 0.45);
+}
+.btn-paywall-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  color: #0284c7 !important;
+  border: 1.5px solid #0284c7;
+  font-weight: 700;
+  font-size: 0.92rem;
+  padding: 9px 18px;
+  border-radius: 8px;
+  text-decoration: none !important;
+}
+.btn-paywall-call:hover {
+  background: #f0f9ff;
+}
+.paywall-activation-box {
+  background: #fff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.85rem 1.15rem;
+  max-width: 520px;
+  margin: 0.85rem auto;
+}
+.paywall-activation-label {
+  display: block;
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 0.86rem;
+  margin-bottom: 0.4rem;
+}
+.btn-locked-paywall {
+  background: #94a3b8 !important;
+  border-color: #64748b !important;
+  color: #fff !important;
+  cursor: not-allowed !important;
+  opacity: 0.85 !important;
+}
+.meta-pill.license-expired {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border: 1.5px solid #f87171 !important;
+  font-weight: 800;
+  animation: pulseBadge 2s infinite;
+}
+@keyframes pulseBadge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+
+
 
 
