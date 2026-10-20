@@ -6234,6 +6234,84 @@ body.level-mode-both #headerSchoolLevelBadge {
 }
 
 /* ==========================================================================
+   ACTIVE 30-DAY DEMO BANNER (REMAINING DAYS INDICATOR)
+   ========================================================================== */
+.demo-active-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1.5px solid #86efac;
+  border-radius: 12px;
+  padding: 0.85rem 1.25rem;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.08);
+  animation: fadeIn 0.3s ease-in-out;
+}
+.demo-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1 1 300px;
+}
+.demo-banner-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.demo-banner-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.demo-banner-title {
+  color: #14532d;
+  font-size: 0.98rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.demo-days-badge {
+  background: #16a34a;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 2px 10px;
+  border-radius: 50px;
+  box-shadow: 0 1px 4px rgba(22, 163, 74, 0.3);
+}
+.demo-banner-desc {
+  color: #166534;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.demo-banner-actions {
+  display: flex;
+  align-items: center;
+}
+.btn-demo-upgrade {
+  background: #ffffff;
+  color: #15803d;
+  border: 1.5px solid #16a34a;
+  font-weight: 700;
+  font-size: 0.86rem;
+  padding: 7px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  white-space: nowrap;
+}
+.btn-demo-upgrade:hover {
+  background: #16a34a;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(22, 163, 74, 0.25);
+}
+
+/* ==========================================================================
    LICENSE EXPIRED PAYWALL BANNER & RENEWAL MODAL (₹499/YEAR)
    ========================================================================== */
 .license-expired-paywall-card {

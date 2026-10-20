@@ -1209,8 +1209,13 @@ const cloudSync = {
               if (typeof app !== 'undefined' && typeof app.saveSchoolLicense === 'function') {
                 app.saveSchoolLicense(currentUdise, remoteLic);
               }
-              if (isActiveSchool && typeof app !== 'undefined' && typeof app.updateDailyEntryPaywallState === 'function') {
-                app.updateDailyEntryPaywallState(remoteLic);
+              if (isActiveSchool && typeof app !== 'undefined') {
+                if (typeof app.updateHeaderLicenseBadge === 'function') {
+                  app.updateHeaderLicenseBadge(remoteLic);
+                }
+                if (typeof app.updateDailyEntryPaywallState === 'function') {
+                  app.updateDailyEntryPaywallState(remoteLic);
+                }
               }
             }
 

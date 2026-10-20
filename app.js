@@ -1345,22 +1345,50 @@ const app = {
     const cleanUdise = String(udise).trim();
     try {
       const raw = localStorage.getItem(this.LICENSE_STORAGE_PREFIX + cleanUdise);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed) {
+          // If explicitly blocked by Admin, respect the block
+          if (parsed.status === 'blocked') return parsed;
+
+          const now = Date.now();
+          // Self-heal: If trial or active was falsely marked expired but expiryDate is in the future
+          if (parsed.status === 'expired' && parsed.expiryDate && (now <= Number(parsed.expiryDate))) {
+            parsed.status = (parsed.plan && parsed.plan !== 'trial30') ? 'active' : 'trial';
+            this.saveSchoolLicense(cleanUdise, parsed);
+            return parsed;
+          }
+
+          // Self-heal: If marked expired with trial30 plan, check if school registered within last 30 days
+          if (parsed.status === 'expired' && parsed.plan === 'trial30') {
+            const auth = (typeof this.getSchoolAuth === 'function') ? this.getSchoolAuth(cleanUdise) : null;
+            const regDate = (auth && auth.registeredAt) ? Number(auth.registeredAt) : (parsed.registeredAt ? Number(parsed.registeredAt) : null);
+            if (regDate && (now <= regDate + (30 * 24 * 60 * 60 * 1000))) {
+              parsed.status = 'trial';
+              parsed.expiryDate = regDate + (30 * 24 * 60 * 60 * 1000);
+              this.saveSchoolLicense(cleanUdise, parsed);
+              return parsed;
+            }
+          }
+
+          if (parsed.expiryDate || parsed.status) return parsed;
+        }
+      }
     } catch(e) {}
 
     // Check if school was already registered earlier
     const auth = (typeof this.getSchoolAuth === 'function') ? this.getSchoolAuth(cleanUdise) : null;
-    const regDate = (auth && auth.registeredAt) ? Number(auth.registeredAt) : null;
+    const regDate = (auth && auth.registeredAt) ? Number(auth.registeredAt) : Date.now();
 
-    // If already registered earlier, trial expiry is based on registration date, NOT today
-    let expiry = regDate ? (regDate + (30 * 24 * 60 * 60 * 1000)) : (Date.now() - 1000);
+    // Trial expiry is 30 days from registration date (or today if fresh)
+    const expiry = regDate + (30 * 24 * 60 * 60 * 1000);
     const isPast = (Date.now() > expiry);
 
     const defaultLic = {
       udise: cleanUdise,
       status: isPast ? 'expired' : 'trial',
       plan: 'trial30',
-      registeredAt: regDate || (isPast ? (Date.now() - (40 * 24 * 60 * 60 * 1000)) : Date.now()),
+      registeredAt: regDate,
       expiryDate: expiry
     };
     this.saveSchoolLicense(cleanUdise, defaultLic);
@@ -1387,19 +1415,30 @@ const app = {
     }
     const lic = this.getSchoolLicense(cleanUdise);
     if (!lic || !lic.expiryDate) {
-      return { valid: true, daysRemaining: 30, isTrial: true, status: 'trial' };
+      return { valid: true, daysRemaining: 30, isTrial: true, status: 'trial', plan: 'trial30', expiryDate: Date.now() + (30 * 86400000) };
     }
     const now = Date.now();
-    const daysRemaining = Math.max(0, Math.ceil((lic.expiryDate - now) / (24 * 60 * 60 * 1000)));
-    const valid = (now <= lic.expiryDate) && (lic.status !== 'blocked') && (lic.status !== 'expired');
-    const isTrial = (lic.status === 'trial');
+    const expiryTime = Number(lic.expiryDate) || 0;
+    const isPast = (now > expiryTime);
+    const isBlocked = (lic.status === 'blocked');
+
+    // Self-heal: If falsely marked expired in status but expiryDate is in future and not blocked
+    if (lic.status === 'expired' && !isBlocked && !isPast) {
+      lic.status = (lic.plan && lic.plan !== 'trial30') ? 'active' : 'trial';
+      this.saveSchoolLicense(cleanUdise, lic);
+    }
+
+    const valid = (!isPast) && (!isBlocked) && (lic.status !== 'expired');
+    const isTrial = (lic.status === 'trial') || (lic.plan === 'trial30' && valid);
+    const daysRemaining = isPast ? 0 : Math.max(1, Math.ceil((expiryTime - now) / (24 * 60 * 60 * 1000)));
+
     return {
       valid,
-      daysRemaining,
+      daysRemaining: valid ? daysRemaining : 0,
       isTrial,
-      status: valid ? (isTrial ? 'trial' : 'active') : 'expired',
+      status: isBlocked ? 'blocked' : (valid ? (isTrial ? 'trial' : 'active') : 'expired'),
       plan: lic.plan || 'trial30',
-      expiryDate: lic.expiryDate
+      expiryDate: expiryTime
     };
   },
 
@@ -2135,26 +2174,7 @@ const app = {
     this.updateAdminVisibility();
 
     // Update Header Badges
-    const trialBadge = document.getElementById('headerTrialBadge');
-    const trialText = document.getElementById('headerTrialText');
-    if (trialBadge && trialText) {
-      if (!licCheck.valid && !isAdmin) {
-        trialBadge.className = 'meta-pill license-expired cursor-pointer';
-        trialText.textContent = `🔴 परवाना संपला (नूतनीकरण करा)`;
-        trialBadge.title = `शाळेचा परवाना संपला किंवा बंद केलेला आहे. नवीन दैनिक नोंद करण्यासाठी ₹४९९/- भरून नूतनीकरण करा.`;
-        trialBadge.onclick = () => app.openLicenseRenewalModal();
-      } else if (licCheck.isTrial) {
-        trialBadge.className = 'meta-pill trial-pill cursor-pointer';
-        trialText.textContent = `🟢 मोफत डेमो: ${licCheck.daysRemaining} दिवस`;
-        trialBadge.title = `तुमचा मोफत डेमो सुरू आहे. अजून ${licCheck.daysRemaining} दिवस शिल्लक आहेत.`;
-        trialBadge.onclick = () => app.showTrialInfo();
-      } else {
-        trialBadge.className = 'meta-pill license-active cursor-pointer';
-        trialText.textContent = `⭐ परवाना सक्रिय`;
-        trialBadge.title = `अधिकृत परवाना सक्रिय आहे (अजून ${licCheck.daysRemaining} दिवस).`;
-        trialBadge.onclick = () => app.showTrialInfo();
-      }
-    }
+    this.updateHeaderLicenseBadge(licCheck);
 
     const hUdise = document.getElementById('headerUdiseCode');
     if (hUdise) hUdise.textContent = activeUdise;
@@ -2169,7 +2189,9 @@ const app = {
       cloudSync.pullLicenseFromCloud(activeUdise).then(remoteLic => {
         if (remoteLic) {
           this.saveSchoolLicense(activeUdise, remoteLic);
-          this.updateDailyEntryPaywallState();
+          const freshLic = this.isLicenseValid(activeUdise);
+          this.updateHeaderLicenseBadge(freshLic);
+          this.updateDailyEntryPaywallState(freshLic);
         }
       }).catch(() => {});
     }
@@ -2198,6 +2220,36 @@ const app = {
   },
 
   /**
+   * Update Header License Badge (Active / Trial with Days / Expired)
+   */
+  updateHeaderLicenseBadge(licCheck = null) {
+    const activeUdise = this.getActiveUdise();
+    const lic = licCheck || this.isLicenseValid(activeUdise);
+    const isAdmin = this.isAdmin();
+
+    const trialBadge = document.getElementById('headerTrialBadge');
+    const trialText = document.getElementById('headerTrialText');
+    if (trialBadge && trialText) {
+      if (!lic.valid && !isAdmin) {
+        trialBadge.className = 'meta-pill license-expired cursor-pointer';
+        trialText.textContent = `🔴 परवाना संपला (नूतनीकरण करा)`;
+        trialBadge.title = `शाळेचा परवाना संपला किंवा बंद केलेला आहे. नवीन दैनिक नोंद करण्यासाठी ₹४९९/- भरून नूतनीकरण करा.`;
+        trialBadge.onclick = () => app.openLicenseRenewalModal();
+      } else if (lic.isTrial) {
+        trialBadge.className = 'meta-pill trial-pill cursor-pointer';
+        trialText.textContent = `🟢 मोफत डेमो: ${lic.daysRemaining} दिवस शिल्लक`;
+        trialBadge.title = `तुमचा मोफत डेमो सुरू आहे. अजून ${lic.daysRemaining} दिवस शिल्लक आहेत.`;
+        trialBadge.onclick = () => app.showTrialInfo();
+      } else {
+        trialBadge.className = 'meta-pill license-active cursor-pointer';
+        trialText.textContent = `⭐ परवाना सक्रिय`;
+        trialBadge.title = `अधिकृत परवाना सक्रिय आहे (अजून ${lic.daysRemaining} दिवस).`;
+        trialBadge.onclick = () => app.showTrialInfo();
+      }
+    }
+  },
+
+  /**
    * Update Daily Entry Paywall banner & form lock state
    */
   updateDailyEntryPaywallState(licCheck = null) {
@@ -2206,6 +2258,8 @@ const app = {
     const isLocked = (!lic.valid) && (activeUdise !== '9226979531');
 
     const banner = document.getElementById('licenseExpiredDailyBanner');
+    const demoBanner = document.getElementById('demoActiveDailyBanner');
+    const demoDaysText = document.getElementById('demoRemainingDaysText');
     const waBtn = document.getElementById('paywallWhatsAppBtn');
     const btnSave = document.getElementById('btnSaveDaily');
     const overlay = document.getElementById('dailyEntryLockedOverlay');
@@ -2219,6 +2273,14 @@ const app = {
         if (waBtn) {
           waBtn.href = this.generateRenewalWhatsAppLink(activeUdise, sName);
         }
+      }
+    }
+
+    if (demoBanner) {
+      const showDemo = (!isLocked) && (lic.isTrial === true) && (lic.daysRemaining > 0);
+      demoBanner.style.display = showDemo ? 'flex' : 'none';
+      if (demoDaysText) {
+        demoDaysText.textContent = `${lic.daysRemaining}`;
       }
     }
 
@@ -2819,7 +2881,7 @@ const app = {
     const statTrial = document.getElementById('adminStatTrial');
     const statExpired = document.getElementById('adminStatExpired');
 
-    if (tbody && (!tbody.children.length || forceRefresh)) {
+    if (tbody && (!tbody.children || !tbody.children.length || forceRefresh)) {
       tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">🔄 सर्व शाळांचा डेटा लोड होत आहे...</td></tr>';
     }
 
@@ -2884,8 +2946,8 @@ const app = {
                 📥 बॅकअप
               </button>
               ${isAct ? 
-                `<button type="button" class="btn btn-sm btn-danger" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminToggleLicense('${udise}')" title="परवाना बंद करा">🔴 बंद करा</button>` :
-                `<button type="button" class="btn btn-sm btn-success" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminToggleLicense('${udise}')" title="१ वर्ष थेट सक्रिय करा">⚡ सक्रिय करा</button>`
+                `<button type="button" class="btn btn-sm btn-outline-danger" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminToggleLicense('${udise}')" title="परवाना बंद (Block) करा">🛑 परवाना बंद</button>` :
+                `<button type="button" class="btn btn-sm btn-success" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminToggleLicense('${udise}')" title="परवाना व्यवस्थापन (सक्रिय / पूर्ववत करा)">⚡ परवाना द्या</button>`
               }
               <button type="button" class="btn btn-sm btn-outline-secondary" style="padding: 3px 7px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminPrepareKeyFor('${udise}')" title="की जनरेटर उघडा">
                 🔑 की
@@ -2983,35 +3045,98 @@ const app = {
     this.showToast(`📂 शाळा '${this.data.settings.schoolName}' (UDISE: ${udise}) चा संपूर्ण डेटा थेट उघडला गेला!`, 'success');
   },
 
+  /**
+   * Admin License Management (Strict Confirmation & Payment Verification)
+   */
   adminToggleLicense(udise) {
     if (!/^\d{11}$/.test(udise)) return;
+
+    // Security check: Only Master Admin can manage licenses
+    if (!this.isAdmin()) {
+      this.showToast('❌ परवाना बदलण्याचा अधिकार केवळ मुख्य ॲडमिनलाच आहे.', 'danger');
+      return;
+    }
+
+    const auth = this.getSchoolAuth(udise) || {};
+    const sName = auth.schoolName || `शाळा (${udise})`;
     const lic = this.isLicenseValid(udise);
     let updatedLic = null;
 
     if (lic.valid) {
-      // Currently valid (active or trial) -> block it
+      // School is currently valid (Active or Trial) -> Admin wants to Block it
+      const confirmBlock = confirm(`⚠️ सावधान!\n\nशाळा: ${sName}\nUDISE: ${udise}\n\nतुम्हाला या शाळेचा परवाना खरोखर बंद (Block) करायचा आहे का?\n\nपरवाना बंद केल्यास शाळेची नवीन दैनिक उपस्थिती व आहार नोंद तात्काळ कुलूपबंद (Lock) होईल आणि ₹४९९/- नूतनीकरण नोटीस दिसेल.`);
+      if (!confirmBlock) return;
+
       updatedLic = {
         udise,
         status: 'blocked',
-        plan: lic.plan || '1year',
+        plan: lic.plan || 'trial30',
+        originalPlan: lic.plan || 'trial30',
+        previousDaysRemaining: lic.daysRemaining,
         expiryDate: Date.now() - 1000,
         blockedAt: Date.now()
       };
       this.saveSchoolLicense(udise, updatedLic);
-      this.showToast(`🔴 शाळा (${udise}) चा परवाना बंद केला.`, 'warning');
+      this.showToast(`🔴 शाळा '${sName}' (UDISE: ${udise}) चा परवाना बंद केला.`, 'warning');
     } else {
-      // Not active -> activate for 1 full year (365 days)
-      const expiry = Date.now() + (365 * 24 * 60 * 60 * 1000);
-      updatedLic = {
-        udise,
-        status: 'active',
-        plan: '1year',
-        planName: '१ वर्ष पूर्ण परवाना',
-        activatedAt: Date.now(),
-        expiryDate: expiry
-      };
-      this.saveSchoolLicense(udise, updatedLic);
-      this.showToast(`⚡ शाळा (${udise}) १ वर्षासाठी थेट सक्रिय केली!`, 'success');
+      // School is currently NOT valid (Blocked or Expired) -> Admin wants to Unblock / Activate
+      const raw = localStorage.getItem(this.LICENSE_STORAGE_PREFIX + udise);
+      let storedLic = null;
+      try { if (raw) storedLic = JSON.parse(raw); } catch(e) {}
+
+      const regDate = (auth && auth.registeredAt) ? Number(auth.registeredAt) : (storedLic && storedLic.registeredAt ? Number(storedLic.registeredAt) : null);
+      const trialRemainingDays = regDate ? Math.max(0, Math.ceil((regDate + (30 * 86400000) - Date.now()) / 86400000)) : (storedLic && storedLic.previousDaysRemaining ? storedLic.previousDaysRemaining : 0);
+
+      if (trialRemainingDays > 0) {
+        // School was on an active 30-day demo before being blocked!
+        const choice = confirm(`ℹ️ परवाना पूर्ववत किंवा सक्रिय करा:\n\nशाळा: ${sName} (UDISE: ${udise})\nया शाळेचा ३० दिवसांचा मोफत डेमो चालू होता (अजून ${trialRemainingDays} दिवस शिल्लक आहेत).\n\n▶ 'OK' दाबा: शाळेचा मूळ मोफत डेमो (${trialRemainingDays} दिवस) पूर्ववत सुरू करण्यासाठी.\n\n▶ 'Cancel' दाबा: जर शाळेने ₹४९९/- शुल्क भरले असेल तर १ वर्षाचा वार्षिक परवाना देण्यासाठी.`);
+
+        if (choice) {
+          // Restore original trial days
+          const expiry = regDate ? (regDate + (30 * 86400000)) : (Date.now() + (trialRemainingDays * 86400000));
+          updatedLic = {
+            udise,
+            status: 'trial',
+            plan: 'trial30',
+            registeredAt: regDate || (Date.now() - ((30 - trialRemainingDays) * 86400000)),
+            expiryDate: expiry
+          };
+          this.saveSchoolLicense(udise, updatedLic);
+          this.showToast(`🟢 शाळा '${sName}' चा मोफत डेमो पूर्ववत सुरू केला (${trialRemainingDays} दिवस शिल्लक).`, 'success');
+        } else {
+          // Admin wants to grant ₹499 1-Year Annual License
+          const confirmAnnual = confirm(`💳 वार्षिक परवाना सक्रियकरण:\n\nशाळा: ${sName} (UDISE: ${udise})\n\nशाळेकडून ₹४९९/- वार्षिक परवाना शुल्क PhonePe/GPay वर जमा झाले आहे का?\n\n'OK' केल्यास शाळेचा अधिकृत परवाना १ वर्षासाठी (३६५ दिवस) सक्रिय होईल.`);
+          if (!confirmAnnual) return;
+
+          const expiry = Date.now() + (365 * 24 * 60 * 60 * 1000);
+          updatedLic = {
+            udise,
+            status: 'active',
+            plan: '1year',
+            planName: '१ वर्ष पूर्ण परवाना',
+            activatedAt: Date.now(),
+            expiryDate: expiry
+          };
+          this.saveSchoolLicense(udise, updatedLic);
+          this.showToast(`⭐ शाळा '${sName}' चा अधिकृत वार्षिक परवाना (₹४९९) १ वर्षासाठी सक्रिय झाला!`, 'success');
+        }
+      } else {
+        // School's demo has already finished (or expired)
+        const confirmAnnual = confirm(`💳 वार्षिक परवाना सक्रियकरण:\n\nशाळा: ${sName} (UDISE: ${udise})\n\nशाळेकडून ₹४९९/- वार्षिक परवाना शुल्क (PhonePe / GPay वर) जमा झाले आहे का?\n\n'OK' केल्यास शाळेचा अधिकृत परवाना १ वर्षासाठी (३६५ दिवस) सक्रिय होईल.`);
+        if (!confirmAnnual) return;
+
+        const expiry = Date.now() + (365 * 24 * 60 * 60 * 1000);
+        updatedLic = {
+          udise,
+          status: 'active',
+          plan: '1year',
+          planName: '१ वर्ष पूर्ण परवाना',
+          activatedAt: Date.now(),
+          expiryDate: expiry
+        };
+        this.saveSchoolLicense(udise, updatedLic);
+        this.showToast(`⭐ शाळा '${sName}' चा अधिकृत वार्षिक परवाना (₹४९९) १ वर्षासाठी सक्रिय झाला!`, 'success');
+      }
     }
 
     if (typeof cloudSync !== 'undefined' && cloudSync.pushLicenseToCloud) {
