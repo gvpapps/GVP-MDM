@@ -1406,60 +1406,34 @@ const app = {
   },
 
   /**
-   * Check if School License or Trial is Valid
+   * Check if School License or Trial is Valid (Unrestricted)
    */
   isLicenseValid(udise) {
-    const cleanUdise = String(udise || this.getActiveUdise() || '').trim();
-    if (cleanUdise === '9226979531') {
-      return { valid: true, daysRemaining: 9999, isTrial: false, status: 'active', plan: 'lifetime', expiryDate: Date.now() + 100000000000 };
-    }
-    const lic = this.getSchoolLicense(cleanUdise);
-    if (!lic || !lic.expiryDate) {
-      return { valid: true, daysRemaining: 30, isTrial: true, status: 'trial', plan: 'trial30', expiryDate: Date.now() + (30 * 86400000) };
-    }
-    const now = Date.now();
-    const expiryTime = Number(lic.expiryDate) || 0;
-    const isPast = (now > expiryTime);
-    const isBlocked = (lic.status === 'blocked');
-
-    // Self-heal: If falsely marked expired in status but expiryDate is in future and not blocked
-    if (lic.status === 'expired' && !isBlocked && !isPast) {
-      lic.status = (lic.plan && lic.plan !== 'trial30') ? 'active' : 'trial';
-      this.saveSchoolLicense(cleanUdise, lic);
-    }
-
-    const valid = (!isPast) && (!isBlocked) && (lic.status !== 'expired');
-    const isTrial = (lic.status === 'trial') || (lic.plan === 'trial30' && valid);
-    const daysRemaining = isPast ? 0 : Math.max(1, Math.ceil((expiryTime - now) / (24 * 60 * 60 * 1000)));
-
     return {
-      valid,
-      daysRemaining: valid ? daysRemaining : 0,
-      isTrial,
-      status: isBlocked ? 'blocked' : (valid ? (isTrial ? 'trial' : 'active') : 'expired'),
-      plan: lic.plan || 'trial30',
-      expiryDate: expiryTime
+      valid: true,
+      daysRemaining: 9999,
+      isTrial: false,
+      status: 'active',
+      plan: 'unlimited',
+      expiryDate: Date.now() + 100000000000
     };
   },
 
   /**
-   * Generate 1-click WhatsApp link with pre-filled school information & payment details
+   * Generate 1-click WhatsApp link with pre-filled school information
    */
   generateWhatsAppLink(udise = null, schoolName = null) {
     const cleanUdise = udise || this.getActiveUdise() || '';
     const cleanName = schoolName || (this.data && this.data.settings && this.data.settings.schoolName) || 'शाळा';
-    const text = `Hi Admin, I want to buy software license.\n\nशाळेचे नाव: ${cleanName}\nUDISE कोड: ${cleanUdise}\nआम्ही ${this.ADMIN_UPI_ID} या UPI वर ₹४९९ पेमेंट केले असून स्क्रीनशॉट जोडत आहोत. कृपया आमच्या शाळेचा परवाना (License: Approved) सक्रिय करावा. धन्यवाद!`;
+    const text = `नमस्कार,\n\nशाळेचे नाव: ${cleanName}\nUDISE कोड: ${cleanUdise}\nमला PM पोषण सॉफ्टवेअर संदर्भात सहाय्य हवे आहे. धन्यवाद!`;
     return `https://wa.me/91${this.ADMIN_CONTACT_NUMBER}?text=${encodeURIComponent(text)}`;
   },
 
   /**
-   * Generate 1-click WhatsApp link with ₹499 annual renewal request & payment details
+   * Generate 1-click WhatsApp link for support
    */
   generateRenewalWhatsAppLink(udise = null, schoolName = null) {
-    const cleanUdise = udise || this.getActiveUdise() || '';
-    const cleanName = schoolName || (this.data && this.data.settings && this.data.settings.schoolName) || 'शाळा';
-    const text = `Hi Admin, I want to buy software license.\n\nशाळेचे नाव: ${cleanName}\nUDISE कोड: ${cleanUdise}\nआम्ही ${this.ADMIN_UPI_ID} या UPI वर ₹४९९ पेमेंट केले असून स्क्रीनशॉट जोडत आहोत. कृपया आमच्या शाळेचा परवाना (License: Approved) सक्रिय करावा. धन्यवाद!`;
-    return `https://wa.me/91${this.ADMIN_CONTACT_NUMBER}?text=${encodeURIComponent(text)}`;
+    return this.generateWhatsAppLink(udise, schoolName);
   },
 
   /**
@@ -1535,10 +1509,6 @@ const app = {
       name: matchedPlan.name
     }));
 
-    // Sync to cloud if available
-    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
-      cloudSync.pushLicenseToCloud(cleanUdise, updatedLic);
-    }
 
     return {
       success: true,
@@ -1851,10 +1821,6 @@ const app = {
             auth = remoteAuth;
             this.saveSchoolAuth(udise, remoteAuth);
           }
-          const remoteLic = await cloudSync.pullLicenseFromCloud(udise);
-          if (remoteLic) {
-            this.saveSchoolLicense(udise, remoteLic);
-          }
         }
       } catch(e) {
         console.warn("Cloud auth check error:", e);
@@ -2132,7 +2098,7 @@ const app = {
     if (pwdInp) pwdInp.value = '';
     if (confPwdInp) confPwdInp.value = '';
 
-    this.showToast(`🎉 शाळा '${name}' ची नोंदणी यशस्वी! १ महिना मोफत डेमो सुरू झाला आहे.`, 'success');
+    this.showToast(`🎉 शाळा '${name}' ची नोंदणी यशस्वी झाली!`, 'success');
     this.checkAccessControl();
     this.refreshAllViews();
     this.renderCurrentTab();
@@ -2143,7 +2109,6 @@ const app = {
       if (cloudSync.clearTombstone) cloudSync.clearTombstone(udise);
       cloudSync.pushSchoolToRegistry(udise, authData);
       cloudSync.pushAuthToCloud(udise, authData);
-      cloudSync.pushLicenseToCloud(udise, trialData);
       cloudSync.pushToCloud(true, udise);
     }
     return true;
@@ -2177,17 +2142,11 @@ const app = {
       }
     }
 
-    // 2. Check Trial & License Status
-    const licCheck = this.isLicenseValid(activeUdise);
-
-    // 3. Valid Session! Always show main app so school can view old reports & data
+    // 2. Valid Session! Always show main app
     if (loginScreen) loginScreen.style.display = 'none';
     if (lockScreen) lockScreen.style.display = 'none';
     if (appWrapper) appWrapper.style.display = 'flex';
     this.updateAdminVisibility();
-
-    // Update Header Badges
-    this.updateHeaderLicenseBadge(licCheck);
 
     const hUdise = document.getElementById('headerUdiseCode');
     if (hUdise) hUdise.textContent = activeUdise;
@@ -2197,45 +2156,15 @@ const app = {
       waLockBtn.href = this.generateRenewalWhatsAppLink(activeUdise);
     }
 
-    // Remote cloud license verification
-    if (activeUdise && activeUdise.length === 11 && typeof cloudSync !== 'undefined' && cloudSync.pullLicenseFromCloud) {
-      cloudSync.pullLicenseFromCloud(activeUdise).then(remoteLic => {
-        if (remoteLic) {
-          this.saveSchoolLicense(activeUdise, remoteLic);
-          const freshLic = this.isLicenseValid(activeUdise);
-          this.updateHeaderLicenseBadge(freshLic);
-        }
-      }).catch(() => {});
-    }
-
     this.applySchoolLevelMode(this.data && this.data.settings && this.data.settings.schoolLevel);
     this.updateHeaderMeta();
     return true;
   },
 
   /**
-   * Update Header License Badge (Active / Trial with Days)
+   * Update Header License Badge (No-op - badges removed)
    */
-  updateHeaderLicenseBadge(licCheck = null) {
-    const activeUdise = this.getActiveUdise();
-    const lic = licCheck || this.isLicenseValid(activeUdise);
-
-    const trialBadge = document.getElementById('headerTrialBadge');
-    const trialText = document.getElementById('headerTrialText');
-    if (trialBadge && trialText) {
-      if (lic.isTrial) {
-        trialBadge.className = 'meta-pill trial-pill cursor-pointer';
-        trialText.textContent = `🟢 मोफत डेमो: ${lic.daysRemaining} दिवस`;
-        trialBadge.title = `तुमचा मोफत डेमो सुरू आहे (${lic.daysRemaining} दिवस शिल्लक). माहिती पाहण्यासाठी क्लिक करा.`;
-        trialBadge.onclick = () => app.showTrialInfo();
-      } else {
-        trialBadge.className = 'meta-pill license-active cursor-pointer';
-        trialText.textContent = `⭐ परवाना सक्रिय`;
-        trialBadge.title = `अधिकृत परवाना सक्रिय आहे. माहिती पाहण्यासाठी क्लिक करा.`;
-        trialBadge.onclick = () => app.showTrialInfo();
-      }
-    }
-  },
+  updateHeaderLicenseBadge(licCheck = null) {},
 
   updateDailyEntryPaywallState() {},
   openLicenseRenewalModal() {},
@@ -2243,21 +2172,9 @@ const app = {
   submitRenewalActivationKey() {},
 
   /**
-   * Show trial information popup
+   * Show trial information popup (No-op)
    */
-  showTrialInfo() {
-    const udise = this.getActiveUdise();
-    const lic = this.isLicenseValid(udise);
-    const sName = (this.data && this.data.settings && this.data.settings.schoolName) || 'शाळा';
-    const waLink = this.generateRenewalWhatsAppLink(udise, sName);
-    if (lic.isTrial) {
-      if (confirm(`🎁 शालेय पोषण आहार (PM POSHAN) - ३० दिवस मोफत डेमो\n\nशाळा: ${sName}\nUDISE: ${udise}\nउर्वरित कालावधी: ${lic.daysRemaining} दिवस शिल्लक\n\nवार्षिक परवाना शुल्क: ₹499/- प्रति वर्ष\n\nतुम्हाला १ वर्षाचा अधिकृत परवाना घेण्यासाठी व्हॉट्सअॅपवर संपर्क करायचा आहे का?`)) {
-        window.open(waLink, '_blank');
-      }
-    } else {
-      alert(`⭐ अधिकृत परवाना सक्रिय!\n\nशाळा: ${sName}\nUDISE: ${udise}\nवैधता: अजून ${lic.daysRemaining} दिवस वैध.\nवार्षिक परवाना शुल्क: ₹499/- प्रति वर्ष\n\nअधिक मदतीसाठी संपर्क: 9226979531 (श्री गणेश विलास पष्टे)`);
-    }
-  },
+  showTrialInfo() {},
 
   /**
    * Prompt Master Admin PIN to open Admin Panel
@@ -2766,20 +2683,8 @@ const app = {
         levelBadge = '<span class="badge" style="background: #7c3aed; color: #fff;">📚 १ ते ८</span>';
       }
 
-      let statusBadge = '';
-      const isAct = lic.valid;
-      if (lic.valid) {
-        if (lic.isTrial) {
-          countTrial++;
-          statusBadge = `<span class="badge-trial">🟡 डेमो (${lic.daysRemaining}d)</span>`;
-        } else {
-          countActive++;
-          statusBadge = `<span class="badge-active">🟢 सक्रिय (${lic.daysRemaining}d)</span>`;
-        }
-      } else {
-        countExpired++;
-        statusBadge = `<span class="badge-expired">🔴 बंद / कालबाह्य</span>`;
-      }
+      let statusBadge = '<span class="badge" style="background: #16a34a; color: #fff;">🟢 नोंदणीकृत</span>';
+      countActive++;
 
       const patStr = sLevel === 'both'
         ? `🎒${s.patPrimary || s.pat || 9} / 🎓${s.patUpper || 15}`
@@ -2802,13 +2707,6 @@ const app = {
               </button>
               <button type="button" class="btn btn-sm btn-outline-success" style="padding: 3px 7px; font-size: 0.75rem; font-weight: 700;" onclick="app.exportSelectedSchoolJsonBackup('${udise}')" title="या शाळेचा स्वतंत्र JSON बॅकअप डाऊनलोड करा">
                 📥 बॅकअप
-              </button>
-              ${isAct ? 
-                `<button type="button" class="btn btn-sm btn-outline-danger" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminToggleLicense('${udise}')" title="परवाना बंद (Block) करा">🛑 परवाना बंद</button>` :
-                `<button type="button" class="btn btn-sm btn-success" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminToggleLicense('${udise}')" title="परवाना व्यवस्थापन (सक्रिय / पूर्ववत करा)">⚡ परवाना द्या</button>`
-              }
-              <button type="button" class="btn btn-sm btn-outline-secondary" style="padding: 3px 7px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminPrepareKeyFor('${udise}')" title="की जनरेटर उघडा">
-                🔑 की
               </button>
               <button type="button" class="btn btn-sm btn-outline-info" style="padding: 3px 7px; font-size: 0.75rem; font-weight: 700; color: #0369a1; border-color: #0284c7;" onclick="app.adminChangeSchoolPassword('${udise}')" title="शाळेचा पासवर्ड बदला">
                 ✏️ पासवर्ड
@@ -2879,10 +2777,6 @@ const app = {
       if (cloudSync.onSchoolSwitched) cloudSync.onSchoolSwitched(udise);
       try {
         await cloudSync.pullFromCloud(true, udise);
-        const remoteLic = await cloudSync.pullLicenseFromCloud(udise);
-        if (remoteLic) {
-          this.saveSchoolLicense(udise, remoteLic);
-        }
       } catch (e) {
         console.warn("Cloud pull on adminOpenSchool notice:", e);
       }
@@ -2903,108 +2797,9 @@ const app = {
   },
 
   /**
-   * Admin License Management (Strict Confirmation & Payment Verification)
+   * Admin License Management (No-op)
    */
-  adminToggleLicense(udise) {
-    if (!/^\d{11}$/.test(udise)) return;
-
-    // Security check: Only Master Admin can manage licenses
-    if (!this.isAdmin()) {
-      this.showToast('❌ परवाना बदलण्याचा अधिकार केवळ मुख्य ॲडमिनलाच आहे.', 'danger');
-      return;
-    }
-
-    const auth = this.getSchoolAuth(udise) || {};
-    const sName = auth.schoolName || `शाळा (${udise})`;
-    const lic = this.isLicenseValid(udise);
-    let updatedLic = null;
-
-    if (lic.valid) {
-      // School is currently valid (Active or Trial) -> Admin wants to Block it
-      const confirmBlock = confirm(`⚠️ सावधान!\n\nशाळा: ${sName}\nUDISE: ${udise}\n\nतुम्हाला या शाळेचा परवाना खरोखर बंद (Block) करायचा आहे का?\n\nपरवाना बंद केल्यास शाळेची नवीन दैनिक उपस्थिती व आहार नोंद तात्काळ कुलूपबंद (Lock) होईल आणि ₹४९९/- नूतनीकरण नोटीस दिसेल.`);
-      if (!confirmBlock) return;
-
-      updatedLic = {
-        udise,
-        status: 'blocked',
-        plan: lic.plan || 'trial30',
-        originalPlan: lic.plan || 'trial30',
-        previousDaysRemaining: lic.daysRemaining,
-        expiryDate: Date.now() - 1000,
-        blockedAt: Date.now()
-      };
-      this.saveSchoolLicense(udise, updatedLic);
-      this.showToast(`🔴 शाळा '${sName}' (UDISE: ${udise}) चा परवाना बंद केला.`, 'warning');
-    } else {
-      // School is currently NOT valid (Blocked or Expired) -> Admin wants to Unblock / Activate
-      const raw = localStorage.getItem(this.LICENSE_STORAGE_PREFIX + udise);
-      let storedLic = null;
-      try { if (raw) storedLic = JSON.parse(raw); } catch(e) {}
-
-      const regDate = (auth && auth.registeredAt) ? Number(auth.registeredAt) : (storedLic && storedLic.registeredAt ? Number(storedLic.registeredAt) : null);
-      const trialRemainingDays = regDate ? Math.max(0, Math.ceil((regDate + (30 * 86400000) - Date.now()) / 86400000)) : (storedLic && storedLic.previousDaysRemaining ? storedLic.previousDaysRemaining : 0);
-
-      if (trialRemainingDays > 0) {
-        // School was on an active 30-day demo before being blocked!
-        const choice = confirm(`ℹ️ परवाना पूर्ववत किंवा सक्रिय करा:\n\nशाळा: ${sName} (UDISE: ${udise})\nया शाळेचा ३० दिवसांचा मोफत डेमो चालू होता (अजून ${trialRemainingDays} दिवस शिल्लक आहेत).\n\n▶ 'OK' दाबा: शाळेचा मूळ मोफत डेमो (${trialRemainingDays} दिवस) पूर्ववत सुरू करण्यासाठी.\n\n▶ 'Cancel' दाबा: जर शाळेने ₹४९९/- शुल्क भरले असेल तर १ वर्षाचा वार्षिक परवाना देण्यासाठी.`);
-
-        if (choice) {
-          // Restore original trial days
-          const expiry = regDate ? (regDate + (30 * 86400000)) : (Date.now() + (trialRemainingDays * 86400000));
-          updatedLic = {
-            udise,
-            status: 'trial',
-            plan: 'trial30',
-            registeredAt: regDate || (Date.now() - ((30 - trialRemainingDays) * 86400000)),
-            expiryDate: expiry
-          };
-          this.saveSchoolLicense(udise, updatedLic);
-          this.showToast(`🟢 शाळा '${sName}' चा मोफत डेमो पूर्ववत सुरू केला (${trialRemainingDays} दिवस शिल्लक).`, 'success');
-        } else {
-          // Admin wants to grant ₹499 1-Year Annual License
-          const confirmAnnual = confirm(`💳 वार्षिक परवाना सक्रियकरण:\n\nशाळा: ${sName} (UDISE: ${udise})\n\nशाळेकडून ₹४९९/- वार्षिक परवाना शुल्क PhonePe/GPay वर जमा झाले आहे का?\n\n'OK' केल्यास शाळेचा अधिकृत परवाना १ वर्षासाठी (३६५ दिवस) सक्रिय होईल.`);
-          if (!confirmAnnual) return;
-
-          const expiry = Date.now() + (365 * 24 * 60 * 60 * 1000);
-          updatedLic = {
-            udise,
-            status: 'active',
-            plan: '1year',
-            planName: '१ वर्ष पूर्ण परवाना',
-            activatedAt: Date.now(),
-            expiryDate: expiry
-          };
-          this.saveSchoolLicense(udise, updatedLic);
-          this.showToast(`⭐ शाळा '${sName}' चा अधिकृत वार्षिक परवाना (₹४९९) १ वर्षासाठी सक्रिय झाला!`, 'success');
-        }
-      } else {
-        // School's demo has already finished (or expired)
-        const confirmAnnual = confirm(`💳 वार्षिक परवाना सक्रियकरण:\n\nशाळा: ${sName} (UDISE: ${udise})\n\nशाळेकडून ₹४९९/- वार्षिक परवाना शुल्क (PhonePe / GPay वर) जमा झाले आहे का?\n\n'OK' केल्यास शाळेचा अधिकृत परवाना १ वर्षासाठी (३६५ दिवस) सक्रिय होईल.`);
-        if (!confirmAnnual) return;
-
-        const expiry = Date.now() + (365 * 24 * 60 * 60 * 1000);
-        updatedLic = {
-          udise,
-          status: 'active',
-          plan: '1year',
-          planName: '१ वर्ष पूर्ण परवाना',
-          activatedAt: Date.now(),
-          expiryDate: expiry
-        };
-        this.saveSchoolLicense(udise, updatedLic);
-        this.showToast(`⭐ शाळा '${sName}' चा अधिकृत वार्षिक परवाना (₹४९९) १ वर्षासाठी सक्रिय झाला!`, 'success');
-      }
-    }
-
-    if (typeof cloudSync !== 'undefined' && cloudSync.pushLicenseToCloud) {
-      cloudSync.pushLicenseToCloud(udise, updatedLic);
-    }
-
-    this.renderAdminSchoolsList();
-    if (this.getActiveUdise() === udise) {
-      this.checkAccessControl();
-    }
-  },
+  adminToggleLicense(udise) {},
 
   adminPrepareKeyFor(udise) {
     const inp = document.getElementById('adminTargetUdise');
@@ -3528,6 +3323,33 @@ const app = {
             }
           }
         });
+      }
+
+      // Self-healing purge for Chevane (27240203701) ghost record on 2026-09-15
+      if (cleanUdise === '27240203701' && this.data.records && this.data.records['2026-09-15']) {
+        const sep15 = this.data.records['2026-09-15'];
+        if (sep15.remarks === 'frozen' || sep15.children === 20 || sep15.children > this.getActivePat('primary')) {
+          delete this.data.records['2026-09-15'];
+          if (!this.data.deletedRecordDates) this.data.deletedRecordDates = [];
+          if (!this.data.deletedRecordDates.includes('2026-09-15')) {
+            this.data.deletedRecordDates.push('2026-09-15');
+          }
+          ['MDM_SAFE_BACKUP_27240203701', 'MDM_SCHOOL_BACKUP_27240203701'].forEach(bKey => {
+            const raw = localStorage.getItem(bKey);
+            if (raw) {
+              try {
+                const bData = JSON.parse(raw);
+                if (bData && bData.records && bData.records['2026-09-15']) {
+                  delete bData.records['2026-09-15'];
+                  localStorage.setItem(bKey, JSON.stringify(bData));
+                }
+              } catch(e) {}
+            }
+          });
+          if (typeof cloudSync !== 'undefined' && cloudSync.deleteDayRecordFromCloud) {
+            cloudSync.deleteDayRecordFromCloud('27240203701', '2026-09-15', 'primary').catch(() => {});
+          }
+        }
       }
 
       // Immediately save clean ordered state for this school
@@ -4860,9 +4682,15 @@ const app = {
     const radioManual = document.getElementById('grainModeManual');
     const manualBox = document.getElementById('manualGrainsSelectionBox');
 
+    const activePat = this.getActivePat();
+    if (childrenInput) {
+      childrenInput.max = activePat;
+      childrenInput.min = '0';
+    }
+
     if (existingRec) {
       if (statusPill) statusPill.textContent = `🔵 ${this.getActiveSectionName()} जतन केलेली नोंद`;
-      if (childrenInput) childrenInput.value = existingRec.children;
+      if (childrenInput) childrenInput.value = Math.min(activePat, existingRec.children);
       
       // Menu resolution
       const isKnownMenu = this.data.menus.some(m => m.name === existingRec.menuName);
@@ -4976,8 +4804,9 @@ const app = {
   adjustChildren(delta) {
     const childrenInput = document.getElementById('entryChildren');
     if (!childrenInput) return;
+    const maxPat = this.getActivePat();
     const current = parseInt(childrenInput.value) || 0;
-    const updated = Math.max(0, current + delta);
+    const updated = Math.min(maxPat, Math.max(0, current + delta));
     childrenInput.value = updated;
     this.onInputsChanged();
   },
@@ -5289,6 +5118,14 @@ const app = {
     const plates = children;
     const isHoliday = (holidayToggle && holidayToggle.value === 'holiday') || children === 0;
 
+    const activeSection = this.getActiveSection();
+    const activePat = this.getActivePat(activeSection);
+    if (!isHoliday && children > activePat) {
+      this.showToast(`❌ उपस्थिती संख्या (${children}) ही शाळेच्या मंजूर पटसंख्येपेक्षा (${activePat}) जास्त असू शकत नाही!`, 'danger');
+      if (childrenInput && typeof childrenInput.focus === 'function') childrenInput.focus();
+      return;
+    }
+
     // Collect manual grains if in manual mode
     let manualGrainsList = null;
     if (isManualMode) {
@@ -5309,7 +5146,6 @@ const app = {
       menuName = menuSelect.value;
     }
 
-    const activeSection = this.getActiveSection();
     const record = this.calculateDay(dateStr, isHoliday ? 0 : children, menuName, isHoliday ? 0 : plates, manualGrainsList, activeSection);
     record.remarks = remarksInput ? remarksInput.value.trim() : '';
     record.updatedAt = new Date().toISOString();
@@ -5860,6 +5696,19 @@ const app = {
     const uChildren = Math.max(0, parseInt(uInp?.value) || 0);
     const uPlates = (uPlatesInp && uPlatesInp.value !== '') ? Math.max(0, parseInt(uPlatesInp.value) || 0) : uChildren;
     const isHoliday = holidayCheck ? holidayCheck.checked : (holidayToggle && holidayToggle.value === 'holiday');
+
+    const maxPrimaryPat = this.getActivePat('primary');
+    const maxUpperPat = this.getActivePat('upper');
+    if (!isHoliday && pChildren > maxPrimaryPat) {
+      this.showToast(`❌ इ. १ ते ५ उपस्थिती (${pChildren}) ही मंजूर पटसंख्येपेक्षा (${maxPrimaryPat}) जास्त असू शकत नाही!`, 'danger');
+      if (pInp && typeof pInp.focus === 'function') pInp.focus();
+      return;
+    }
+    if (!isHoliday && uChildren > maxUpperPat) {
+      this.showToast(`❌ इ. ६ ते ८ उपस्थिती (${uChildren}) ही मंजूर पटसंख्येपेक्षा (${maxUpperPat}) जास्त असू शकत नाही!`, 'danger');
+      if (uInp && typeof uInp.focus === 'function') uInp.focus();
+      return;
+    }
 
     let menuName = "वरणभात";
     if (isHoliday) {
@@ -6530,8 +6379,9 @@ const app = {
         <td class="text-right">${!isHoliday && q.masala ? (q.masala * 1000).toFixed(1) : '—'}</td>
         <td class="text-right">${isHoliday ? '0' : rec.fuelCost}</td>
         <td><small>${rec.remarks || ''}</small></td>
-        <td class="no-print text-center">
-          <button class="btn btn-sm btn-outline-primary" onclick="app.editDayRecord('${dateStr}', '${this.activeSection}')">✏️ बदल</button>
+        <td class="no-print text-center" style="white-space: nowrap;">
+          <button class="btn btn-sm btn-outline-primary" style="padding: 2px 6px; font-size: 0.75rem;" onclick="app.editDayRecord('${dateStr}', '${this.activeSection}')" title="या दिवसाची नोंद बदला">✏️ बदल</button>
+          <button class="btn btn-sm btn-outline-danger" style="padding: 2px 6px; font-size: 0.75rem; margin-left: 4px;" onclick="app.deleteDayRecordFromRegister('${dateStr}', '${this.activeSection}')" title="या दिवसाची नोंद हटवा">🗑️ हटवा</button>
         </td>
       `;
       tableBody.appendChild(tr);
@@ -6573,10 +6423,12 @@ const app = {
     if (targetSection && (targetSection === 'primary' || targetSection === 'upper')) {
       this.switchSection(targetSection);
     }
-    this.switchTab('daily');
     const dateInput = document.getElementById('entryDate');
     if (dateInput) {
       dateInput.value = dateStr;
+    }
+    this.switchTab('daily');
+    if (dateInput) {
       this.onDateChanged();
     }
     const formBox = document.getElementById('dailyEntryForm');
@@ -6584,6 +6436,58 @@ const app = {
       formBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     this.showToast(`दि. ${dateStr} ची ${this.getActiveSectionName()} नोंद संपादनासाठी उघडली आहे.`, 'info');
+  },
+
+  /**
+   * Delete day record directly from Daily Register view with cloud sync
+   */
+  async deleteDayRecordFromRegister(dateStr, targetSection = null) {
+    const sec = targetSection || this.activeSection || 'primary';
+    const secName = (sec === 'upper') ? 'इ. ६ ते ८' : 'इ. १ ते ५';
+    if (!confirm(`⚠️ खात्री करा:\n\nदि. ${dateStr} ची (${secName}) दैनिक आहार नोंद कायमची हटवायची आहे का?`)) {
+      return;
+    }
+
+    const curUdise = this.getActiveUdise();
+
+    // 1. Delete locally from memory & record tombstone
+    if (sec === 'upper') {
+      if (this.data.recordsUpper && this.data.recordsUpper[dateStr]) {
+        delete this.data.recordsUpper[dateStr];
+      }
+      if (!this.data.deletedRecordDatesUpper) this.data.deletedRecordDatesUpper = [];
+      if (!this.data.deletedRecordDatesUpper.includes(dateStr)) {
+        this.data.deletedRecordDatesUpper.push(dateStr);
+      }
+    } else {
+      if (this.data.records && this.data.records[dateStr]) {
+        delete this.data.records[dateStr];
+      }
+      if (!this.data.deletedRecordDates) this.data.deletedRecordDates = [];
+      if (!this.data.deletedRecordDates.includes(dateStr)) {
+        this.data.deletedRecordDates.push(dateStr);
+      }
+    }
+
+    // 2. Persist local storage
+    this.saveState();
+
+    // 3. Delete directly from Firebase Cloud
+    if (typeof cloudSync !== 'undefined' && cloudSync.deleteDayRecordFromCloud) {
+      try {
+        await cloudSync.deleteDayRecordFromCloud(curUdise, dateStr, sec);
+      } catch (err) {
+        console.warn('Cloud delete notice:', err);
+      }
+      if (cloudSync.pushToCloud) {
+        cloudSync.pushToCloud(false, curUdise);
+      }
+    }
+
+    // 4. Re-render UI
+    this.renderDailyRegister();
+    if (typeof this.renderCurrentTab === 'function') this.renderCurrentTab();
+    this.showToast(`🗑️ दि. ${dateStr} ची (${secName}) नोंद यशस्वीपणे हटवली!`, 'success');
   },
 
   printDailyRegister() {

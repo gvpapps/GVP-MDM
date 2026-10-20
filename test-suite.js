@@ -256,28 +256,43 @@ const testSuite = {
       description: "एकाच UDISE लॉगिनखाली १-५ ची नोंद data.records मध्ये व ६-८ ची नोंद data.recordsUpper मध्ये एकमेकांना बाधा न आणता राहते.",
       run() {
         const testDate = "2026-09-01";
-        // Save distinct records for both sections
-        const calcP = app.calculateDay(testDate, 8, "मुगडाळ खिचडी", null, null, 'primary');
-        const calcU = app.calculateDay(testDate, 14, "मुगडाळ खिचडी", null, null, 'upper');
-        
-        if (!app.data.records) app.data.records = {};
-        if (!app.data.recordsUpper) app.data.recordsUpper = {};
-        
-        app.data.records[testDate] = calcP;
-        app.data.recordsUpper[testDate] = calcU;
+        const origRec = app.data?.records ? app.data.records[testDate] : undefined;
+        const origRecUpper = app.data?.recordsUpper ? app.data.recordsUpper[testDate] : undefined;
+        try {
+          // Save distinct records for both sections
+          const calcP = app.calculateDay(testDate, 8, "मुगडाळ खिचडी", null, null, 'primary');
+          const calcU = app.calculateDay(testDate, 14, "मुगडाळ खिचडी", null, null, 'upper');
+          
+          if (!app.data.records) app.data.records = {};
+          if (!app.data.recordsUpper) app.data.recordsUpper = {};
+          
+          app.data.records[testDate] = calcP;
+          app.data.recordsUpper[testDate] = calcU;
 
-        const pRec = app.getActiveRecords('primary')[testDate];
-        const uRec = app.getActiveRecords('upper')[testDate];
+          const pRec = app.getActiveRecords('primary')[testDate];
+          const uRec = app.getActiveRecords('upper')[testDate];
 
-        const passed = (pRec && pRec.children === 8 && pRec.quantities.rice === 0.8) &&
-                       (uRec && uRec.children === 14 && Math.abs(uRec.quantities.rice - 2.1) < 0.0001) &&
-                       (app.getActivePat('primary') !== undefined) &&
-                       (app.getActivePat('upper') !== undefined);
+          const passed = (pRec && pRec.children === 8 && pRec.quantities.rice === 0.8) &&
+                         (uRec && uRec.children === 14 && Math.abs(uRec.quantities.rice - 2.1) < 0.0001) &&
+                         (app.getActivePat('primary') !== undefined) &&
+                         (app.getActivePat('upper') !== undefined);
 
-        return {
-          passed,
-          details: `१ ते ५: ${pRec ? pRec.children : 0} मुले, तांदूळ ${pRec ? pRec.quantities.rice : 0} kg | ६ ते ८: ${uRec ? uRec.children : 0} मुले, तांदूळ ${uRec ? uRec.quantities.rice : 0} kg`
-        };
+          return {
+            passed,
+            details: `१ ते ५: ${pRec ? pRec.children : 0} मुले, तांदूळ ${pRec ? pRec.quantities.rice : 0} kg | ६ ते ८: ${uRec ? uRec.children : 0} मुले, तांदूळ ${uRec ? uRec.quantities.rice : 0} kg`
+          };
+        } finally {
+          if (origRec !== undefined) {
+            app.data.records[testDate] = origRec;
+          } else if (app.data?.records) {
+            delete app.data.records[testDate];
+          }
+          if (origRecUpper !== undefined) {
+            app.data.recordsUpper[testDate] = origRecUpper;
+          } else if (app.data?.recordsUpper) {
+            delete app.data.recordsUpper[testDate];
+          }
+        }
       }
     },
     {
@@ -355,24 +370,40 @@ const testSuite = {
         // Safety verification: recalculating 2026-10 should NOT touch 2026-09
         const dummyDateOld = '2026-09-15';
         const dummyDateCurrent = '2026-10-15';
-        if (!app.data.records) app.data.records = {};
-        app.data.records[dummyDateOld] = { date: dummyDateOld, menuName: 'वरणभात', children: 20, plates: 20, fuelCost: 30.2, quantities: { rice: 2.0, tur_dal: 0.4 }, remarks: 'frozen' };
-        app.data.records[dummyDateCurrent] = { date: dummyDateCurrent, menuName: 'वरणभात', children: 20, plates: 20, fuelCost: 10, quantities: { rice: 1.0, tur_dal: 0.2 }, remarks: 'active' };
+        const origRecOld = app.data?.records ? app.data.records[dummyDateOld] : undefined;
+        const origRecCurrent = app.data?.records ? app.data.records[dummyDateCurrent] : undefined;
 
-        const picker = document.getElementById('monthlyExcelPicker');
-        if (picker) picker.value = '2026-10';
-        
-        app.recalculateCurrentMonth(false); // Run without prompt
+        try {
+          if (!app.data.records) app.data.records = {};
+          app.data.records[dummyDateOld] = { date: dummyDateOld, menuName: 'वरणभात', children: 20, plates: 20, fuelCost: 30.2, quantities: { rice: 2.0, tur_dal: 0.4 }, remarks: 'frozen' };
+          app.data.records[dummyDateCurrent] = { date: dummyDateCurrent, menuName: 'वरणभात', children: 20, plates: 20, fuelCost: 10, quantities: { rice: 1.0, tur_dal: 0.2 }, remarks: 'active' };
 
-        const oldUntouched = app.data.records[dummyDateOld].quantities.rice === 2.0 && app.data.records[dummyDateOld].remarks === 'frozen';
-        const currentUpdated = app.data.records[dummyDateCurrent].quantities.rice === 2.0; // Recalculated with latest 0.10 rate
+          const picker = document.getElementById('monthlyExcelPicker');
+          if (picker) picker.value = '2026-10';
+          
+          app.recalculateCurrentMonth(false); // Run without prompt
 
-        const passed = hasRecalcMethod && hasStandardMenusMethod && hasGodBhat && hasPurakAhar && hasDoodhKheer && oldUntouched && currentUpdated;
+          const oldUntouched = app.data.records[dummyDateOld].quantities.rice === 2.0 && app.data.records[dummyDateOld].remarks === 'frozen';
+          const currentUpdated = app.data.records[dummyDateCurrent].quantities.rice === 2.0; // Recalculated with latest 0.10 rate
 
-        return {
-          passed,
-          details: `पुनर्गणना पद्धत: ${hasRecalcMethod ? 'उपलब्ध' : 'गहाळ'}, मानक मेन्यू सिंक: ${hasGodBhat && hasPurakAhar ? 'यशस्वी' : 'त्रुटी'}, मागील महिना (2026-09) सुरक्षित: ${oldUntouched ? 'होय (100% Frozen)' : 'नाही'}, चालू महिना अपडेट: ${currentUpdated ? 'होय' : 'नाही'}`
-        };
+          const passed = hasRecalcMethod && hasStandardMenusMethod && hasGodBhat && hasPurakAhar && hasDoodhKheer && oldUntouched && currentUpdated;
+
+          return {
+            passed,
+            details: `पुनर्गणना पद्धत: ${hasRecalcMethod ? 'उपलब्ध' : 'गहाळ'}, मानक मेन्यू सिंक: ${hasGodBhat && hasPurakAhar ? 'यशस्वी' : 'त्रुटी'}, मागील महिना (2026-09) सुरक्षित: ${oldUntouched ? 'होय (100% Frozen)' : 'नाही'}, चालू महिना अपडेट: ${currentUpdated ? 'होय' : 'नाही'}`
+          };
+        } finally {
+          if (origRecOld !== undefined) {
+            app.data.records[dummyDateOld] = origRecOld;
+          } else if (app.data?.records) {
+            delete app.data.records[dummyDateOld];
+          }
+          if (origRecCurrent !== undefined) {
+            app.data.records[dummyDateCurrent] = origRecCurrent;
+          } else if (app.data?.records) {
+            delete app.data.records[dummyDateCurrent];
+          }
+        }
       }
     },
     {
@@ -758,110 +789,114 @@ const testSuite = {
     },
     {
       id: 26,
-      name: "Test 26: बहु-शाळा लॉगिन पृथक्करण (Chevane Isolation), परवाना पडताळणी व दैनिक नोंदीची अखंडता",
-      description: "चेवणे (27240203701) लॉगिनवर मोहापाडा किंवा मेंगाळवाडीचे नाव न येणे (काटेकोर शाळा पृथक्करण), ३० दिवस मोफत डेमो शिल्लक दिवस अचूक दिसणे, १ वर्ष ॲक्टिव्हेशन की पडताळणी, आणि दैनिक नोंद विनाअडथळा जतन होणे.",
+      name: "Test 26: बहु-शाळा लॉगिन पृथक्करण (Chevane Isolation), पटसंख्या मर्यादा व दैनिक नोंदीची अखंडता",
+      description: "चेवणे (27240203701) लॉगिनवर मोहापाडा किंवा मेंगाळवाडीचे नाव न येणे, १५ सप्टेंबरची २० मुलांची अनधिकृत नोंद नष्ट होणे, पटसंख्येपेक्षा जास्त उपस्थिती नोंदवण्यास प्रतिबंध, आणि दैनिक नोंद विनाअडथळा जतन होणे.",
       run() {
         // Save current session to guarantee zero pollution
         const origActiveUdise = localStorage.getItem(app.ACTIVE_UDISE_STORAGE_KEY);
         const origData = app.data ? JSON.parse(JSON.stringify(app.data)) : null;
 
         const chevaneUdise = "27240203701";
-        const mengalwadiUdise = "27240304501";
-        const demoUdise = "27240201502";
-
-        // 1. Verify Strict School Isolation: Chevane vs Mengalwadi
         const origChevaneAuth = app.getSchoolAuth(chevaneUdise);
         const origChevaneData = localStorage.getItem(app.getSchoolStorageKey(chevaneUdise));
 
-        // Seed Chevane clean auth & registration
-        app.saveSchoolAuth(chevaneUdise, {
-          udise: chevaneUdise,
-          schoolName: "रा.जि.प. प्राथमिक शाळा चेवणे",
-          schoolLevel: "both",
-          passwordHash: app.sha256("1234")
-        });
-        app.registerSchool({
-          udise: chevaneUdise,
-          schoolName: "रा.जि.प. प्राथमिक शाळा चेवणे",
-          schoolLevel: "both"
-        });
+        let passChevaneName = false;
+        let passChevaneUdise = false;
+        let passSep15Purged = false;
+        let passPatLimitValidation = false;
+        let passAdjust = false;
+        let passLicenseUnrestricted = false;
+        let sNameChevane = '';
 
-        // Simulate Chevane login & state load
-        app.loadState(chevaneUdise);
-        const sNameChevane = (app.data && app.data.settings && app.data.settings.schoolName) || '';
-        const passChevaneName = sNameChevane.includes("चेवणे") && !sNameChevane.includes("मेंगाळवाडी") && !sNameChevane.includes("मोहापाडा");
-        const passChevaneUdise = (app.data && app.data.settings && app.data.settings.udise === chevaneUdise);
+        try {
+          // Seed Chevane clean auth & registration
+          app.saveSchoolAuth(chevaneUdise, {
+            udise: chevaneUdise,
+            schoolName: "रा.जि.प. प्राथमिक शाळा चेवणे",
+            schoolLevel: "both",
+            pat: 9,
+            patPrimary: 9,
+            patUpper: 15,
+            passwordHash: app.sha256("1234")
+          });
+          app.registerSchool({
+            udise: chevaneUdise,
+            schoolName: "रा.जि.प. प्राथमिक शाळा चेवणे",
+            schoolLevel: "both",
+            pat: 9,
+            patPrimary: 9,
+            patUpper: 15
+          });
 
-        // 2. Test Active 30-day Demo school days calculation
-        const origDemoLic = app.getSchoolLicense(demoUdise);
-        const mockDemoLic = {
-          udise: demoUdise,
-          status: 'trial',
-          plan: 'trial30',
-          registeredAt: Date.now() - (12 * 24 * 60 * 60 * 1000),
-          expiryDate: Date.now() + (18 * 24 * 60 * 60 * 1000)
-        };
-        app.saveSchoolLicense(demoUdise, mockDemoLic);
+          // Simulate Chevane login & state load
+          app.loadState(chevaneUdise);
+          sNameChevane = (app.data && app.data.settings && app.data.settings.schoolName) || '';
+          passChevaneName = sNameChevane.includes("चेवणे") && !sNameChevane.includes("मेंगाळवाडी") && !sNameChevane.includes("मोहापाडा");
+          passChevaneUdise = (app.data && app.data.settings && app.data.settings.udise === chevaneUdise);
 
-        const checkDemo = app.isLicenseValid(demoUdise);
-        const passDemoValid = (checkDemo.valid === true) && (checkDemo.isTrial === true) && (checkDemo.daysRemaining >= 17 && checkDemo.daysRemaining <= 19);
+          // 2. Verify 15-Sept ghost record is purged and absent
+          passSep15Purged = (!app.data.records || !app.data.records['2026-09-15'] || app.data.records['2026-09-15'].children <= 9);
 
-        // 3. Header trial badge reflects demo days
-        app.updateHeaderLicenseBadge(checkDemo);
-        const headerBadgeText = document.getElementById('headerTrialText');
-        const passHeaderBadge = (!headerBadgeText || headerBadgeText.textContent.includes('मोफत डेमो'));
+          // 3. Verify Strict Pat Attendance Limit: children > activePat must be blocked
+          let toastMessage = "";
+          let toastType = "";
+          const origShowToast = app.showToast;
+          app.showToast = (msg, type) => { toastMessage = msg; toastType = type; };
 
-        // 4. Verify valid key activation unlocks 365 days
-        const validKey = app.generateAdminKey(chevaneUdise, '1year');
-        const actRes = app.verifyActivationKey(validKey, chevaneUdise);
-        const passActivation = actRes.success === true;
-        const checkActive = app.isLicenseValid(chevaneUdise);
-        const passActiveNow = (checkActive.valid === true) && (checkActive.daysRemaining >= 364);
+          const dateInput = document.getElementById('entryDate');
+          const childrenInput = document.getElementById('entryChildren');
+          const holidayToggle = document.getElementById('entryHolidayToggle');
 
-        // 5. Verify Daily Entry save works cleanly without any paywall blocking
-        let toastType = "";
-        const origShowToast = app.showToast;
-        app.showToast = (msg, type) => { toastType = type; };
+          if (dateInput) dateInput.value = '2026-10-20';
+          if (childrenInput) childrenInput.value = '20'; // 20 > 9 (activePat)
+          if (holidayToggle) holidayToggle.value = 'working';
 
-        // Test adjust children
-        const childrenInput = document.getElementById('entryChildren');
-        const origVal = childrenInput ? childrenInput.value : '0';
-        if (childrenInput) childrenInput.value = 5;
-        app.adjustChildren(1);
-        const passAdjust = childrenInput ? (Number(childrenInput.value) === 6) : true;
+          app.saveCurrentRecord();
+          passPatLimitValidation = (toastType === 'danger' && toastMessage.includes('मंजूर पटसंख्येपेक्षा'));
 
-        // Restore original mocks & active session
-        app.showToast = origShowToast;
-        if (childrenInput) childrenInput.value = origVal;
-        if (origDemoLic) app.saveSchoolLicense(demoUdise, origDemoLic);
-        if (origChevaneAuth) {
-          app.saveSchoolAuth(chevaneUdise, origChevaneAuth);
-        } else {
-          localStorage.removeItem(app.AUTH_STORAGE_PREFIX + chevaneUdise);
-        }
-        if (origChevaneData) {
-          localStorage.setItem(app.getSchoolStorageKey(chevaneUdise), origChevaneData);
-        } else {
-          localStorage.removeItem(app.getSchoolStorageKey(chevaneUdise));
-        }
+          // 4. Verify adjust children clamps to activePat (9)
+          if (childrenInput) childrenInput.value = '8';
+          app.adjustChildren(1); // becomes 9
+          const val9 = childrenInput ? Number(childrenInput.value) : 9;
+          app.adjustChildren(1); // should stay 9 because pat is 9
+          const valStay9 = childrenInput ? Number(childrenInput.value) : 9;
+          passAdjust = (val9 === 9 && valStay9 === 9);
 
-        // Restore active user session perfectly
-        if (origActiveUdise) {
-          localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, origActiveUdise);
-          if (origData) {
-            app.data = origData;
+          // 5. Verify Unrestricted License
+          const checkLic = app.isLicenseValid(chevaneUdise);
+          passLicenseUnrestricted = (checkLic.valid === true && checkLic.status === 'active');
+
+          app.showToast = origShowToast;
+        } finally {
+          // Restore original mocks & active session
+          if (origChevaneAuth) {
+            app.saveSchoolAuth(chevaneUdise, origChevaneAuth);
           } else {
-            app.loadState(origActiveUdise);
+            localStorage.removeItem(app.AUTH_STORAGE_PREFIX + chevaneUdise);
           }
-        } else {
-          localStorage.removeItem(app.ACTIVE_UDISE_STORAGE_KEY);
+          if (origChevaneData) {
+            localStorage.setItem(app.getSchoolStorageKey(chevaneUdise), origChevaneData);
+          } else {
+            localStorage.removeItem(app.getSchoolStorageKey(chevaneUdise));
+          }
+
+          if (origActiveUdise) {
+            localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, origActiveUdise);
+            if (origData) {
+              app.data = origData;
+            } else {
+              app.loadState(origActiveUdise);
+            }
+          } else {
+            localStorage.removeItem(app.ACTIVE_UDISE_STORAGE_KEY);
+          }
         }
 
-        const passed = passChevaneName && passChevaneUdise && passDemoValid && passHeaderBadge && passActivation && passActiveNow && passAdjust;
+        const passed = passChevaneName && passChevaneUdise && passSep15Purged && passPatLimitValidation && passAdjust && passLicenseUnrestricted;
 
         return {
           passed,
-          details: `चेवणे शाळा नाव पृथक्करण (${sNameChevane}): ${passChevaneName ? 'अचूक (मेंगाळवाडी/मोहापाडा ओव्हरराईट नाही)' : 'त्रुटी'}, चेवणे UDISE: ${passChevaneUdise ? 'अचूक' : 'त्रुटी'}, मोफत डेमो (१८ दिवस): ${passDemoValid ? 'सक्रिय व अचूक दिवस' : 'त्रुटी'}, १ वर्ष की ॲक्टिव्हेशन: ${passActiveNow ? 'यशस्वी' : 'त्रुटी'}, दैनिक उपस्थिती नोंद: ${passAdjust ? 'विनाअडथळा सुरू' : 'त्रुटी'}`
+          details: `चेवणे शाळा नाव पृथक्करण (${sNameChevane}): ${passChevaneName ? 'अचूक' : 'त्रुटी'}, चेवणे UDISE: ${passChevaneUdise ? 'अचूक' : 'त्रुटी'}, १५ सप्टेंबर २० मुले नोंद निष्कासन: ${passSep15Purged ? 'होय (Purged)' : 'नाही'}, पटसंख्या मर्यादा पडताळणी (>पट ब्लॉक): ${passPatLimitValidation ? 'होय' : 'नाही'}, दैनिक उपस्थिती Clamp: ${passAdjust ? 'अचूक' : 'त्रुटी'}`
         };
       }
     }
@@ -871,6 +906,9 @@ const testSuite = {
    * Run all test cases and render results into DOM
    */
   runAllTests() {
+    const origActiveUdise = localStorage.getItem(app.ACTIVE_UDISE_STORAGE_KEY);
+    const origData = app.data ? JSON.parse(JSON.stringify(app.data)) : null;
+
     const container = document.getElementById('testCasesContainer');
     const badge = document.getElementById('testSummaryBadge');
     if (!container) return;
@@ -878,38 +916,49 @@ const testSuite = {
     container.innerHTML = '';
     let passCount = 0;
 
-    this.tests.forEach(test => {
-      let result = { passed: false, details: "Error" };
-      try {
-        result = test.run();
-      } catch (e) {
-        result = { passed: false, details: `अपवाद: ${e.message}` };
+    try {
+      this.tests.forEach(test => {
+        let result = { passed: false, details: "Error" };
+        try {
+          result = test.run();
+        } catch (e) {
+          result = { passed: false, details: `अपवाद: ${e.message}` };
+        }
+
+        if (result.passed) passCount++;
+
+        const item = document.createElement('div');
+        item.className = 'test-case-item';
+        item.innerHTML = `
+          <div class="test-case-info">
+            <div class="test-case-title">${test.name}</div>
+            <div class="test-case-desc">${test.description}</div>
+            <div class="form-hint" style="color: #475569; margin-top: 0.25rem;"><strong>तपशील:</strong> ${result.details}</div>
+          </div>
+          <div class="test-case-status ${result.passed ? 'passed' : 'failed'}">
+            <span>${result.passed ? '✅ उत्तीर्ण (PASSED)' : '❌ अनुत्तीर्ण (FAILED)'}</span>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+
+      if (badge) {
+        if (passCount === this.tests.length) {
+          badge.className = 'badge badge-success';
+          badge.innerHTML = `🎉 सर्व ${passCount}/${this.tests.length} चाचण्या यशस्वीरित्या उत्तीर्ण!`;
+        } else {
+          badge.className = 'badge badge-danger';
+          badge.innerHTML = `⚠️ ${passCount}/${this.tests.length} चाचण्या उत्तीर्ण`;
+        }
       }
-
-      if (result.passed) passCount++;
-
-      const item = document.createElement('div');
-      item.className = 'test-case-item';
-      item.innerHTML = `
-        <div class="test-case-info">
-          <div class="test-case-title">${test.name}</div>
-          <div class="test-case-desc">${test.description}</div>
-          <div class="form-hint" style="color: #475569; margin-top: 0.25rem;"><strong>तपशील:</strong> ${result.details}</div>
-        </div>
-        <div class="test-case-status ${result.passed ? 'passed' : 'failed'}">
-          <span>${result.passed ? '✅ उत्तीर्ण (PASSED)' : '❌ अनुत्तीर्ण (FAILED)'}</span>
-        </div>
-      `;
-      container.appendChild(item);
-    });
-
-    if (badge) {
-      if (passCount === this.tests.length) {
-        badge.className = 'badge badge-success';
-        badge.innerHTML = `🎉 सर्व ${passCount}/${this.tests.length} चाचण्या यशस्वीरित्या उत्तीर्ण!`;
-      } else {
-        badge.className = 'badge badge-danger';
-        badge.innerHTML = `⚠️ ${passCount}/${this.tests.length} चाचण्या उत्तीर्ण`;
+    } finally {
+      if (origActiveUdise) {
+        localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, origActiveUdise);
+        if (origData) {
+          app.data = origData;
+        } else {
+          app.loadState(origActiveUdise);
+        }
       }
     }
   }

@@ -1214,22 +1214,6 @@ const cloudSync = {
               }
             }
 
-            // Sync authoritative remote license from Firebase
-            const remoteLic = (json && json.license) || (remoteData && remoteData.license);
-            if (remoteLic && remoteLic.status) {
-              if (typeof localStorage !== 'undefined') {
-                localStorage.setItem(`MDM_SCHOOL_LICENSE_${currentUdise}`, JSON.stringify(remoteLic));
-              }
-              if (typeof app !== 'undefined' && typeof app.saveSchoolLicense === 'function') {
-                app.saveSchoolLicense(currentUdise, remoteLic);
-              }
-              if (isActiveSchool && typeof app !== 'undefined') {
-                if (typeof app.checkAccessControl === 'function') {
-                  app.checkAccessControl();
-                }
-              }
-            }
-
             if (isActiveSchool) {
               app.data = mergedTarget;
               if (typeof app.applySchoolLevelMode === 'function') app.applySchoolLevelMode(app.data.settings?.schoolLevel);
@@ -1555,47 +1539,28 @@ const cloudSync = {
    * Push school license/trial to Google Firebase Realtime Database
    */
   async pushLicenseToCloud(udise, licenseData) {
-    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
-    if (!cleanBaseUrl || !udise || !licenseData) return false;
-    const cleanUdise = String(udise).trim();
-    const endpoint = `${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/license.json`;
-    try {
-      await this.fetchWithTimeout(endpoint, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(licenseData)
-      }, 8000);
-      return true;
-    } catch(e) {
-      console.warn("Could not push license to cloud:", e);
-      return false;
-    }
+    return true;
+  },
+
+  async pullLicenseFromCloud(udise) {
+    return null;
   },
 
   /**
-   * Pull school license from Cloud to check remote Admin activation
+   * Delete single day record directly on Google Firebase Realtime Database
    */
-  async pullLicenseFromCloud(udise) {
+  async deleteDayRecordFromCloud(udise, dateStr, section = 'primary') {
     const cleanBaseUrl = this.getEffectiveFirebaseUrl();
-    if (!cleanBaseUrl || !udise) return null;
+    if (!cleanBaseUrl || !udise || !dateStr) return false;
     const cleanUdise = String(udise).trim();
-    const endpoint = `${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/license.json`;
+    const pathKey = (section === 'upper') ? 'recordsUpper' : 'records';
+    const endpoint = `${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/appData/${pathKey}/${dateStr}.json`;
     try {
-      const res = await this.fetchWithTimeout(endpoint, {}, 8000);
-      if (res.ok) {
-        const remoteLic = await res.json();
-        if (remoteLic && remoteLic.status) {
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(`MDM_SCHOOL_LICENSE_${cleanUdise}`, JSON.stringify(remoteLic));
-          }
-          if (typeof app !== 'undefined' && app.saveSchoolLicense) {
-            app.saveSchoolLicense(cleanUdise, remoteLic);
-          }
-          return remoteLic;
-        }
-      }
+      await this.fetchWithTimeout(endpoint, { method: 'DELETE' }, 6000);
+      return true;
     } catch(e) {
-      console.warn("Could not pull remote license:", e);
+      console.warn("Could not delete record on cloud:", e);
+      return false;
     }
   },
 

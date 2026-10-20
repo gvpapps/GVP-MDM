@@ -5663,29 +5663,6 @@ body.level-mode-upper .combined-report-card {
 }
 
 /* Header Badges */
-.meta-pill.trial-pill {
-  background: rgba(245, 158, 11, 0.22);
-  border-color: rgba(245, 158, 11, 0.6);
-  color: #fef3c7;
-  font-weight: 700;
-}
-.meta-pill.trial-pill.expired {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: rgba(239, 68, 68, 0.8);
-  color: #fecaca;
-  animation: pulseBadge 1.8s infinite;
-}
-@keyframes pulseBadge {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.04); }
-  100% { transform: scale(1); }
-}
-.meta-pill.license-active {
-  background: rgba(34, 197, 94, 0.22);
-  border-color: rgba(34, 197, 94, 0.6);
-  color: #bbf7d0;
-  font-weight: 700;
-}
 .meta-pill.level-badge {
   font-weight: 800;
   letter-spacing: 0.3px;
