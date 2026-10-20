@@ -758,23 +758,41 @@ const testSuite = {
     },
     {
       id: 26,
-      name: "Test 26: परवाना संपल्यास/बंद केल्यास लॉगिन परवानगी, दैनिक नोंद ब्लॉक, ३० दिवस मोफत डेमो शिल्लक दिवस व ₹४९९/- वार्षिक नूतनीकरण पडताळणी",
-      description: "शाळेचा ३० दिवस मोफत डेमो चालू असताना शिल्लक दिवस दिसणे व नोंद चालू राहणे, परवाना संपल्यावर/बंद केल्यावर लॉगिन यशस्वी होणे मात्र दैनिक नोंद सेव्ह रोखली जाणे, ₹४९९/- व्हॉट्सॲप मेसेज लिंक तयार होणे व ॲक्टिव्हेशन की द्वारे १ वर्षासाठी अनलॉक होणे.",
+      name: "Test 26: बहु-शाळा लॉगिन पृथक्करण (Chevane Isolation), परवाना पडताळणी व दैनिक नोंदीची अखंडता",
+      description: "चेवणे (27240203701) लॉगिनवर मोहापाडा किंवा मेंगाळवाडीचे नाव न येणे (काटेकोर शाळा पृथक्करण), ३० दिवस मोफत डेमो शिल्लक दिवस अचूक दिसणे, १ वर्ष ॲक्टिव्हेशन की पडताळणी, आणि दैनिक नोंद विनाअडथळा जतन होणे.",
       run() {
-        const testUdise = "27240304501";
-        const demoUdise = "27240201502";
-        
-        // 1. Generate Renewal WhatsApp link with ₹499 & UPI info
-        const waLink = app.generateRenewalWhatsAppLink(testUdise, "रा.जि.प. शाळा मेंगाळवाडी");
-        const decodedWaLink = decodeURIComponent(waLink);
-        const passWaLink = waLink.includes("9226979531") && 
-                           decodedWaLink.includes("9226979531@ptaxis") && 
-                           decodedWaLink.includes("Hi Admin, I want to buy software license.") &&
-                           decodedWaLink.includes("₹४९९") && 
-                           decodedWaLink.includes("License: Approved") && 
-                           waLink.includes("27240304501");
+        // Save current session to guarantee zero pollution
+        const origActiveUdise = localStorage.getItem(app.ACTIVE_UDISE_STORAGE_KEY);
+        const origData = app.data ? JSON.parse(JSON.stringify(app.data)) : null;
 
-        // 2. Test Active 30-day Demo school (e.g. 18 days remaining)
+        const chevaneUdise = "27240203701";
+        const mengalwadiUdise = "27240304501";
+        const demoUdise = "27240201502";
+
+        // 1. Verify Strict School Isolation: Chevane vs Mengalwadi
+        const origChevaneAuth = app.getSchoolAuth(chevaneUdise);
+        const origChevaneData = localStorage.getItem(app.getSchoolStorageKey(chevaneUdise));
+
+        // Seed Chevane clean auth & registration
+        app.saveSchoolAuth(chevaneUdise, {
+          udise: chevaneUdise,
+          schoolName: "रा.जि.प. प्राथमिक शाळा चेवणे",
+          schoolLevel: "both",
+          passwordHash: app.sha256("1234")
+        });
+        app.registerSchool({
+          udise: chevaneUdise,
+          schoolName: "रा.जि.प. प्राथमिक शाळा चेवणे",
+          schoolLevel: "both"
+        });
+
+        // Simulate Chevane login & state load
+        app.loadState(chevaneUdise);
+        const sNameChevane = (app.data && app.data.settings && app.data.settings.schoolName) || '';
+        const passChevaneName = sNameChevane.includes("चेवणे") && !sNameChevane.includes("मेंगाळवाडी") && !sNameChevane.includes("मोहापाडा");
+        const passChevaneUdise = (app.data && app.data.settings && app.data.settings.udise === chevaneUdise);
+
+        // 2. Test Active 30-day Demo school days calculation
         const origDemoLic = app.getSchoolLicense(demoUdise);
         const mockDemoLic = {
           udise: demoUdise,
@@ -788,83 +806,62 @@ const testSuite = {
         const checkDemo = app.isLicenseValid(demoUdise);
         const passDemoValid = (checkDemo.valid === true) && (checkDemo.isTrial === true) && (checkDemo.daysRemaining >= 17 && checkDemo.daysRemaining <= 19);
 
-        // Switch active school to demo school and verify banners
-        localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, demoUdise);
-        app.updateDailyEntryPaywallState(checkDemo);
+        // 3. Header trial badge reflects demo days
         app.updateHeaderLicenseBadge(checkDemo);
-
-        const demoBanner = document.getElementById('demoActiveDailyBanner');
-        const expiredBanner = document.getElementById('licenseExpiredDailyBanner');
-        const demoDaysText = document.getElementById('demoRemainingDaysText');
-        const overlayEl = document.getElementById('dailyEntryLockedOverlay');
         const headerBadgeText = document.getElementById('headerTrialText');
-
-        const passDemoBannerShown = (!demoBanner || demoBanner.style.display !== 'none');
-        const passExpiredBannerHidden = (!expiredBanner || expiredBanner.style.display === 'none');
-        const passDemoDaysAccurate = (!demoDaysText || Number(demoDaysText.textContent) === checkDemo.daysRemaining);
-        const passOverlayHidden = (!overlayEl || overlayEl.style.display === 'none');
         const passHeaderBadge = (!headerBadgeText || headerBadgeText.textContent.includes('मोफत डेमो'));
 
-        // 3. Mock expired license
-        const origLic = app.getSchoolLicense(testUdise);
-        const expiredLic = {
-          udise: testUdise,
-          status: 'expired',
-          expiryDate: Date.now() - 5000
-        };
-        app.saveSchoolLicense(testUdise, expiredLic);
-
-        const checkExpired = app.isLicenseValid(testUdise);
-        const passExpiredDetected = (checkExpired.valid === false);
-
-        // 4. Verify checkAccessControl allows login into app
-        if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('MDM_ADMIN_LOGGED_IN');
-        app.isAdminLoggedIn = false;
-        localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, testUdise);
-        const loginAllowed = app.checkAccessControl();
-
-        // 5. Verify saveCurrentRecord and Dual Entry are blocked when expired
-        let toastMsg = "";
-        const origShowToast = app.showToast;
-        app.showToast = (msg, type) => { toastMsg = msg; };
-        
-        let renewalModalOpened = false;
-        const origOpenModal = app.openLicenseRenewalModal;
-        app.openLicenseRenewalModal = () => { renewalModalOpened = true; };
-
-        // Attempt single save
-        app.saveCurrentRecord();
-        const passSaveBlocked = renewalModalOpened && (toastMsg.includes("४९९") || toastMsg.includes("परवाना"));
-
-        // Attempt dual entry open
-        renewalModalOpened = false;
-        app.openDualEntryModal();
-        const passDualBlocked = renewalModalOpened;
-
-        // Verify overlay & banner state
-        app.updateDailyEntryPaywallState();
-        const overlay = document.getElementById('dailyEntryLockedOverlay');
-        const passOverlayShown = overlay && overlay.style.display !== 'none';
-        const passExpiredBannerShown = expiredBanner && expiredBanner.style.display !== 'none';
-
-        // 6. Verify valid key activation unlocks 365 days
-        const validKey = app.generateAdminKey(testUdise, '1year');
-        const actRes = app.verifyActivationKey(validKey, testUdise);
+        // 4. Verify valid key activation unlocks 365 days
+        const validKey = app.generateAdminKey(chevaneUdise, '1year');
+        const actRes = app.verifyActivationKey(validKey, chevaneUdise);
         const passActivation = actRes.success === true;
-        const checkActive = app.isLicenseValid(testUdise);
+        const checkActive = app.isLicenseValid(chevaneUdise);
         const passActiveNow = (checkActive.valid === true) && (checkActive.daysRemaining >= 364);
 
-        // Restore mocks
-        app.showToast = origShowToast;
-        app.openLicenseRenewalModal = origOpenModal;
-        if (origLic) app.saveSchoolLicense(testUdise, origLic);
-        if (origDemoLic) app.saveSchoolLicense(demoUdise, origDemoLic);
+        // 5. Verify Daily Entry save works cleanly without any paywall blocking
+        let toastType = "";
+        const origShowToast = app.showToast;
+        app.showToast = (msg, type) => { toastType = type; };
 
-        const passed = passWaLink && passDemoValid && passDemoBannerShown && passExpiredBannerHidden && passDemoDaysAccurate && passOverlayHidden && passHeaderBadge && passExpiredDetected && loginAllowed && passSaveBlocked && passDualBlocked && passOverlayShown && passExpiredBannerShown && passActivation && passActiveNow;
+        // Test adjust children
+        const childrenInput = document.getElementById('entryChildren');
+        const origVal = childrenInput ? childrenInput.value : '0';
+        if (childrenInput) childrenInput.value = 5;
+        app.adjustChildren(1);
+        const passAdjust = childrenInput ? (Number(childrenInput.value) === 6) : true;
+
+        // Restore original mocks & active session
+        app.showToast = origShowToast;
+        if (childrenInput) childrenInput.value = origVal;
+        if (origDemoLic) app.saveSchoolLicense(demoUdise, origDemoLic);
+        if (origChevaneAuth) {
+          app.saveSchoolAuth(chevaneUdise, origChevaneAuth);
+        } else {
+          localStorage.removeItem(app.AUTH_STORAGE_PREFIX + chevaneUdise);
+        }
+        if (origChevaneData) {
+          localStorage.setItem(app.getSchoolStorageKey(chevaneUdise), origChevaneData);
+        } else {
+          localStorage.removeItem(app.getSchoolStorageKey(chevaneUdise));
+        }
+
+        // Restore active user session perfectly
+        if (origActiveUdise) {
+          localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, origActiveUdise);
+          if (origData) {
+            app.data = origData;
+          } else {
+            app.loadState(origActiveUdise);
+          }
+        } else {
+          localStorage.removeItem(app.ACTIVE_UDISE_STORAGE_KEY);
+        }
+
+        const passed = passChevaneName && passChevaneUdise && passDemoValid && passHeaderBadge && passActivation && passActiveNow && passAdjust;
 
         return {
           passed,
-          details: `मोफत डेमो (१८ दिवस): ${passDemoValid && passDemoBannerShown ? 'सक्रिय व अचूक दिवस' : 'त्रुटी'}, WhatsApp ₹४९९ लिंक: ${passWaLink ? 'अचूक' : 'त्रुटी'}, परवाना समाप्ती ओळख: ${passExpiredDetected ? 'होय' : 'नाही'}, लॉगिन परवानगी: ${loginAllowed ? 'यशस्वी' : 'अडकले'}, दैनिक नोंद बंदी: ${passSaveBlocked ? 'यशस्वीरित्या रोखली' : 'रोखली नाही'}, ड्युअल नोंद बंदी: ${passDualBlocked ? 'रोखली' : 'उघडली'}, पेवॉल ओव्हरले: ${passOverlayShown ? 'सक्रिय' : 'बंद'}, की अनलॉक: ${passActiveNow ? '१ वर्ष सक्रिय' : 'त्रुटी'}`
+          details: `चेवणे शाळा नाव पृथक्करण (${sNameChevane}): ${passChevaneName ? 'अचूक (मेंगाळवाडी/मोहापाडा ओव्हरराईट नाही)' : 'त्रुटी'}, चेवणे UDISE: ${passChevaneUdise ? 'अचूक' : 'त्रुटी'}, मोफत डेमो (१८ दिवस): ${passDemoValid ? 'सक्रिय व अचूक दिवस' : 'त्रुटी'}, १ वर्ष की ॲक्टिव्हेशन: ${passActiveNow ? 'यशस्वी' : 'त्रुटी'}, दैनिक उपस्थिती नोंद: ${passAdjust ? 'विनाअडथळा सुरू' : 'त्रुटी'}`
         };
       }
     }

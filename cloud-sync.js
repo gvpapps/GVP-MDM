@@ -607,8 +607,13 @@ const cloudSync = {
    * Preserves non-empty strings and valid numbers with timestamp-based reconciliation
    */
   mergeSettings(localSett, remoteSett, targetUdise = null, preferRemote = false) {
-    const l = localSett || {};
+    let l = localSett || {};
     const r = remoteSett || {};
+
+    // Strict School Isolation: If local settings belong to another school, discard them immediately
+    if (targetUdise && l.udise && String(l.udise).trim() !== String(targetUdise).trim()) {
+      l = {};
+    }
 
     const lTime = l.updatedAt ? new Date(l.updatedAt).getTime() : 0;
     const rTime = r.updatedAt ? new Date(r.updatedAt).getTime() : 0;
@@ -670,6 +675,15 @@ const cloudSync = {
     // Critical: Guarantee UDISE matches targetUdise / current school
     if (targetUdise) {
       res.udise = String(targetUdise).trim();
+      // Cross-school bleed protection: If target school is NOT 27240304501 or 27240219201, never allow Mengalwadi / Mohapada names
+      if (res.udise !== '27240304501' && res.udise !== '27240219201') {
+        if (res.schoolName && (res.schoolName.includes('मेंगाळवाडी') || res.schoolName.includes('मोहपाडा'))) {
+          const authName = (typeof app !== 'undefined' && app.getSchoolAuth) ? (app.getSchoolAuth(res.udise)?.schoolName || '') : '';
+          res.schoolName = (r.schoolName && !r.schoolName.includes('मेंगाळवाडी') && !r.schoolName.includes('मोहपाडा'))
+            ? r.schoolName
+            : (authName || (res.udise === '27240203701' ? 'चेवणे' : `शाळा (${res.udise})`));
+        }
+      }
     } else if (r.udise && /^\d{11}$/.test(r.udise)) {
       res.udise = String(r.udise).trim();
     } else if (l.udise && /^\d{11}$/.test(l.udise)) {
@@ -1210,11 +1224,8 @@ const cloudSync = {
                 app.saveSchoolLicense(currentUdise, remoteLic);
               }
               if (isActiveSchool && typeof app !== 'undefined') {
-                if (typeof app.updateHeaderLicenseBadge === 'function') {
-                  app.updateHeaderLicenseBadge(remoteLic);
-                }
-                if (typeof app.updateDailyEntryPaywallState === 'function') {
-                  app.updateDailyEntryPaywallState(remoteLic);
+                if (typeof app.checkAccessControl === 'function') {
+                  app.checkAccessControl();
                 }
               }
             }
