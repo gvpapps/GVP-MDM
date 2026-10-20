@@ -1373,13 +1373,17 @@ const app = {
    * Check if School License or Trial is Valid
    */
   isLicenseValid(udise) {
-    const lic = this.getSchoolLicense(udise);
+    const cleanUdise = String(udise || this.getActiveUdise() || '').trim();
+    if (cleanUdise === '9226979531') {
+      return { valid: true, daysRemaining: 9999, isTrial: false, status: 'active', plan: 'lifetime', expiryDate: Date.now() + 100000000000 };
+    }
+    const lic = this.getSchoolLicense(cleanUdise);
     if (!lic || !lic.expiryDate) {
       return { valid: true, daysRemaining: 30, isTrial: true, status: 'trial' };
     }
     const now = Date.now();
     const daysRemaining = Math.max(0, Math.ceil((lic.expiryDate - now) / (24 * 60 * 60 * 1000)));
-    const valid = (now <= lic.expiryDate) && (lic.status !== 'blocked');
+    const valid = (now <= lic.expiryDate) && (lic.status !== 'blocked') && (lic.status !== 'expired');
     const isTrial = (lic.status === 'trial');
     return {
       valid,
@@ -1842,6 +1846,13 @@ const app = {
     if (alertBox) alertBox.classList.add('d-none');
     localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, udise);
 
+    // Clear admin privileges if logging into a standard school
+    if (udise !== '9226979531') {
+      try { sessionStorage.removeItem('MDM_ADMIN_LOGGED_IN'); } catch (e) {}
+      this.isAdminLoggedIn = false;
+      this.updateAdminVisibility();
+    }
+
     // Self-heal: Ensure no stale tombstone can block active school
     this.removeLocalTombstone(udise);
 
@@ -2153,14 +2164,14 @@ const app = {
   updateDailyEntryPaywallState(licCheck = null) {
     const activeUdise = this.getActiveUdise();
     const lic = licCheck || this.isLicenseValid(activeUdise);
-    const isAdmin = (sessionStorage.getItem('MDM_ADMIN_LOGGED_IN') === 'true') || 
-                    (this.isAdminLoggedIn === true) || 
-                    (activeUdise === '9226979531');
-    const isLocked = !lic.valid && !isAdmin;
+    const isLocked = (!lic.valid) && (activeUdise !== '9226979531');
 
     const banner = document.getElementById('licenseExpiredDailyBanner');
     const waBtn = document.getElementById('paywallWhatsAppBtn');
     const btnSave = document.getElementById('btnSaveDaily');
+    const overlay = document.getElementById('dailyEntryLockedOverlay');
+    const entryCard = document.querySelector('.entry-control-card');
+    const btnDual = document.getElementById('btnDualQuickEntry');
 
     if (banner) {
       banner.style.display = isLocked ? 'block' : 'none';
@@ -2172,26 +2183,40 @@ const app = {
       }
     }
 
-    // Toggle disabled status for daily entry controls when locked
-    const formInputs = document.querySelectorAll('#dailyEntryForm input:not(#entryDate), #dailyEntryForm select, #dailyEntryForm textarea');
+    if (overlay) {
+      overlay.style.display = isLocked ? 'flex' : 'none';
+    }
+
+    if (entryCard) {
+      entryCard.classList.toggle('is-locked-paywall', isLocked);
+    }
+
+    if (btnDual) {
+      if (isLocked) {
+        btnDual.classList.add('btn-locked-paywall');
+        btnDual.title = '🔒 परवाना नूतनीकरण आवश्यक (₹499)';
+      } else {
+        btnDual.classList.remove('btn-locked-paywall');
+        btnDual.title = 'एकाच वेळी १ ते ५ आणि ६ ते ८ दोन्हीची एकत्र नोंद करा';
+      }
+    }
+
+    // Toggle attribute for daily entry controls when locked
+    const formInputs = document.querySelectorAll('#dailyEntryForm input, #dailyEntryForm select, #dailyEntryForm textarea');
     formInputs.forEach(el => {
       if (isLocked) {
         el.setAttribute('data-locked-paywall', '1');
-        el.disabled = true;
       } else if (el.getAttribute('data-locked-paywall') === '1') {
         el.removeAttribute('data-locked-paywall');
-        el.disabled = false;
       }
     });
 
     if (btnSave) {
       if (isLocked) {
-        btnSave.disabled = true;
         btnSave.innerHTML = '<span>🔒 परवाना नूतनीकरण आवश्यक (₹499)</span>';
         btnSave.classList.add('btn-locked-paywall');
       } else {
-        btnSave.disabled = false;
-        btnSave.innerHTML = '<span>💾 उपस्थिती व आहार नोंद जतन करा</span>';
+        btnSave.innerHTML = `<span>💾 आजची ${this.getActiveSectionName()} नोंद जतन करा</span>`;
         btnSave.classList.remove('btn-locked-paywall');
       }
     }
@@ -4177,6 +4202,36 @@ const app = {
    * Bind DOM Event Listeners
    */
   bindEvents() {
+    // Paywall Interceptor: Capture clicks on daily entry controls when license is expired
+    const interceptDailyIfLocked = (e) => {
+      const activeUdise = this.getActiveUdise();
+      const lic = this.isLicenseValid(activeUdise);
+      if (!lic.valid && activeUdise !== '9226979531') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showToast('🔒 दैनिक नोंद करण्यासाठी परवाना नूतनीकरण आवश्यक आहे! कृपया ₹४९९/- भरा.', 'warning');
+        this.openLicenseRenewalModal();
+        return false;
+      }
+    };
+
+    const dailyForm = document.getElementById('dailyEntryForm');
+    if (dailyForm) {
+      dailyForm.addEventListener('click', interceptDailyIfLocked, true); // capture phase!
+    }
+    const btnDualQuick = document.getElementById('btnDualQuickEntry');
+    if (btnDualQuick) {
+      btnDualQuick.addEventListener('click', interceptDailyIfLocked, true); // capture phase!
+    }
+    const dailyOverlay = document.getElementById('dailyEntryLockedOverlay');
+    if (dailyOverlay) {
+      dailyOverlay.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.openLicenseRenewalModal();
+      });
+    }
+
     // Daily entry triggers
     const entryDate = document.getElementById('entryDate');
     if (entryDate) {
@@ -4884,9 +4939,19 @@ const app = {
       }
     }
 
+    const activeUdise = this.getActiveUdise();
+    const lic = this.isLicenseValid(activeUdise);
+    const isLocked = (!lic.valid) && (activeUdise !== '9226979531');
+
     const saveBtn = document.getElementById('btnSaveDaily');
     if (saveBtn) {
-      saveBtn.innerHTML = `<span>💾 आजची ${this.getActiveSectionName()} नोंद जतन करा</span>`;
+      if (isLocked) {
+        saveBtn.innerHTML = '<span>🔒 परवाना नूतनीकरण आवश्यक (₹499)</span>';
+        saveBtn.classList.add('btn-locked-paywall');
+      } else {
+        saveBtn.innerHTML = `<span>💾 आजची ${this.getActiveSectionName()} नोंद जतन करा</span>`;
+        saveBtn.classList.remove('btn-locked-paywall');
+      }
     }
 
     const fuelHint = document.getElementById('fuelRateHint');
@@ -4896,6 +4961,7 @@ const app = {
 
     this.onInputsChanged();
     this.renderRecentDaysRibbon();
+    this.updateDailyEntryPaywallState(lic);
   },
 
   /**
@@ -4919,6 +4985,13 @@ const app = {
    * Adjust children count by delta (+1 or -1)
    */
   adjustChildren(delta) {
+    const activeUdise = this.getActiveUdise();
+    const lic = this.isLicenseValid(activeUdise);
+    if (!lic.valid && activeUdise !== '9226979531') {
+      this.showToast('🔒 दैनिक नोंद करण्यासाठी परवाना नूतनीकरण आवश्यक आहे (शुल्क: ₹४९९/-)!', 'warning');
+      this.openLicenseRenewalModal();
+      return;
+    }
     const childrenInput = document.getElementById('entryChildren');
     if (!childrenInput) return;
     const current = parseInt(childrenInput.value) || 0;
@@ -5218,8 +5291,8 @@ const app = {
   saveCurrentRecord() {
     const activeUdise = this.getActiveUdise();
     const lic = this.isLicenseValid(activeUdise);
-    if (!lic.valid && !this.isAdmin()) {
-      this.showToast('⚠️ परवाना संपलेला आहे! नवीन नोंद करण्यासाठी कृपया ₹४९९/- भरून वार्षिक परवाना नूतनीकरण करा.', 'danger');
+    if (!lic.valid && activeUdise !== '9226979531') {
+      this.showToast('🔒 शाळेचा परवाना संपलेला आहे! नवीन दैनिक नोंद करण्यासाठी कृपया ₹४९९/- भरून वार्षिक परवाना नूतनीकरण करा.', 'danger');
       this.openLicenseRenewalModal();
       return;
     }
@@ -5351,8 +5424,8 @@ const app = {
     try {
       const activeUdise = this.getActiveUdise();
       const lic = this.isLicenseValid(activeUdise);
-      if (!lic.valid && !this.isAdmin()) {
-        this.showToast('⚠️ परवाना संपलेला आहे! नवीन नोंद करण्यासाठी कृपया ₹४९९/- भरून वार्षिक परवाना नूतनीकरण करा.', 'danger');
+      if (!lic.valid && activeUdise !== '9226979531') {
+        this.showToast('🔒 शाळेचा परवाना संपलेला आहे! नवीन दैनिक नोंद करण्यासाठी कृपया ₹४९९/- भरून वार्षिक परवाना नूतनीकरण करा.', 'danger');
         this.openLicenseRenewalModal();
         return;
       }
@@ -5799,8 +5872,8 @@ const app = {
   saveDualRecords() {
     const activeUdise = this.getActiveUdise();
     const lic = this.isLicenseValid(activeUdise);
-    if (!lic.valid && !this.isAdmin()) {
-      this.showToast('⚠️ परवाना संपलेला आहे! नवीन नोंद करण्यासाठी कृपया ₹४९९/- भरून वार्षिक परवाना नूतनीकरण करा.', 'danger');
+    if (!lic.valid && activeUdise !== '9226979531') {
+      this.showToast('🔒 शाळेचा परवाना संपलेला आहे! नवीन दैनिक नोंद करण्यासाठी कृपया ₹४९९/- भरून वार्षिक परवाना नूतनीकरण करा.', 'danger');
       this.openLicenseRenewalModal();
       return;
     }
@@ -5931,6 +6004,12 @@ const app = {
    * Reset the daily entry form
    */
   resetDailyForm() {
+    const activeUdise = this.getActiveUdise();
+    const lic = this.isLicenseValid(activeUdise);
+    if (!lic.valid && activeUdise !== '9226979531') {
+      this.openLicenseRenewalModal();
+      return;
+    }
     this.onDateChanged();
     this.showToast('फॉर्म पूर्ववत केला आहे.', 'warning');
   },
@@ -5939,6 +6018,13 @@ const app = {
    * Delete current day's record for active section
    */
   deleteCurrentDayRecord() {
+    const activeUdise = this.getActiveUdise();
+    const lic = this.isLicenseValid(activeUdise);
+    if (!lic.valid && activeUdise !== '9226979531') {
+      this.showToast('🔒 शाळेचा परवाना संपलेला आहे! कृपया ₹४९९/- भरून वार्षिक परवाना नूतनीकरण करा.', 'danger');
+      this.openLicenseRenewalModal();
+      return;
+    }
     const dateInput = document.getElementById('entryDate');
     if (!dateInput || !dateInput.value) {
       this.showToast('कृपया वैध तारीख निवडा.', 'danger');
@@ -12167,6 +12253,12 @@ const app = {
   },
 
   shareTodayEntryViaWhatsApp(dateStr) {
+    const activeUdise = this.getActiveUdise();
+    const lic = this.isLicenseValid(activeUdise);
+    if (!lic.valid && activeUdise !== '9226979531') {
+      this.openLicenseRenewalModal();
+      return;
+    }
     const targetDate = dateStr || (document.getElementById('entryDate') ? document.getElementById('entryDate').value : new Date().toISOString().split('T')[0]);
     const rec = (this.data && this.data.records) ? this.data.records[targetDate] : null;
     if (!rec) {

@@ -26,7 +26,7 @@
     }
   </script>
 
-  <link rel="stylesheet" href="styles.css?v=20261020_7">
+  <link rel="stylesheet" href="styles.css?v=20261020_8">
 </head>
 <body>
 
@@ -700,7 +700,7 @@
               </div>
             </div>
             <div class="ribbon-right">
-              <button type="button" class="btn btn-warning btn-sm font-weight-bold shadow-sm" onclick="app.openDualEntryModal()" title="एकाच वेळी १ ते ५ आणि ६ ते ८ दोन्हीची एकत्र नोंद करा">
+              <button type="button" id="btnDualQuickEntry" class="btn btn-warning btn-sm font-weight-bold shadow-sm" onclick="app.openDualEntryModal()" title="एकाच वेळी १ ते ५ आणि ६ ते ८ दोन्हीची एकत्र नोंद करा">
                 ⚡ दोन्ही एकत्र नोंद
               </button>
             </div>
@@ -784,7 +784,19 @@
           <div class="entry-grid calc-hidden">
             
             <!-- Left Column: Input Controls -->
-            <div class="card entry-control-card" style="box-shadow: 0 4px 14px rgba(0,0,0,0.06); border-radius: 12px; border: 1.5px solid #e2e8f0;">
+            <div class="card entry-control-card" style="box-shadow: 0 4px 14px rgba(0,0,0,0.06); border-radius: 12px; border: 1.5px solid #e2e8f0; position: relative;">
+              <!-- Locked Paywall Overlay when License is Expired -->
+              <div id="dailyEntryLockedOverlay" class="daily-entry-locked-overlay" style="display: none;" onclick="app.openLicenseRenewalModal()" title="परवाना संपलेला आहे. नूतनीकरण करण्यासाठी येथे क्लिक करा">
+                <div class="locked-overlay-content">
+                  <span class="locked-overlay-icon">🔒</span>
+                  <h4 class="locked-overlay-title">दैनिक नोंद बंद आहे</h4>
+                  <p class="locked-overlay-subtitle">शाळेचा परवाना संपलेला आहे. नवीन उपस्थिती व आहार नोंद करण्यासाठी येथे क्लिक करून ₹४९९/- वार्षिक नूतनीकरण करा.</p>
+                  <button type="button" class="btn btn-danger btn-sm fw-bold shadow-sm" style="font-size: 0.9rem; padding: 8px 16px; border-radius: 8px;">
+                    👉 ₹४९९ भरून परवाना सुरू करा
+                  </button>
+                </div>
+              </div>
+
               <div class="card-header flex-between" style="background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%); border-bottom: 1.5px solid #dbeafe; padding: 10px 16px;">
                 <div class="d-flex align-items-center gap-2">
                   <span style="font-size: 1.2rem;">📝</span>
@@ -3683,10 +3695,10 @@
   <div id="printSlipContainer" class="print-only-slip"></div>
 
   <!-- Application Logic Scripts -->
-  <script src="firebase-config.js?v=20261020_7"></script>
-  <script src="cloud-sync.js?v=20261020_7"></script>
-  <script src="excel-engine.js?v=20261020_7"></script>
-  <script src="test-suite.js?v=20261020_7"></script>
-  <script src="app.js?v=20261020_7"></script>
+  <script src="firebase-config.js?v=20261020_8"></script>
+  <script src="cloud-sync.js?v=20261020_8"></script>
+  <script src="excel-engine.js?v=20261020_8"></script>
+  <script src="test-suite.js?v=20261020_8"></script>
+  <script src="app.js?v=20261020_8"></script>
 </body>
 </html>

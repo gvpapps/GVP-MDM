@@ -6385,8 +6385,8 @@ body.level-mode-both #headerSchoolLevelBadge {
   background: #94a3b8 !important;
   border-color: #64748b !important;
   color: #fff !important;
-  cursor: not-allowed !important;
-  opacity: 0.85 !important;
+  cursor: pointer !important;
+  opacity: 0.9 !important;
 }
 .meta-pill.license-expired {
   background: #fee2e2 !important;
@@ -6398,6 +6398,66 @@ body.level-mode-both #headerSchoolLevelBadge {
 @keyframes pulseBadge {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.72; }
+}
+
+/* Daily Entry Locked Overlay when License is Expired */
+.entry-control-card.is-locked-paywall {
+  position: relative;
+  overflow: hidden;
+}
+.daily-entry-locked-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(248, 250, 252, 0.92);
+  backdrop-filter: blur(3px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  cursor: pointer;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.2s ease;
+  border: 2px dashed #ef4444;
+}
+.daily-entry-locked-overlay:hover {
+  background: rgba(254, 242, 242, 0.96);
+  border-color: #dc2626;
+}
+.locked-overlay-content {
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.locked-overlay-icon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.5rem;
+  animation: pulseBadge 1.5s infinite;
+}
+.locked-overlay-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #991b1b;
+  margin-bottom: 0.4rem;
+}
+.locked-overlay-subtitle {
+  font-size: 0.88rem;
+  color: #475569;
+  margin-bottom: 1rem;
+  line-height: 1.4;
+  font-weight: 500;
+}
+#btnDualQuickEntry.btn-locked-paywall {
+  background: #cbd5e1 !important;
+  border-color: #94a3b8 !important;
+  color: #475569 !important;
+  cursor: pointer !important;
 }
 
 

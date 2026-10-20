@@ -791,7 +791,7 @@ const testSuite = {
         localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, testUdise);
         const loginAllowed = app.checkAccessControl();
 
-        // 4. Verify saveCurrentRecord is blocked when expired
+        // 4. Verify saveCurrentRecord and Dual Entry are blocked when expired
         let toastMsg = "";
         const origShowToast = app.showToast;
         app.showToast = (msg, type) => { toastMsg = msg; };
@@ -800,9 +800,19 @@ const testSuite = {
         const origOpenModal = app.openLicenseRenewalModal;
         app.openLicenseRenewalModal = () => { renewalModalOpened = true; };
 
-        // Attempt save
+        // Attempt single save
         app.saveCurrentRecord();
         const passSaveBlocked = renewalModalOpened && (toastMsg.includes("४९९") || toastMsg.includes("परवाना"));
+
+        // Attempt dual entry open
+        renewalModalOpened = false;
+        app.openDualEntryModal();
+        const passDualBlocked = renewalModalOpened;
+
+        // Verify overlay & banner state
+        app.updateDailyEntryPaywallState();
+        const overlay = document.getElementById('dailyEntryLockedOverlay');
+        const passOverlayShown = overlay && overlay.style.display !== 'none';
 
         // 5. Verify valid key activation unlocks 365 days
         const validKey = app.generateAdminKey(testUdise, '1year');
@@ -816,11 +826,11 @@ const testSuite = {
         app.openLicenseRenewalModal = origOpenModal;
         if (origLic) app.saveSchoolLicense(testUdise, origLic);
 
-        const passed = passWaLink && passExpiredDetected && loginAllowed && passSaveBlocked && passActivation && passActiveNow;
+        const passed = passWaLink && passExpiredDetected && loginAllowed && passSaveBlocked && passDualBlocked && passOverlayShown && passActivation && passActiveNow;
 
         return {
           passed,
-          details: `WhatsApp ₹४९९ लिंक: ${passWaLink ? 'अचूक' : 'त्रुटी'}, परवाना समाप्ती ओळख: ${passExpiredDetected ? 'होय' : 'नाही'}, लॉगिन परवानगी: ${loginAllowed ? 'यशस्वी' : 'अडकले'}, दैनिक नोंद बंदी: ${passSaveBlocked ? 'यशस्वीरित्या रोखली' : 'रोखली नाही'}, की अनलॉक: ${passActiveNow ? '१ वर्ष सक्रिय' : 'त्रुटी'}`
+          details: `WhatsApp ₹४९९ लिंक: ${passWaLink ? 'अचूक' : 'त्रुटी'}, परवाना समाप्ती ओळख: ${passExpiredDetected ? 'होय' : 'नाही'}, लॉगिन परवानगी: ${loginAllowed ? 'यशस्वी' : 'अडकले'}, दैनिक नोंद बंदी: ${passSaveBlocked ? 'यशस्वीरित्या रोखली' : 'रोखली नाही'}, ड्युअल नोंद बंदी: ${passDualBlocked ? 'रोखली' : 'उघडली'}, पेवॉल ओव्हरले: ${passOverlayShown ? 'सक्रिय' : 'बंद'}, की अनलॉक: ${passActiveNow ? '१ वर्ष सक्रिय' : 'त्रुटी'}`
         };
       }
     }
