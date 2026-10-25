@@ -259,9 +259,6 @@ const app = {
     if (adminInp && (!adminInp.value || !adminInp.value.trim())) adminInp.value = effectiveFb;
     const cloudInp = document.getElementById('cloudFirebaseUrl');
     if (cloudInp && (!cloudInp.value || !cloudInp.value.trim())) cloudInp.value = effectiveFb;
-
-    // Auto-run test suite in background to verify correctness
-    testSuite.runAllTests();
   },
 
   // =========================================================================
@@ -3676,12 +3673,32 @@ const app = {
   },
 
   /**
+   * Get Today's local date string formatted as YYYY-MM-DD (Timezone-safe Indian Standard Time)
+   */
+  getTodayDateString() {
+    const now = new Date();
+    const yr = now.getFullYear();
+    const mo = String(now.getMonth() + 1).padStart(2, '0');
+    const da = String(now.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${da}`;
+  },
+
+  /**
+   * Get Current local month string formatted as YYYY-MM
+   */
+  getCurrentMonthString() {
+    const now = new Date();
+    const yr = now.getFullYear();
+    const mo = String(now.getMonth() + 1).padStart(2, '0');
+    return `${yr}-${mo}`;
+  },
+
+  /**
    * Set up today's date and month pickers and auto-select current academic year
    */
   setupDatePickers() {
-    const today = new Date();
-    const todayStr = today.toISOString().substring(0, 10);
-    const monthStr = todayStr.substring(0, 7);
+    const todayStr = this.getTodayDateString();
+    const monthStr = this.getCurrentMonthString();
 
     const entryDateInput = document.getElementById('entryDate');
     if (entryDateInput) {
@@ -5248,7 +5265,7 @@ const app = {
       }
 
       const dateInput = document.getElementById('entryDate');
-      const dateStr = dateOverride || (dateInput ? dateInput.value : '') || new Date().toISOString().substring(0, 10);
+      const dateStr = dateOverride || (dateInput ? dateInput.value : '') || this.getTodayDateString();
 
       const modalDateInp = document.getElementById('dualEntryDate');
       if (modalDateInp) modalDateInp.value = dateStr;
@@ -8639,7 +8656,7 @@ const app = {
     let targetDate = dateStr;
     if (!targetDate) {
       const entryDateEl = document.getElementById('entryDate');
-      targetDate = entryDateEl ? entryDateEl.value : (new Date().toISOString().substring(0, 10));
+      targetDate = entryDateEl ? entryDateEl.value : this.getTodayDateString();
     }
 
     if (dateInput) dateInput.value = targetDate;
@@ -11901,7 +11918,13 @@ const app = {
 
     setTimeout(() => {
       toast.style.opacity = '0';
-      setTimeout(() => toast.remove(), 250);
+      setTimeout(() => {
+        if (toast && typeof toast.remove === 'function') {
+          toast.remove();
+        } else if (toast && toast.parentNode) {
+          toast.parentNode.removeChild(toast);
+        }
+      }, 250);
     }, 3500);
   },
 
@@ -12102,7 +12125,7 @@ const app = {
   },
 
   shareTodayEntryViaWhatsApp(dateStr) {
-    const targetDate = dateStr || (document.getElementById('entryDate') ? document.getElementById('entryDate').value : new Date().toISOString().split('T')[0]);
+    const targetDate = dateStr || (document.getElementById('entryDate') ? document.getElementById('entryDate').value : this.getTodayDateString());
     const rec = (this.data && this.data.records) ? this.data.records[targetDate] : null;
     if (!rec) {
       this.showToast('या दिनांकाची कोणतीही नोंद आढळली नाही.', 'warning');

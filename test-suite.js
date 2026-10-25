@@ -795,6 +795,9 @@ const testSuite = {
         // Save current session to guarantee zero pollution
         const origActiveUdise = localStorage.getItem(app.ACTIVE_UDISE_STORAGE_KEY);
         const origData = app.data ? JSON.parse(JSON.stringify(app.data)) : null;
+        const origDateVal = document.getElementById('entryDate')?.value;
+        const origChildrenVal = document.getElementById('entryChildren')?.value;
+        const origHolidayVal = document.getElementById('entryHolidayToggle')?.value;
 
         const chevaneUdise = "27240203701";
         const origChevaneAuth = app.getSchoolAuth(chevaneUdise);
@@ -880,13 +883,22 @@ const testSuite = {
             localStorage.removeItem(app.getSchoolStorageKey(chevaneUdise));
           }
 
+          // Restore DOM values
+          const dateInp = document.getElementById('entryDate');
+          if (dateInp && origDateVal !== undefined) dateInp.value = origDateVal;
+          const childInp = document.getElementById('entryChildren');
+          if (childInp && origChildrenVal !== undefined) childInp.value = origChildrenVal;
+          const holInp = document.getElementById('entryHolidayToggle');
+          if (holInp && origHolidayVal !== undefined) holInp.value = origHolidayVal;
+
           if (origActiveUdise) {
             localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, origActiveUdise);
+            app.loadState(origActiveUdise);
             if (origData) {
               app.data = origData;
-            } else {
-              app.loadState(origActiveUdise);
             }
+            app.updateHeaderMeta();
+            if (typeof app.onDateChanged === 'function') app.onDateChanged();
           } else {
             localStorage.removeItem(app.ACTIVE_UDISE_STORAGE_KEY);
           }
@@ -908,6 +920,7 @@ const testSuite = {
   runAllTests() {
     const origActiveUdise = localStorage.getItem(app.ACTIVE_UDISE_STORAGE_KEY);
     const origData = app.data ? JSON.parse(JSON.stringify(app.data)) : null;
+    const origDateVal = document.getElementById('entryDate')?.value;
 
     const container = document.getElementById('testCasesContainer');
     const badge = document.getElementById('testSummaryBadge');
@@ -952,13 +965,17 @@ const testSuite = {
         }
       }
     } finally {
+      const dateInp = document.getElementById('entryDate');
+      if (dateInp && origDateVal !== undefined) dateInp.value = origDateVal;
+
       if (origActiveUdise) {
         localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, origActiveUdise);
+        app.loadState(origActiveUdise);
         if (origData) {
           app.data = origData;
-        } else {
-          app.loadState(origActiveUdise);
         }
+        app.updateHeaderMeta();
+        if (typeof app.onDateChanged === 'function') app.onDateChanged();
       }
     }
   }
