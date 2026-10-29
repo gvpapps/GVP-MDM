@@ -4809,7 +4809,7 @@ const app = {
       if (childrenInput) childrenInput.value = 0;
     } else {
       if (childrenInput && parseInt(childrenInput.value) === 0) {
-        childrenInput.value = this.data.settings.pat || 8;
+        childrenInput.value = (typeof this.getActivePat === 'function') ? this.getActivePat() : (this.data.settings.pat || 8);
       }
     }
     this.onInputsChanged();

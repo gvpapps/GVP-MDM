@@ -853,15 +853,19 @@ const cloudSync = {
       if (existingRemote && existingRemote.appData) {
         const remoteData = existingRemote.appData;
 
-        // Union of deleted record date tombstones
+        // Active dates being saved/retained locally (Smart Revival: never tombstone active records!)
+        const activePushDatesP = new Set(Object.keys(dataToPush.records || {}));
+        const activePushDatesU = new Set(Object.keys(dataToPush.recordsUpper || {}));
+
+        // Union of deleted record date tombstones (strictly excludes any newly active/saved records)
         const mergedDeletedRecordDates = Array.from(new Set([
           ...(dataToPush.deletedRecordDates || []),
           ...(remoteData.deletedRecordDates || [])
-        ]));
+        ])).filter(d => !activePushDatesP.has(d));
         const mergedDeletedRecordDatesUpper = Array.from(new Set([
           ...(dataToPush.deletedRecordDatesUpper || []),
           ...(remoteData.deletedRecordDatesUpper || [])
-        ]));
+        ])).filter(d => !activePushDatesU.has(d));
 
         const mergedRecords = this.mergeDayRecordsMap(dataToPush.records, remoteData.records, true, mergedDeletedRecordDates);
         const mergedRecordsUpper = this.mergeDayRecordsMap(dataToPush.recordsUpper, remoteData.recordsUpper, true, mergedDeletedRecordDatesUpper);
@@ -1124,15 +1128,25 @@ const cloudSync = {
               }
             }
 
-            // Union of deleted record date tombstones
+            // Active dates present locally or in incoming remote records (Smart Revival: never tombstone active records!)
+            const activePullDatesP = new Set([
+              ...Object.keys(baseData.records || {}),
+              ...Object.keys(remoteRecords || {})
+            ]);
+            const activePullDatesU = new Set([
+              ...Object.keys(baseData.recordsUpper || {}),
+              ...Object.keys(remoteData.recordsUpper || {})
+            ]);
+
+            // Union of deleted record date tombstones (strictly excludes any actively present records)
             const mergedDeletedRecordDates = Array.from(new Set([
               ...(baseData.deletedRecordDates || []),
               ...(remoteData.deletedRecordDates || [])
-            ]));
+            ])).filter(d => !activePullDatesP.has(d));
             const mergedDeletedRecordDatesUpper = Array.from(new Set([
               ...(baseData.deletedRecordDatesUpper || []),
               ...(remoteData.deletedRecordDatesUpper || [])
-            ]));
+            ])).filter(d => !activePullDatesU.has(d));
 
             // Smart Conflict-Free Merge: Local + Remote (Protects local populated data from being wiped)
             const mergedRecords = this.mergeDayRecordsMap(baseData.records, remoteRecords, false, mergedDeletedRecordDates);

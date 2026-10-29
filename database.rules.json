@@ -1,0 +1,38 @@
+{
+  "rules": {
+    "mdm_schools": {
+      ".read": true,
+      "test_ping": {
+        ".write": true
+      },
+      "$school_key": {
+        ".write": true,
+        ".validate": "$school_key.matches(/^mdm_[0-9]{10,11}$/)"
+      }
+    },
+    "mdm_registry": {
+      ".read": true,
+      "$school_key": {
+        ".write": true,
+        ".validate": "$school_key.matches(/^mdm_[0-9]{10,11}$/)"
+      }
+    },
+    "mdm_tombstones": {
+      ".read": true,
+      "$school_key": {
+        ".write": true,
+        ".validate": "$school_key.matches(/^mdm_[0-9]{10,11}$/)"
+      }
+    },
+    "mdm_backups": {
+      "$backup_key": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "school_info": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
