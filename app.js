@@ -4150,6 +4150,9 @@ const app = {
         this.preparePrintReportTitle('चव_नोंदवही', mName ? `${mName}_${ym.split('-')[0]}` : ym);
       } else if (isMonthly) {
         if (printSlip) printSlip.innerHTML = '';
+        if (typeof this.setPrintPageOrientation === 'function') {
+          this.setPrintPageOrientation('landscape', 'A4', '4mm 6mm 4mm 6mm');
+        }
         document.body.classList.remove('print-portrait', 'print-formb', 'print-yearly', 'print-register', 'print-slip', 'print-taste', 'printing-taste');
         document.body.classList.add('print-monthly', 'print-landscape');
         const mPicker = document.getElementById('monthlyExcelPicker');
@@ -6787,7 +6790,7 @@ const app = {
     const mName = this.getMonthNameMarathi(ym);
     this.preparePrintReportTitle('मासिक_अहवाल', `${mName}_${yrS}`);
 
-    this.setPrintPageOrientation('landscape', 'A4', '6mm 10mm 6mm 10mm');
+    this.setPrintPageOrientation('landscape', 'A4', '4mm 6mm 4mm 6mm');
     document.body.classList.remove('print-portrait', 'print-formb', 'print-yearly', 'print-register', 'print-taste');
     document.body.classList.add('print-monthly', 'print-landscape');
     setTimeout(() => {
