@@ -911,6 +911,58 @@ const testSuite = {
           details: `चेवणे शाळा नाव पृथक्करण (${sNameChevane}): ${passChevaneName ? 'अचूक' : 'त्रुटी'}, चेवणे UDISE: ${passChevaneUdise ? 'अचूक' : 'त्रुटी'}, १५ सप्टेंबर २० मुले नोंद निष्कासन: ${passSep15Purged ? 'होय (Purged)' : 'नाही'}, पटसंख्या मर्यादा पडताळणी (>पट ब्लॉक): ${passPatLimitValidation ? 'होय' : 'नाही'}, दैनिक उपस्थिती Clamp: ${passAdjust ? 'अचूक' : 'त्रुटी'}`
         };
       }
+    },
+    {
+      id: 27,
+      name: "Test 27: ॲडमिन शाळा प्रवेश नियंत्रण (Full Access vs View Only Mode) व संपर्क पॉपअप पडताळणी",
+      description: "शाळांसाठी 1 महिना डेमो किंवा वर्ष ॲक्सेस ऐवजी ॲडमिन पॅनेलमधून डेटा नोंद थांबवून फक्त पाहणी मोड (View Only) करणे, ॲडमिन संपर्क पॉपअप (मो. 9226979531 व 1-क्लिक WhatsApp) व मास्टर ॲडमिन सूट याची पडताळणी.",
+      run() {
+        const testUdise = "27240304501";
+        const origMode = localStorage.getItem(app.ACCESS_MODE_STORAGE_PREFIX + testUdise);
+        const origAdminSession = sessionStorage.getItem('MDM_ADMIN_LOGGED_IN');
+
+        try {
+          // 1. Default Access Mode for fresh/existing school must be 'full' (Zero data disturbance)
+          localStorage.removeItem(app.ACCESS_MODE_STORAGE_PREFIX + testUdise);
+          sessionStorage.removeItem('MDM_ADMIN_LOGGED_IN');
+          const passDefault = (app.getSchoolAccessMode(testUdise) === 'full') && (app.isViewOnlyMode(testUdise) === false);
+
+          // 2. Set to 'view_only' mode
+          app.setSchoolAccessMode(testUdise, 'view_only');
+          const passViewOnly = (app.getSchoolAccessMode(testUdise) === 'view_only') && (app.isViewOnlyMode(testUdise) === true);
+
+          // 3. Strict enforcement: Even when Admin session is active, View Only is strictly enforced
+          sessionStorage.setItem('MDM_ADMIN_LOGGED_IN', 'true');
+          const passStrictEnforcement = (app.isViewOnlyMode(testUdise) === true);
+          sessionStorage.removeItem('MDM_ADMIN_LOGGED_IN');
+
+          // 4. Contact Details & 1-click WhatsApp Link
+          const waLink = app.generateWhatsAppLink(testUdise, "जि.प. शाळा जुगरेवाडी");
+          const passWhatsApp = waLink.includes('9226979531') && waLink.includes('wa.me') && waLink.includes('27240304501');
+
+          // 5. Toggle back to Full Access
+          app.setSchoolAccessMode(testUdise, 'full');
+          const passRestoreFull = (app.getSchoolAccessMode(testUdise) === 'full') && (app.isViewOnlyMode(testUdise) === false);
+
+          const passed = passDefault && passViewOnly && passStrictEnforcement && passWhatsApp && passRestoreFull;
+
+          return {
+            passed,
+            details: `डीफॉल्ट पूर्ण नोंद (Full Access): ${passDefault ? 'सुरू (100% सुरक्षित)' : 'त्रुटी'}, फक्त पाहणी मोड (View Only): ${passViewOnly ? 'यशस्वी' : 'त्रुटी'}, कडक अंमलबजावणी (डेटा नोंद 100% बंद): ${passStrictEnforcement ? 'सक्रिय' : 'त्रुटी'}, WhatsApp लिंक व मो. 9226979531: ${passWhatsApp ? 'अचूक' : 'त्रुटी'}, पूर्ण प्रवेश पुनर्संचयित: ${passRestoreFull ? 'यशस्वी' : 'त्रुटी'}`
+          };
+        } finally {
+          if (origMode) {
+            localStorage.setItem(app.ACCESS_MODE_STORAGE_PREFIX + testUdise, origMode);
+          } else {
+            localStorage.removeItem(app.ACCESS_MODE_STORAGE_PREFIX + testUdise);
+          }
+          if (origAdminSession) {
+            sessionStorage.setItem('MDM_ADMIN_LOGGED_IN', origAdminSession);
+          } else {
+            sessionStorage.removeItem('MDM_ADMIN_LOGGED_IN');
+          }
+        }
+      }
     }
   ],
 

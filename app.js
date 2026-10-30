@@ -23,6 +23,7 @@ const app = {
   TOMBSTONES_STORAGE_KEY: 'MDM_DELETED_SCHOOL_TOMBSTONES',
   AUTH_STORAGE_PREFIX: 'MDM_SCHOOL_AUTH_',
   LICENSE_STORAGE_PREFIX: 'MDM_SCHOOL_LICENSE_',
+  ACCESS_MODE_STORAGE_PREFIX: 'MDM_SCHOOL_ACCESS_MODE_',
   SAFE_BACKUP_PREFIX: 'MDM_SAFE_BACKUP_',
   MASTER_KEY_SECRET_SALT: 'GVP_PM_POSHAN_SECURE_SALT_2026',
   ADMIN_CONTACT_NUMBER: '9226979531',
@@ -238,6 +239,7 @@ const app = {
       this.initCalcTableVisibility();
       this.refreshAllViews();
       this.renderCurrentTab();
+      this.updateDailyEntryViewOnlyBanner();
     }
 
     // Check Access Control (Show Login/Registration Screen if not logged in)
@@ -249,6 +251,25 @@ const app = {
       cloudSync.init();
       // Background 2-way sync of registered schools list
       this.syncCloudSchoolRegistry();
+    }
+
+    // Real-time authoritative access mode verification from cloud on startup
+    if (activeUdise && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl) {
+      const cleanFb = cloudSync.getEffectiveFirebaseUrl();
+      if (cleanFb) {
+        cloudSync.fetchWithTimeout(`${cleanFb}/mdm_registry/mdm_${activeUdise}/accessMode.json?t=${Date.now()}`, { cache: 'no-store' }, 4000)
+          .then(r => r.ok ? r.json() : null)
+          .then(remoteMode => {
+            if (remoteMode) {
+              localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + activeUdise, remoteMode);
+              if (this.data && this.data.settings) {
+                this.data.settings.accessMode = remoteMode;
+              }
+              this.updateDailyEntryViewOnlyBanner();
+            }
+          })
+          .catch(() => {});
+      }
     }
 
     // Auto-populate all Firebase URL inputs across the application
@@ -1434,6 +1455,202 @@ const app = {
   },
 
   /**
+   * Get School Access Mode: 'full' (Data Entry Allowed) or 'view_only' (Data Entry Halted)
+   * Defaults to 'full' for 100% safety & backward compatibility
+   */
+  getSchoolAccessMode(udise) {
+    if (!udise) return 'full';
+    const cleanUdise = String(udise).trim();
+    try {
+      const mode = localStorage.getItem(this.ACCESS_MODE_STORAGE_PREFIX + cleanUdise);
+      if (mode === 'view_only') return 'view_only';
+      if (mode === 'full') return 'full';
+    } catch(e) {}
+
+    // Check school data settings if available
+    try {
+      if (this.data && this.data.settings && this.data.settings.udise === cleanUdise && this.data.settings.accessMode) {
+        return this.data.settings.accessMode;
+      }
+      const sKey = this.getSchoolStorageKey ? this.getSchoolStorageKey(cleanUdise) : `MDM_SCHOOL_DATA_${cleanUdise}`;
+      const raw = localStorage.getItem(sKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.settings && parsed.settings.accessMode) {
+          return parsed.settings.accessMode;
+        }
+      }
+    } catch(e) {}
+
+    return 'full';
+  },
+
+  /**
+   * Set School Access Mode ('full' or 'view_only')
+   * Persists to local storage and syncs directly to Firebase Realtime Database
+   */
+  async setSchoolAccessMode(udise, mode = 'full') {
+    if (!udise) return;
+    const cleanUdise = String(udise).trim();
+    const validMode = (mode === 'view_only') ? 'view_only' : 'full';
+
+    // 1. Save in dedicated localStorage key
+    try {
+      localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + cleanUdise, validMode);
+    } catch(e) {}
+
+    // 2. Also save inside school data storage so it persists with school state
+    try {
+      const sKey = this.getSchoolStorageKey ? this.getSchoolStorageKey(cleanUdise) : `MDM_SCHOOL_DATA_${cleanUdise}`;
+      const raw = localStorage.getItem(sKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.settings) {
+          parsed.settings.accessMode = validMode;
+          localStorage.setItem(sKey, JSON.stringify(parsed));
+        }
+      }
+      if (this.data && this.data.settings && this.data.settings.udise === cleanUdise) {
+        this.data.settings.accessMode = validMode;
+      }
+    } catch(e) {}
+
+    // 3. Cloud Real-time sync to Firebase central registry & school nodes
+    if (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl && cloudSync.pushSchoolAccessMode) {
+      try {
+        await cloudSync.pushSchoolAccessMode(cleanUdise, validMode);
+      } catch(e) {
+        console.warn("Could not sync access mode to cloud:", e);
+      }
+    }
+
+    // 4. Update UI immediately for active school
+    if (this.getActiveUdise() === cleanUdise) {
+      this.updateDailyEntryViewOnlyBanner();
+    }
+  },
+
+  /**
+   * Check if current active school (or given udise) is in View Only mode
+   */
+  isViewOnlyMode(udise = null) {
+    const targetUdise = udise || this.getActiveUdise();
+    if (!targetUdise) return false;
+    return this.getSchoolAccessMode(targetUdise) === 'view_only';
+  },
+
+  /**
+   * Show Contact Admin Modal with Phone & 1-Click WhatsApp link
+   */
+  showContactAdminModal() {
+    const modal = document.getElementById('contactAdminModal');
+    const curUdise = this.getActiveUdise() || '';
+    const curName = (this.data && this.data.settings && this.data.settings.schoolName) || `शाळा (${curUdise})`;
+
+    const nameEl = document.getElementById('contactSchoolName');
+    const udiseEl = document.getElementById('contactSchoolUdise');
+    const waBtn = document.getElementById('contactWhatsAppBtn');
+    const callBtn = document.getElementById('contactCallBtn');
+
+    if (nameEl) nameEl.textContent = curName;
+    if (udiseEl) udiseEl.textContent = curUdise;
+
+    const waMsg = `नमस्कार,\n\nशाळेचे नाव: ${curName}\nUDISE कोड: ${curUdise}\nआमच्या शाळेसाठी दैनिक नोंद (Data Entry) सुरू करण्यासाठी संपर्क करत आहोत. धन्यवाद!`;
+    if (waBtn) {
+      waBtn.href = `https://wa.me/91${this.ADMIN_CONTACT_NUMBER}?text=${encodeURIComponent(waMsg)}`;
+    }
+    if (callBtn) {
+      callBtn.href = `tel:${this.ADMIN_CONTACT_NUMBER}`;
+    }
+
+    if (modal) {
+      modal.style.display = 'flex';
+    } else {
+      alert(`🔒 आपल्या शाळेसाठी सध्या डेटा नोंदणी थांबवण्यात आली असून फक्त पाहणी मोड (View Only) सुरू आहे.\n\nडेटा नोंद सुरू करण्यासाठी कृपया ॲडमिनशी संपर्क साधा:\n📞 मो. ${this.ADMIN_CONTACT_NUMBER} (श्री गणेश विलास पष्टे)`);
+    }
+  },
+
+  /**
+   * Close Contact Admin Modal
+   */
+  closeContactAdminModal() {
+    const modal = document.getElementById('contactAdminModal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  /**
+   * Update View Only warning banner in Daily Entry view
+   */
+  updateDailyEntryViewOnlyBanner() {
+    const banner = document.getElementById('dailyEntryViewOnlyBanner');
+    const pill = document.getElementById('entryStatusPill');
+    const saveBtn = document.getElementById('btnSaveDaily');
+    const dualBtn = document.getElementById('btnDualQuickEntry');
+    const isViewOnly = this.isViewOnlyMode();
+
+    if (banner) {
+      if (isViewOnly) {
+        banner.classList.remove('d-none');
+        banner.style.display = 'block';
+      } else {
+        banner.classList.add('d-none');
+        banner.style.display = 'none';
+      }
+    }
+
+    if (pill) {
+      if (isViewOnly) {
+        pill.textContent = '🔒 पाहणी मोड';
+        pill.style.background = '#fef3c7';
+        pill.style.color = '#92400e';
+        pill.style.borderColor = '#f59e0b';
+      } else {
+        pill.style.background = '';
+        pill.style.color = '';
+        pill.style.borderColor = '';
+      }
+    }
+
+    if (saveBtn) {
+      if (isViewOnly) {
+        saveBtn.setAttribute('data-viewonly', 'true');
+        saveBtn.innerHTML = '<span>🔒 फक्त पाहणी मोड (डेटा नोंद बंद - ॲडमिन संपर्क)</span>';
+        saveBtn.style.background = '#f59e0b';
+        saveBtn.style.color = '#78350f';
+        saveBtn.style.border = '2px solid #d97706';
+        saveBtn.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.35)';
+        saveBtn.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.showContactAdminModal();
+          return false;
+        };
+      } else {
+        saveBtn.removeAttribute('data-viewonly');
+        saveBtn.innerHTML = '<span>💾 आजची नोंद जतन करा (Save Record)</span>';
+        saveBtn.style.background = '';
+        saveBtn.style.color = '';
+        saveBtn.style.border = '';
+        saveBtn.style.boxShadow = '';
+        saveBtn.onclick = null;
+      }
+    }
+
+    if (dualBtn) {
+      if (isViewOnly) {
+        dualBtn.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.showContactAdminModal();
+          return false;
+        };
+      } else {
+        dualBtn.onclick = () => this.openDualEntryModal();
+      }
+    }
+  },
+
+  /**
    * Cryptographic Master Key Generator (For Admin Ganesh Pashte)
    */
   generateAdminKey(targetUdise, planType = '1year') {
@@ -1908,6 +2125,7 @@ const app = {
     this.checkAccessControl();
     this.refreshAllViews();
     this.renderCurrentTab();
+    this.updateDailyEntryViewOnlyBanner();
     return true;
   },
 
@@ -2155,6 +2373,7 @@ const app = {
 
     this.applySchoolLevelMode(this.data && this.data.settings && this.data.settings.schoolLevel);
     this.updateHeaderMeta();
+    this.updateDailyEntryViewOnlyBanner();
     return true;
   },
 
@@ -2234,6 +2453,14 @@ const app = {
 
     if (tab === 'schools') {
       this.renderAdminSchoolsList();
+    } else if (tab === 'generator') {
+      const uInp = document.getElementById('adminTargetUdise');
+      const curU = (uInp && uInp.value.trim()) ? uInp.value.trim() : (this.getActiveUdise() || '');
+      if (uInp && !uInp.value) uInp.value = curU;
+      const modeSel = document.getElementById('adminAccessModeSelect');
+      if (modeSel && curU) {
+        modeSel.value = this.getSchoolAccessMode(curU);
+      }
     } else if (tab === 'cloud') {
       const fbInp = document.getElementById('adminFirebaseUrlInput');
       if (fbInp) {
@@ -2390,6 +2617,12 @@ const app = {
                 map[u].patUpper = item.patUpper || map[u].patUpper || 15;
                 map[u].schoolLevel = item.schoolLevel || map[u].schoolLevel || 'both';
                 map[u].lastActive = item.lastActive || map[u].lastActive || new Date().toISOString();
+                if (item.accessMode) {
+                  map[u].accessMode = item.accessMode;
+                  try { localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + u, item.accessMode); } catch(e) {}
+                } else if (!map[u].accessMode) {
+                  map[u].accessMode = this.getSchoolAccessMode(u);
+                }
               });
             }
           }
@@ -2680,8 +2913,25 @@ const app = {
         levelBadge = '<span class="badge" style="background: #7c3aed; color: #fff;">📚 १ ते ८</span>';
       }
 
-      let statusBadge = '<span class="badge" style="background: #16a34a; color: #fff;">🟢 नोंदणीकृत</span>';
-      countActive++;
+      const accessMode = s.accessMode || this.getSchoolAccessMode(udise);
+      const isViewOnly = (accessMode === 'view_only');
+
+      let accessBadge = '';
+      if (isViewOnly) {
+        countTrial++;
+        accessBadge = `
+          <button type="button" class="btn btn-sm fw-bold" style="background: #fff7ed; color: #c2410c; border: 1.5px solid #fb923c; font-size: 0.76rem; padding: 3px 8px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;" onclick="app.adminToggleSchoolAccess('${udise}', 'full')" title="क्लिक करा: डेटा नोंद सुरू (Full Access) करा">
+            <span>🔒</span> <span>फक्त पाहणी</span>
+          </button>
+        `;
+      } else {
+        countActive++;
+        accessBadge = `
+          <button type="button" class="btn btn-sm fw-bold" style="background: #f0fdf4; color: #15803d; border: 1.5px solid #86efac; font-size: 0.76rem; padding: 3px 8px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;" onclick="app.adminToggleSchoolAccess('${udise}', 'view_only')" title="क्लिक करा: डेटा नोंद थांबवा (फक्त पाहणी मोड)">
+            <span>🟢</span> <span>नोंद सुरू</span>
+          </button>
+        `;
+      }
 
       const patStr = sLevel === 'both'
         ? `🎒${s.patPrimary || s.pat || 9} / 🎓${s.patUpper || 15}`
@@ -2696,7 +2946,7 @@ const app = {
           <td style="padding: 8px; text-align: center;">${levelBadge}</td>
           <td style="padding: 8px; font-size: 0.82rem; color: #475569;">${centreStr}</td>
           <td style="padding: 8px; text-align: center; font-weight: 700; color: #0f172a;">${patStr}</td>
-          <td style="padding: 8px; text-align: center;" class="admin-lic-status">${statusBadge}</td>
+          <td style="padding: 8px; text-align: center;" class="admin-lic-status">${accessBadge}</td>
           <td style="padding: 8px; text-align: center;">
             <div style="display: flex; gap: 4px; justify-content: center; flex-wrap: wrap;">
               <button type="button" class="btn btn-sm btn-primary" style="padding: 3px 8px; font-size: 0.75rem; font-weight: 700;" onclick="app.adminOpenSchool('${udise}')" title="या शाळेचा संपूर्ण डेटा उघडा">
@@ -2791,6 +3041,76 @@ const app = {
     this.renderCurrentTab();
 
     this.showToast(`📂 शाळा '${this.data.settings.schoolName}' (UDISE: ${udise}) चा संपूर्ण डेटा थेट उघडला गेला!`, 'success');
+  },
+
+  /**
+   * Admin 1-Click Access Toggle in School List Table
+   */
+  async adminToggleSchoolAccess(udise, targetMode) {
+    if (!udise || !/^\d{11}$/.test(udise)) return;
+    const mode = (targetMode === 'view_only') ? 'view_only' : 'full';
+    await this.setSchoolAccessMode(udise, mode);
+
+    const modeName = (mode === 'view_only') ? '🔒 फक्त पाहणी मोड (Data Entry बंद)' : '🟢 पूर्ण नोंद सुरू (Full Access)';
+    this.showToast(`शाळा (${udise}) चा प्रवेश बदलला: ${modeName}`, 'success');
+
+    // Re-render table & stats
+    this.renderAdminSchoolsList(true);
+  },
+
+  /**
+   * Save Access Mode from Tab 2 Controller
+   */
+  async adminSaveSelectedSchoolAccess() {
+    const targetInp = document.getElementById('adminTargetUdise');
+    const modeSel = document.getElementById('adminAccessModeSelect');
+    const statusTxt = document.getElementById('adminAccessModeStatusText');
+    const targetUdise = (targetInp ? targetInp.value : '').trim();
+    const mode = (modeSel ? modeSel.value : 'full');
+
+    if (!/^\d{11}$/.test(targetUdise)) {
+      alert('❌ कृपया वैध 11-अंकी UDISE क्रमांक टाका.');
+      if (targetInp) targetInp.focus();
+      return;
+    }
+
+    await this.setSchoolAccessMode(targetUdise, mode);
+    const modeText = (mode === 'view_only') ? '🔒 फक्त पाहणी मोड (Data Entry बंद)' : '🟢 पूर्ण नोंद सुरू (Full Access)';
+    this.showToast(`✅ शाळा (${targetUdise}) साठी प्रवेश स्थिती '${modeText}' सेव्ह झाली!`, 'success');
+
+    if (statusTxt) {
+      statusTxt.textContent = `शेवटचा बदल: ${targetUdise} -> ${modeText} (${new Date().toLocaleTimeString('mr-IN')})`;
+    }
+
+    this.renderAdminSchoolsList(true);
+  },
+
+  /**
+   * Send WhatsApp notification to teacher about access mode
+   */
+  adminSendAccessWhatsAppNotification() {
+    const targetInp = document.getElementById('adminTargetUdise');
+    const modeSel = document.getElementById('adminAccessModeSelect');
+    const targetUdise = (targetInp ? targetInp.value : '').trim();
+    const mode = (modeSel ? modeSel.value : 'full');
+
+    if (!/^\d{11}$/.test(targetUdise)) {
+      alert('❌ कृपया 11-अंकी UDISE क्रमांक टाका.');
+      return;
+    }
+
+    const auth = (typeof this.getSchoolAuth === 'function') ? this.getSchoolAuth(targetUdise) : {};
+    const sName = (auth && auth.schoolName) ? auth.schoolName : `शाळा (${targetUdise})`;
+
+    let text = '';
+    if (mode === 'full') {
+      text = `नमस्कार,\n\nशाळेचे नाव: ${sName}\nUDISE कोड: ${targetUdise}\n\nआपल्या शाळेसाठी PM पोषण सॉफ्टवेअरमध्ये 'दैनिक डेटा नोंद (Data Entry) सुविधा' सुरू करण्यात आली आहे. आपण आता नियमित उपस्थिती व आहार नोंदी सेव्ह करू शकता.\n\nधन्यवाद!\n- श्री गणेश विलास पष्टे (मो. 9226979531)`;
+    } else {
+      text = `नमस्कार,\n\nशाळेचे नाव: ${sName}\nUDISE कोड: ${targetUdise}\n\nआपल्या शाळेसाठी PM पोषण सॉफ्टवेअरमध्ये सध्या 'फक्त पाहणी मोड (View Only)' ठेवण्यात आला आहे. डेटा नोंदणी पुन्हा सुरू करण्यासाठी कृपया संपर्क साधावा.\n\nधन्यवाद!\n- श्री गणेश विलास पष्टे (मो. 9226979531)`;
+    }
+
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank');
   },
 
   /**
@@ -4329,6 +4649,9 @@ const app = {
     });
 
     this.renderCurrentTab();
+    if (tabId === 'daily') {
+      this.updateDailyEntryViewOnlyBanner();
+    }
   },
 
   /**
@@ -4687,6 +5010,9 @@ const app = {
     const dayCodeEl = document.getElementById('entryDayCodeTag');
     if (dayTextEl) dayTextEl.textContent = dayName;
     if (dayCodeEl) dayCodeEl.textContent = `कोड: ${dayCode}`;
+
+    // Update View Only Mode Banner
+    this.updateDailyEntryViewOnlyBanner();
 
     // Check if we already have a record for this date in active section
     const activeRecs = this.getActiveRecords();
@@ -5120,6 +5446,10 @@ const app = {
    * Save the current Daily Entry form to state & storage
    */
   saveCurrentRecord() {
+    if (this.isViewOnlyMode()) {
+      this.showContactAdminModal();
+      return;
+    }
     const dateInput = document.getElementById('entryDate');
     const childrenInput = document.getElementById('entryChildren');
     const menuSelect = document.getElementById('entryMenu');
@@ -5251,6 +5581,10 @@ const app = {
    * Open Dual Quick Entry Modal (१ ते ५ आणि ६ ते ८ एकाच वेळी)
    */
   openDualEntryModal(dateOverride = null) {
+    if (this.isViewOnlyMode()) {
+      this.showContactAdminModal();
+      return;
+    }
     try {
       // Auto-enable composite / both classes mode if user desires dual quick entry
       if (this.data && this.data.settings && this.data.settings.schoolLevel !== 'both') {
@@ -5692,6 +6026,11 @@ const app = {
   },
 
   saveDualRecords() {
+    if (this.isViewOnlyMode()) {
+      if (typeof this.closeDualEntryModal === 'function') this.closeDualEntryModal();
+      this.showContactAdminModal();
+      return;
+    }
     const modalDateInput = document.getElementById('dualEntryDate');
     const mainDateInput = document.getElementById('entryDate');
     const dateStr = (modalDateInput && modalDateInput.value) ? modalDateInput.value : (mainDateInput?.value || '');
@@ -5839,6 +6178,10 @@ const app = {
    * Delete current day's record for active section
    */
   deleteCurrentDayRecord() {
+    if (this.isViewOnlyMode()) {
+      this.showContactAdminModal();
+      return;
+    }
     const dateInput = document.getElementById('entryDate');
     if (!dateInput || !dateInput.value) {
       this.showToast('कृपया वैध तारीख निवडा.', 'danger');
@@ -6462,6 +6805,10 @@ const app = {
    * Delete day record directly from Daily Register view with cloud sync
    */
   async deleteDayRecordFromRegister(dateStr, targetSection = null) {
+    if (this.isViewOnlyMode()) {
+      this.showContactAdminModal();
+      return;
+    }
     const sec = targetSection || this.activeSection || 'primary';
     const secName = (sec === 'upper') ? 'इ. ६ ते ८' : 'इ. १ ते ५';
     if (!confirm(`⚠️ खात्री करा:\n\nदि. ${dateStr} ची (${secName}) दैनिक आहार नोंद कायमची हटवायची आहे का?`)) {
@@ -10147,6 +10494,11 @@ const app = {
   },
 
   saveStockReceipt() {
+    if (this.isViewOnlyMode()) {
+      this.closeAddStockModal();
+      this.showContactAdminModal();
+      return;
+    }
     const dateInput = document.getElementById('stockReceiptDate');
     const billInput = document.getElementById('stockReceiptBillNo');
     if (!dateInput || !dateInput.value) {
@@ -10243,6 +10595,10 @@ const app = {
   },
 
   deleteStockReceipt(receiptIdOrIdx, section = this.stockViewFilter || this.activeSection) {
+    if (this.isViewOnlyMode()) {
+      this.showContactAdminModal();
+      return;
+    }
     if (confirm('ही धान्य पावती नोंद हटवायची आहे का?')) {
       const targetReceipts = (section === 'upper') ? this.data.stockReceiptsUpper : this.data.stockReceipts;
       if (!targetReceipts) return;
@@ -10462,6 +10818,11 @@ const app = {
   },
 
   saveStockTransfer() {
+    if (this.isViewOnlyMode()) {
+      if (typeof this.closeStockTransferModal === 'function') this.closeStockTransferModal();
+      this.showContactAdminModal();
+      return;
+    }
     const dateInput = document.getElementById('stockTransferDate');
     const dirSelect = document.getElementById('stockTransferDirection');
     const reasonInput = document.getElementById('stockTransferReason');

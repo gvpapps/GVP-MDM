@@ -761,6 +761,23 @@ const cloudSync = {
       return false;
     }
 
+    // 🔒 100% Strict Access Control: If school is in 'view_only' mode, strictly block pushing data to cloud!
+    const effectiveAccessMode = (typeof app !== 'undefined' && typeof app.getSchoolAccessMode === 'function')
+      ? app.getSchoolAccessMode(currentUdise)
+      : ((typeof localStorage !== 'undefined') ? (localStorage.getItem('MDM_SCHOOL_ACCESS_MODE_' + currentUdise) || '') : '');
+
+    if (effectiveAccessMode === 'view_only') {
+      this.isSyncing = false;
+      this.hasPendingPush = false;
+      this.config.status = 'synced';
+      this.updateUIStatus();
+      console.warn(`[CloudSync] pushToCloud BLOCKED: School (${currentUdise}) is locked in View-Only mode.`);
+      if (!isSilent && typeof app !== 'undefined' && typeof app.showContactAdminModal === 'function') {
+        app.showContactAdminModal();
+      }
+      return false;
+    }
+
     const cleanBaseUrl = this.getEffectiveFirebaseUrl();
     if (!cleanBaseUrl) {
       if (!isSilent) {
@@ -1228,6 +1245,27 @@ const cloudSync = {
               }
             }
 
+            let pulledAccessMode = (json && json.accessMode) || (remoteData && remoteData.accessMode) || (remoteData && remoteData.settings && remoteData.settings.accessMode);
+            if (!pulledAccessMode && cleanBaseUrl) {
+              try {
+                const regRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_registry/mdm_${currentUdise}/accessMode.json?t=${Date.now()}`, { cache: 'no-store' }, 4000);
+                if (regRes.ok) {
+                  const regMode = await regRes.json();
+                  if (regMode) pulledAccessMode = regMode;
+                }
+              } catch(e) {}
+            }
+            if (pulledAccessMode) {
+              const storageKey = (typeof app !== 'undefined' && app.ACCESS_MODE_STORAGE_PREFIX) ? (app.ACCESS_MODE_STORAGE_PREFIX + currentUdise) : ('MDM_SCHOOL_ACCESS_MODE_' + currentUdise);
+              try { localStorage.setItem(storageKey, pulledAccessMode); } catch(e) {}
+              if (mergedTarget && mergedTarget.settings) {
+                mergedTarget.settings.accessMode = pulledAccessMode;
+              }
+              if (isActiveSchool && typeof app !== 'undefined' && app.data && app.data.settings) {
+                app.data.settings.accessMode = pulledAccessMode;
+              }
+            }
+
             if (isActiveSchool) {
               app.data = mergedTarget;
               if (typeof app.applySchoolLevelMode === 'function') app.applySchoolLevelMode(app.data.settings?.schoolLevel);
@@ -1240,6 +1278,7 @@ const cloudSync = {
               if (typeof app.renderCurrentTab === 'function') app.renderCurrentTab();
               if (typeof app.onDateChanged === 'function') app.onDateChanged();
               if (typeof app.renderRecentDaysRibbon === 'function') app.renderRecentDaysRibbon();
+              if (typeof app.updateDailyEntryViewOnlyBanner === 'function') app.updateDailyEntryViewOnlyBanner();
             }
 
             if (typeof app !== 'undefined' && typeof app.registerSchool === 'function' && mergedSettings) {
@@ -1597,6 +1636,7 @@ const cloudSync = {
       patPrimary: parseInt(schoolInfo.patPrimary || schoolInfo.pat) || 9,
       patUpper: parseInt(schoolInfo.patUpper) || 15,
       schoolLevel: schoolInfo.schoolLevel || 'both',
+      accessMode: schoolInfo.accessMode || 'full',
       lastActive: schoolInfo.lastActive || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -1609,6 +1649,39 @@ const cloudSync = {
       return true;
     } catch(e) {
       console.warn("Could not push school to registry:", e);
+      return false;
+    }
+  },
+
+  /**
+   * Push school access mode ('full' or 'view_only') to central registry in Firebase
+   */
+  async pushSchoolAccessMode(udise, accessMode = 'full') {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl || !udise) return false;
+    const cleanUdise = String(udise).trim();
+    const modePayload = JSON.stringify(accessMode);
+    try {
+      await Promise.allSettled([
+        this.fetchWithTimeout(`${cleanBaseUrl}/mdm_registry/mdm_${cleanUdise}/accessMode.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: modePayload
+        }, 7000),
+        this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/accessMode.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: modePayload
+        }, 7000),
+        this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/appData/settings/accessMode.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: modePayload
+        }, 7000)
+      ]);
+      return true;
+    } catch(e) {
+      console.warn("Could not push access mode to cloud:", e);
       return false;
     }
   },

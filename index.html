@@ -316,7 +316,7 @@
             🏫 नोंदणीकृत शाळा व्यवस्थापन
           </button>
           <button type="button" class="portal-tab-btn" id="adminTabBtnGen" onclick="app.switchAdminTab('generator')">
-            🔑 की जनरेटर (Key Generator)
+            🛡️ शाळा प्रवेश नियंत्रण (Access Mode)
           </button>
           <button type="button" class="portal-tab-btn" id="adminTabBtnCloud" onclick="app.switchAdminTab('cloud')">
             ☁️ क्लाऊड सिंक नियंत्रण
@@ -330,23 +330,19 @@
       <div class="auth-body" style="padding: 16px; overflow-y: auto; flex: 1;">
         <div id="masterAdminAlert" class="alert alert-danger d-none py-2 px-3 mb-3 small" role="alert"></div>
 
-        <!-- 4 Stats Cards (Cashbook Style) -->
+        <!-- 3 Clean Stats Cards -->
         <div class="admin-stats-grid">
           <div class="admin-stat-card" style="border-left: 4px solid #3b82f6; background: #eff6ff;">
             <span style="font-size: 0.78rem; color: #1e40af; font-weight: 700;">एकूण शाळा</span>
             <span id="adminStatTotal" class="admin-stat-val" style="color: #1e3a8a;">0</span>
           </div>
           <div class="admin-stat-card" style="border-left: 4px solid #10b981; background: #f0fdf4;">
-            <span style="font-size: 0.78rem; color: #166534; font-weight: 700;">सक्रिय शाळा</span>
+            <span style="font-size: 0.78rem; color: #166534; font-weight: 700;">🟢 डेटा नोंद सुरू (Full)</span>
             <span id="adminStatActive" class="admin-stat-val" style="color: #15803d;">0</span>
           </div>
           <div class="admin-stat-card" style="border-left: 4px solid #f59e0b; background: #fffbeb;">
-            <span style="font-size: 0.78rem; color: #854d0e; font-weight: 700;">मोफत डेमो / प्रलंबित</span>
+            <span style="font-size: 0.78rem; color: #854d0e; font-weight: 700;">🔒 फक्त पाहणी मोड (View Only)</span>
             <span id="adminStatTrial" class="admin-stat-val" style="color: #b45309;">0</span>
-          </div>
-          <div class="admin-stat-card" style="border-left: 4px solid #ef4444; background: #fef2f2;">
-            <span style="font-size: 0.78rem; color: #991b1b; font-weight: 700;">कालबाह्य / बंद</span>
-            <span id="adminStatExpired" class="admin-stat-val" style="color: #dc2626;">0</span>
           </div>
         </div>
 
@@ -374,7 +370,7 @@
                   <th style="padding: 9px 8px; text-align: center; width: 95px;">वर्ग रचना</th>
                   <th style="padding: 9px 8px; text-align: left; width: 130px;">केंद्र / तालुका</th>
                   <th style="padding: 9px 8px; text-align: center; width: 85px;">पट</th>
-                  <th style="padding: 9px 8px; text-align: center; width: 135px;">स्थिती</th>
+                  <th style="padding: 9px 8px; text-align: center; width: 150px;">प्रवेश स्थिती / मोड</th>
                   <th style="padding: 9px 8px; text-align: center; width: 260px;">कृती (Actions)</th>
                 </tr>
               </thead>
@@ -385,19 +381,48 @@
           </div>
         </div>
 
-        <!-- ================= TAB 2: KEY GENERATOR ================= -->
+        <!-- ================= TAB 2: ACCESS MODE & KEY GENERATOR ================= -->
         <div id="adminViewGenerator" style="display: none;">
-          <div class="card p-3 mb-0" style="background: #f8fafc; border: 1.5px solid #cbd5e1;">
-            <strong style="color: #1e3a8a; font-size: 0.95rem; display: block; margin-bottom: 10px;">
-              🔑 ॲक्टिव्हेशन की जनरेटर (Key Generator):
+          <!-- 1. School Access Control -->
+          <div class="card p-3 mb-3" style="background: #ffffff; border: 1.5px solid #cbd5e1; border-top: 4px solid #f59e0b; border-radius: 8px;">
+            <strong style="color: #1e3a8a; font-size: 1rem; display: block; margin-bottom: 8px;">
+              🛡️ शाळा प्रवेश नियंत्रण (Access Mode Controller):
             </strong>
+            <p class="text-muted small mb-3">
+              येथून आपण कोणत्याही शाळेचा डेटा नोंद अधिकार सुरू करू शकता किंवा थांबवून <strong>फक्त पाहणी मोड (View Only)</strong> करू शकता:
+            </p>
+
             <div class="mb-3">
               <label for="adminTargetUdise" class="form-label fw-bold small text-dark">
-                🏫 ज्या शाळेसाठी की हवी आहे तिचा 11-अंकी UDISE:
+                🏫 ज्या शाळेचा मोड बदलायचा आहे तिचा 11-अंकी UDISE:
               </label>
               <input type="text" class="form-control text-center fw-bold fs-5 font-monospace" id="adminTargetUdise" maxlength="11" placeholder="उदा. 27240304501" oninput="app.onUdiseInput(this)">
             </div>
 
+            <div class="mb-3">
+              <label for="adminAccessModeSelect" class="form-label fw-bold small text-dark">⚙️ प्रवेश स्थिती (Access Mode) निवडा:</label>
+              <select id="adminAccessModeSelect" class="form-select fw-bold">
+                <option value="full" selected>🟢 पूर्ण नोंद सुरू (Full Access - Data Entry सुरु)</option>
+                <option value="view_only">🔒 फक्त पाहणी मोड (View Only - Data Entry बंद)</option>
+              </select>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap mb-2">
+              <button type="button" class="btn btn-primary fw-bold flex-1" onclick="app.adminSaveSelectedSchoolAccess()">
+                💾 प्रवेश स्थिती सेव्ह करा
+              </button>
+              <button type="button" class="btn btn-success fw-bold flex-1" onclick="app.adminSendAccessWhatsAppNotification()">
+                💬 WhatsApp वर मेसेज पाठवा
+              </button>
+            </div>
+            <div id="adminAccessModeStatusText" class="small text-muted mt-1 text-center font-monospace"></div>
+          </div>
+
+          <!-- 2. Cryptographic Key Generator (Advanced) -->
+          <div class="card p-3 mb-0" style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px;">
+            <strong style="color: #475569; font-size: 0.92rem; display: block; margin-bottom: 8px;">
+              🔑 ॲक्टिव्हेशन की जनरेटर (Key Generator):
+            </strong>
             <div class="mb-3">
               <label class="form-label fw-bold small text-dark">⏳ परवाना कालावधी निवडा:</label>
               <select id="adminPlanSelect" class="form-select">
@@ -408,7 +433,7 @@
               </select>
             </div>
 
-            <button type="button" class="btn btn-primary btn-lg w-100 mb-3 fw-bold" onclick="app.generateAndShowAdminKey()">
+            <button type="button" class="btn btn-outline-primary w-100 mb-3 fw-bold" onclick="app.generateAndShowAdminKey()">
               ⚡ ॲक्टिव्हेशन की तयार करा (Generate Key)
             </button>
 
@@ -544,6 +569,81 @@
         <button type="button" class="btn btn-secondary btn-sm px-4 fw-bold" onclick="app.closeMasterAdminModal()">
           बंद करा ✖
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact Admin Modal (View Only Mode / Contact Ganesh Pashte) -->
+  <div id="contactAdminModal" class="modal-backdrop" style="display: none; z-index: 1000010; background: rgba(15, 23, 42, 0.75); justify-content: center; align-items: center; padding: 16px;">
+    <div class="modal-dialog" style="max-width: 480px; width: 100%; margin: auto;">
+      <div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+        <!-- Header -->
+        <div class="modal-header" style="background: linear-gradient(135deg, #b45309, #d97706); color: #fff; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;">
+          <div class="d-flex align-items-center gap-2">
+            <span style="font-size: 1.6rem;">🔒</span>
+            <div>
+              <h3 class="modal-title" style="color: #fff; font-size: 1.15rem; font-weight: 800; margin: 0;">फक्त पाहणी मोड (View Only)</h3>
+              <p style="margin: 0; font-size: 0.78rem; color: #fef3c7;">डेटा नोंदणी सुरू करण्यासाठी ॲडमिनशी संपर्क साधा</p>
+            </div>
+          </div>
+          <button type="button" class="modal-close-btn" onclick="app.closeContactAdminModal()" style="color: #fff; font-size: 1.6rem; background: transparent; border: none; cursor: pointer; line-height: 1;">&times;</button>
+        </div>
+
+        <!-- Body -->
+        <div class="modal-body" style="padding: 20px; background: #ffffff;">
+          <div class="p-3 mb-3 rounded-3" style="background: #fffbeb; border: 1.5px solid #fde68a;">
+            <p style="margin: 0; font-size: 0.88rem; color: #92400e; line-height: 1.5; font-weight: 600;">
+              ℹ️ आपल्या शाळेसाठी सध्या नवीन डेटा नोंद (Data Entry) सुविधा थांबवण्यात आली असून <strong>फक्त पाहणी मोड (View Only)</strong> सुरू आहे.
+            </p>
+            <p style="margin: 6px 0 0 0; font-size: 0.82rem; color: #b45309;">
+              (आपण सर्व दैनंदिन रजिस्टर, मासिक अव्वल, अहवाल व ताळेबंद नेहमीप्रमाणे पाहू व प्रिंट करू शकता.)
+            </p>
+          </div>
+
+          <!-- School Information Card -->
+          <div class="p-3 mb-3 rounded-3" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="text-muted small">शाळेचे नाव:</span>
+              <strong id="contactSchoolName" class="text-dark small">रा.जि.प. शाळा</strong>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="text-muted small">UDISE कोड:</span>
+              <code id="contactSchoolUdise" class="fw-bold fs-6 text-primary" style="font-family: monospace;">27240304501</code>
+            </div>
+          </div>
+
+          <!-- Contact Details Box -->
+          <div class="text-center p-3 mb-3 rounded-3" style="background: #f0fdf4; border: 1.5px dashed #22c55e;">
+            <span style="font-size: 0.82rem; color: #166534; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">📞 सॉफ्टवेअर प्रशासक / ॲडमिन:</span>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #0f172a; margin: 4px 0;">
+              श्री गणेश विलास पष्टे
+            </div>
+            <div style="font-size: 1.25rem; font-weight: 800; color: #15803d; letter-spacing: 1px; font-family: monospace;">
+              9226979531
+            </div>
+          </div>
+
+          <!-- Action Buttons: WhatsApp & Call -->
+          <div class="d-flex flex-column gap-2 mb-3">
+            <a id="contactWhatsAppBtn" href="https://wa.me/919226979531" target="_blank" class="btn btn-success fw-bold py-2 px-3 text-center d-flex align-items-center justify-content-center gap-2" style="border-radius: 8px; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);">
+              <span style="font-size: 1.25rem;">💬</span>
+              <span>व्हॉट्सअॅपवर संपर्क साधा (1-Click WhatsApp)</span>
+            </a>
+            <a id="contactCallBtn" href="tel:9226979531" class="btn btn-outline-primary fw-bold py-2 px-3 text-center d-flex align-items-center justify-content-center gap-2" style="border-radius: 8px; font-size: 0.9rem;">
+              <span>📞</span>
+              <span>थेट फोन कॉल करा (9226979531)</span>
+            </a>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+            <button type="button" class="btn btn-sm btn-secondary fw-bold px-3" onclick="app.closeContactAdminModal()">
+              ✕ समजले / बंद करा
+            </button>
+            <button type="button" class="btn btn-sm btn-link text-muted" onclick="app.closeContactAdminModal(); app.promptMasterAdmin();">
+              👑 ॲडमिन लॉगिन
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -724,6 +824,18 @@
                 <span class="status-indicator live" id="entryStatusPill" style="font-size: 0.78rem; padding: 2px 8px;">🟢 नवीन नोंद</span>
               </div>
               <div class="card-body" style="padding: 16px;">
+                <!-- View Only Mode Banner -->
+                <div id="dailyEntryViewOnlyBanner" class="alert alert-warning py-2 px-3 mb-3 d-none" style="background: #fffbeb; border: 1.5px solid #f59e0b; border-radius: 8px; font-size: 0.85rem; color: #92400e;">
+                  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div>
+                      <strong>🔒 फक्त पाहणी मोड (View Only):</strong> आपल्या शाळेची नवीन डेटा नोंद सध्या थांबवण्यात आली आहे.
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-warning fw-bold text-dark" onclick="app.showContactAdminModal()" style="border-color: #d97706; background: #fff;">
+                      📞 ॲडमिन संपर्क
+                    </button>
+                  </div>
+                </div>
+
                 <form id="dailyEntryForm" novalidate onsubmit="event.preventDefault(); app.saveCurrentRecord();">
                   
                   <!-- Group 1: Date, Day, Holiday & Menu Box -->
