@@ -734,17 +734,53 @@ const cloudSync = {
     const l = Array.isArray(localMenus) ? localMenus : [];
     const r = Array.isArray(remoteMenus) ? remoteMenus : [];
     if (l.length === 0 && r.length === 0) return [];
-    if (l.length === 0) return r;
-    if (r.length === 0) return l;
+
+    const CANONICAL_MENU_NAMES = {
+      veg_pulav: "व्हेजिटेबल पुलाव (वाटाणा)",
+      moong_khichdi: "मूगडाळ खिचडी (मूगडाळ)",
+      moog_shevga_varan: "मूग शेवग्याचे वरण (तूरडाळ व मूग)",
+      chavali_khichdi: "चवळी खिचडी (चवळी)",
+      matki_usal: "मटकी उसळभात (मटकी)",
+      masale_bhat: "मसालेभात (तूरडाळ)",
+      soya_pulav: "सोयाबीन पुलाव (सोयावडी)",
+      masoori_pulav: "मसूरी पुलाव (मसूरडाळ)",
+      matar_pulav: "मटार पुलाव (वाटाणा)",
+      god_bhat: "गोड भात (गुळ साखर)",
+      purak_ahar: "पूरक आहार (अंडी / केळी)",
+      doodh_kheer: "दूध / खीर",
+      non_veg: "नॉन व्हेज / अंडी",
+      varan_bhat: "वरणभात (तूरडाळ)",
+      chana_usal: "हरभरा उसळभात (हरभरा)",
+      holiday: "सुट्टी"
+    };
+
+    const getCanonicalName = (m) => {
+      if (!m) return "";
+      if (m.id && CANONICAL_MENU_NAMES[m.id]) return CANONICAL_MENU_NAMES[m.id];
+      const clean = (m.name || '').replace(/\s*\(.*?\)/, '').trim();
+      for (const k of Object.keys(CANONICAL_MENU_NAMES)) {
+        const canClean = CANONICAL_MENU_NAMES[k].replace(/\s*\(.*?\)/, '').trim();
+        if (clean === canClean) return CANONICAL_MENU_NAMES[k];
+      }
+      return m.name || "";
+    };
 
     const base = preferRemote ? r : l;
     const secondary = preferRemote ? l : r;
-    const merged = [...base];
+    const merged = base.map(item => {
+      const copy = Object.assign({}, item);
+      const can = getCanonicalName(copy);
+      if (can) copy.name = can;
+      return copy;
+    });
 
     secondary.forEach(item => {
       const exists = merged.some(m => (m.id && item.id && m.id === item.id) || (m.name && item.name && m.name === item.name));
       if (!exists) {
-        merged.push(item);
+        const copy = Object.assign({}, item);
+        const can = getCanonicalName(copy);
+        if (can) copy.name = can;
+        merged.push(copy);
       }
     });
 
@@ -1288,6 +1324,7 @@ const cloudSync = {
 
             if (isActiveSchool) {
               app.data = mergedTarget;
+              if (typeof app.ensureStandardMenus === 'function') app.ensureStandardMenus();
               if (typeof app.applySchoolLevelMode === 'function') app.applySchoolLevelMode(app.data.settings?.schoolLevel);
               if (typeof app.updateHeaderMeta === 'function') app.updateHeaderMeta();
               if (typeof app.populateMenuDropdown === 'function') app.populateMenuDropdown();

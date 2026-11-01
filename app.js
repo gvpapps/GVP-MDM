@@ -3785,11 +3785,18 @@ const app = {
       ];
 
       officialWeeklyMenus.forEach(om => {
-        const existing = this.data.menus.find(m => m.id === om.id || m.name === om.name || (m.name && om.name.startsWith(m.name)));
+        const existing = this.data.menus.find(m => {
+          if (m.id && om.id && m.id === om.id) return true;
+          if (m.name === om.name) return true;
+          const cleanM = (m.name || '').replace(/\s*\(.*?\)/, '').trim();
+          const cleanO = (om.name || '').replace(/\s*\(.*?\)/, '').trim();
+          return cleanM === cleanO;
+        });
         if (!existing) {
           this.data.menus.push(om);
         } else {
-          if (!existing.name.includes('(')) existing.name = om.name;
+          existing.name = om.name;
+          if (om.id) existing.id = om.id;
           if (om.pulseSplit) existing.pulseSplit = om.pulseSplit;
           if (om.pulseKeys) existing.pulseKeys = om.pulseKeys;
           if (om.pulseKey && (!existing.pulseKey || existing.pulseKey === 'nil')) existing.pulseKey = om.pulseKey;
@@ -4330,7 +4337,7 @@ const app = {
       if (menu.id === 'holiday') return; // Handled by toggle
       const opt = document.createElement('option');
       opt.value = menu.name;
-      opt.textContent = `${menu.dayName ? menu.dayName + ' - ' : ''}${menu.name}`;
+      opt.textContent = menu.name;
       menuSelect.appendChild(opt);
     });
 
@@ -4442,9 +4449,9 @@ const app = {
         return hasRice ? "साधा भात" : "सुट्टी";
       }
 
-      // Check if user has selected moong + tur_dal (मूग शेवग्याचे वरण)
+      // Check if user has selected moong + tur_dal (मूग शेवग्याचे वरण (तूरडाळ व मूग))
       if (nonRice.length === 2 && nonRice.includes('moong') && nonRice.includes('tur_dal')) {
-        return "मूग शेवग्याचे वरण";
+        return "मूग शेवग्याचे वरण (तूरडाळ व मूग)";
       }
 
       // Check if user has a configured menu specifically for this single pulse
@@ -6021,9 +6028,10 @@ const app = {
         menuSel.appendChild(defOption);
 
         (this.data.menus || []).forEach(m => {
+          if (m.id === 'holiday') return;
           const opt = document.createElement('option');
           opt.value = m.name;
-          opt.textContent = `${m.name} (${m.dayName || ''})`;
+          opt.textContent = m.name;
           menuSel.appendChild(opt);
         });
 
@@ -7655,19 +7663,48 @@ const app = {
       { id: "holiday", name: "सुट्टी", pulseKey: null, dayCode: 0, dayName: "सुट्टी" }
     ];
 
+    let hasChanged = false;
     standardMenus.forEach(sMenu => {
-      const existing = this.data.menus.find(m => m.id === sMenu.id || m.name === sMenu.name || (m.name && sMenu.name.startsWith(m.name)));
+      const existing = this.data.menus.find(m => {
+        if (m.id && sMenu.id && m.id === sMenu.id) return true;
+        if (m.name === sMenu.name) return true;
+        const cleanM = (m.name || '').replace(/\s*\(.*?\)/, '').trim();
+        const cleanS = (sMenu.name || '').replace(/\s*\(.*?\)/, '').trim();
+        return cleanM === cleanS;
+      });
+
       if (!existing) {
-        this.data.menus.push(sMenu);
+        this.data.menus.push(Object.assign({}, sMenu));
+        hasChanged = true;
       } else {
-        if (!existing.name.includes('(')) existing.name = sMenu.name;
+        if (existing.name !== sMenu.name) {
+          existing.name = sMenu.name;
+          hasChanged = true;
+        }
+        if (sMenu.id && existing.id !== sMenu.id) {
+          existing.id = sMenu.id;
+          hasChanged = true;
+        }
         if (sMenu.id === 'god_bhat' && (!existing.pulseKey || existing.pulseKey === 'nil')) {
           existing.pulseKey = 'gul_sakhar';
+          hasChanged = true;
         }
-        if (sMenu.pulseSplit) existing.pulseSplit = sMenu.pulseSplit;
-        if (sMenu.pulseKeys) existing.pulseKeys = sMenu.pulseKeys;
+        if (sMenu.pulseSplit && JSON.stringify(existing.pulseSplit) !== JSON.stringify(sMenu.pulseSplit)) {
+          existing.pulseSplit = sMenu.pulseSplit;
+          hasChanged = true;
+        }
+        if (sMenu.pulseKeys && JSON.stringify(existing.pulseKeys) !== JSON.stringify(sMenu.pulseKeys)) {
+          existing.pulseKeys = sMenu.pulseKeys;
+          hasChanged = true;
+        }
       }
     });
+
+    if (hasChanged && typeof this.saveState === 'function') {
+      try {
+        this.saveState(false, true);
+      } catch (e) {}
+    }
   },
 
   /**
