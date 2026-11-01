@@ -363,8 +363,8 @@ const testSuite = {
         const hasRecalcMethod = typeof app.recalculateCurrentMonth === 'function';
         const hasStandardMenusMethod = typeof app.ensureStandardMenus === 'function';
         if (hasStandardMenusMethod) app.ensureStandardMenus();
-        const hasGodBhat = Array.isArray(app.data?.menus) && app.data.menus.some(m => m.name === 'गोड भात' && m.pulseKey === 'gul_sakhar');
-        const hasPurakAhar = Array.isArray(app.data?.menus) && app.data.menus.some(m => m.id === 'purak_ahar' || m.name === 'पूरक आहार');
+        const hasGodBhat = Array.isArray(app.data?.menus) && app.data.menus.some(m => (m.name.includes('गोड भात') || m.id === 'god_bhat') && m.pulseKey === 'gul_sakhar');
+        const hasPurakAhar = Array.isArray(app.data?.menus) && app.data.menus.some(m => m.id === 'purak_ahar' || m.name.includes('पूरक आहार'));
         const hasDoodhKheer = Array.isArray(app.data?.menus) && app.data.menus.some(m => m.id === 'doodh_kheer' || m.name.includes('दूध'));
         
         // Safety verification: recalculating 2026-10 should NOT touch 2026-09
@@ -1003,15 +1003,18 @@ const testSuite = {
           app.showContactAdminModal = origModalFn;
           app.setSchoolAccessMode(testUdise, 'full');
 
-          // 5. Weekly default menu resolution
+          // 5. Weekly default menu resolution with Pulse name in brackets
           const defMonMenu = app.getDefaultMenuForDay("2026-11-02");
           const passMenu = (typeof defMonMenu === 'string' && defMonMenu.length > 0 && defMonMenu !== 'सुट्टी');
+          const passPulseInName = defMonMenu.includes('(') && defMonMenu.includes(')');
+          const calcVegWithPulse = app.calculateDay("2026-11-02", 10, "व्हेजिटेबल पुलाव (वाटाणा)");
+          const passVegCalc = calcVegWithPulse.quantities && calcVegWithPulse.quantities.vatana > 0;
 
-          const passed = passTasteTime && isNov1Sunday && passCalc && passBulkViewOnlyGuard && passMenu;
+          const passed = passTasteTime && isNov1Sunday && passCalc && passBulkViewOnlyGuard && passMenu && passPulseInName && passVegCalc;
 
           return {
             passed,
-            details: `चव वेळ (सोम-शुक्र 1:00 PM, शनि 9:30 AM): ${passTasteTime ? 'अचूक' : 'त्रुटी'}, रविवार ओळख: ${isNov1Sunday ? 'यशस्वी' : 'त्रुटी'}, १००% पट हिशोब (तांदूळ व खर्च): ${passCalc ? 'अचूक' : 'त्रुटी'}, पाहणी मोड (View Only) सुरक्षा ब्लॉक: ${passBulkViewOnlyGuard ? 'सक्रिय' : 'त्रुटी'}, वारानुसार मेनू सायकल: ${passMenu ? 'सुरू' : 'त्रुटी'}`
+            details: `चव वेळ (सोम-शुक्र 1:00 PM, शनि 9:30 AM): ${passTasteTime ? 'अचूक' : 'त्रुटी'}, रविवार ओळख: ${isNov1Sunday ? 'यशस्वी' : 'त्रुटी'}, १००% पट हिशोब (तांदूळ व खर्च): ${passCalc ? 'अचूक' : 'त्रुटी'}, पाहणी मोड (View Only) सुरक्षा ब्लॉक: ${passBulkViewOnlyGuard ? 'सक्रिय' : 'त्रुटी'}, वारानुसार मेनू कडधान्य नावासह (कंसात): ${passPulseInName && passVegCalc ? 'अचूक' : 'त्रुटी'}`
           };
         } finally {
           if (origMode) {

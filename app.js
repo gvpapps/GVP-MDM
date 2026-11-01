@@ -90,18 +90,21 @@ const app = {
 
     // Master Menus & Associated Ingredients (4-Week Cyclic Timetable)
     menus: [
-      { id: "veg_pulav", name: "व्हेजिटेबल पुलाव", pulseKey: "vatana", dayCode: 2, dayName: "सोमवार (आठवडा 1, 3)" },
-      { id: "moong_khichdi", name: "मूगडाळ खिचडी", pulseKey: "moong_dal", dayCode: 3, dayName: "मंगळवार / शुक्रवार" },
-      { id: "moog_shevga_varan", name: "मूग शेवग्याचे वरण", pulseKey: "tur_dal", pulseKeys: ["moong", "tur_dal"], pulseSplit: { moong: 0.010, tur_dal: 0.010 }, dayCode: 4, dayName: "बुधवार" },
-      { id: "chavali_khichdi", name: "चवळी खिचडी", pulseKey: "chavali", dayCode: 5, dayName: "गुरुवार (आठवडा 1, 3)" },
-      { id: "matki_usal", name: "मटकी उसळभात", pulseKey: "matki", dayCode: 6, dayName: "शुक्रवार / शनिवार" },
-      { id: "masale_bhat", name: "मसालेभात", pulseKey: "tur_dal", dayCode: 7, dayName: "शनिवार (आठवडा 1, 3)" },
-      { id: "soya_pulav", name: "सोयाबीन पुलाव", pulseKey: "soyavadi", dayCode: 2, dayName: "सोमवार (आठवडा 2, 4)" },
-      { id: "masoori_pulav", name: "मसूरी पुलाव", pulseKey: "masoor_dal", dayCode: 3, dayName: "मंगळवार (आठवडा 2, 4)" },
-      { id: "matar_pulav", name: "मटार पुलाव", pulseKey: "vatana", dayCode: 5, dayName: "गुरुवार (आठवडा 2, 4)" },
-      { id: "god_bhat", name: "गोड भात", pulseKey: "nil", dayCode: 0, dayName: "विशेष मेन्यू" },
-      { id: "non_veg", name: "नॉन व्हेज / पूरक आहार", pulseKey: "nil", dayCode: 0, dayName: "विशेष मेन्यू" },
-      { id: "varan_bhat", name: "वरणभात", pulseKey: "tur_dal", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "veg_pulav", name: "व्हेजिटेबल पुलाव (वाटाणा)", pulseKey: "vatana", dayCode: 2, dayName: "सोमवार (आठवडा 1, 3)" },
+      { id: "moong_khichdi", name: "मूगडाळ खिचडी (मूगडाळ)", pulseKey: "moong_dal", dayCode: 3, dayName: "मंगळवार / शुक्रवार" },
+      { id: "moog_shevga_varan", name: "मूग शेवग्याचे वरण (तूरडाळ व मूग)", pulseKey: "tur_dal", pulseKeys: ["moong", "tur_dal"], pulseSplit: { moong: 0.010, tur_dal: 0.010 }, dayCode: 4, dayName: "बुधवार" },
+      { id: "chavali_khichdi", name: "चवळी खिचडी (चवळी)", pulseKey: "chavali", dayCode: 5, dayName: "गुरुवार (आठवडा 1, 3)" },
+      { id: "matki_usal", name: "मटकी उसळभात (मटकी)", pulseKey: "matki", dayCode: 6, dayName: "शुक्रवार / शनिवार" },
+      { id: "masale_bhat", name: "मसालेभात (तूरडाळ)", pulseKey: "tur_dal", dayCode: 7, dayName: "शनिवार (आठवडा 1, 3)" },
+      { id: "soya_pulav", name: "सोयाबीन पुलाव (सोयावडी)", pulseKey: "soyavadi", dayCode: 2, dayName: "सोमवार (आठवडा 2, 4)" },
+      { id: "masoori_pulav", name: "मसूरी पुलाव (मसूरडाळ)", pulseKey: "masoor_dal", dayCode: 3, dayName: "मंगळवार (आठवडा 2, 4)" },
+      { id: "matar_pulav", name: "मटार पुलाव (वाटाणा)", pulseKey: "vatana", dayCode: 5, dayName: "गुरुवार (आठवडा 2, 4)" },
+      { id: "god_bhat", name: "गोड भात (गुळ साखर)", pulseKey: "gul_sakhar", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "purak_ahar", name: "पूरक आहार (अंडी / केळी)", pulseKey: "purak_ahar", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "doodh_kheer", name: "दूध / खीर", pulseKey: "doodh_powder", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "non_veg", name: "नॉन व्हेज / अंडी", pulseKey: "nil", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "varan_bhat", name: "वरणभात (तूरडाळ)", pulseKey: "tur_dal", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "chana_usal", name: "हरभरा उसळभात (हरभरा)", pulseKey: "chana", dayCode: 0, dayName: "विशेष मेन्यू" },
       { id: "holiday", name: "सुट्टी", pulseKey: null, dayCode: 0, dayName: "सुट्टी" }
     ],
 
@@ -1220,18 +1223,21 @@ const app = {
         doodh_powder: { id: "doodh_powder", name: "दूध पावडर", defaultRate: 0.015, unit: "kg", category: "grain" }
       },
       menus: [
-        { id: "veg_pulav", name: "व्हेजिटेबल पुलाव", pulseKey: "vatana", dayCode: 2, dayName: "सोमवार (आठवडा 1, 3)" },
-        { id: "moong_khichdi", name: "मूगडाळ खिचडी", pulseKey: "moong_dal", dayCode: 3, dayName: "मंगळवार / शुक्रवार" },
-        { id: "moog_shevga_varan", name: "मूग शेवग्याचे वरण", pulseKey: "tur_dal", pulseKeys: ["moong", "tur_dal"], pulseSplit: { moong: 0.010, tur_dal: 0.010 }, dayCode: 4, dayName: "बुधवार" },
-        { id: "chavali_khichdi", name: "चवळी खिचडी", pulseKey: "chavali", dayCode: 5, dayName: "गुरुवार (आठवडा 1, 3)" },
-        { id: "matki_usal", name: "मटकी उसळभात", pulseKey: "matki", dayCode: 6, dayName: "शुक्रवार / शनिवार" },
-        { id: "masale_bhat", name: "मसालेभात", pulseKey: "tur_dal", dayCode: 7, dayName: "शनिवार (आठवडा 1, 3)" },
-        { id: "soya_pulav", name: "सोयाबीन पुलाव", pulseKey: "soyavadi", dayCode: 2, dayName: "सोमवार (आठवडा 2, 4)" },
-        { id: "masoori_pulav", name: "मसूरी पुलाव", pulseKey: "masoor_dal", dayCode: 3, dayName: "मंगळवार (आठवडा 2, 4)" },
-        { id: "matar_pulav", name: "मटार पुलाव", pulseKey: "vatana", dayCode: 5, dayName: "गुरुवार (आठवडा 2, 4)" },
-        { id: "god_bhat", name: "गोड भात", pulseKey: "nil", dayCode: 0, dayName: "विशेष मेन्यू" },
-        { id: "non_veg", name: "नॉन व्हेज / पूरक आहार", pulseKey: "nil", dayCode: 0, dayName: "विशेष मेन्यू" },
-        { id: "varan_bhat", name: "वरणभात", pulseKey: "tur_dal", dayCode: 0, dayName: "विशेष मेन्यू" },
+        { id: "veg_pulav", name: "व्हेजिटेबल पुलाव (वाटाणा)", pulseKey: "vatana", dayCode: 2, dayName: "सोमवार (आठवडा 1, 3)" },
+        { id: "moong_khichdi", name: "मूगडाळ खिचडी (मूगडाळ)", pulseKey: "moong_dal", dayCode: 3, dayName: "मंगळवार / शुक्रवार" },
+        { id: "moog_shevga_varan", name: "मूग शेवग्याचे वरण (तूरडाळ व मूग)", pulseKey: "tur_dal", pulseKeys: ["moong", "tur_dal"], pulseSplit: { moong: 0.010, tur_dal: 0.010 }, dayCode: 4, dayName: "बुधवार" },
+        { id: "chavali_khichdi", name: "चवळी खिचडी (चवळी)", pulseKey: "chavali", dayCode: 5, dayName: "गुरुवार (आठवडा 1, 3)" },
+        { id: "matki_usal", name: "मटकी उसळभात (मटकी)", pulseKey: "matki", dayCode: 6, dayName: "शुक्रवार / शनिवार" },
+        { id: "masale_bhat", name: "मसालेभात (तूरडाळ)", pulseKey: "tur_dal", dayCode: 7, dayName: "शनिवार (आठवडा 1, 3)" },
+        { id: "soya_pulav", name: "सोयाबीन पुलाव (सोयावडी)", pulseKey: "soyavadi", dayCode: 2, dayName: "सोमवार (आठवडा 2, 4)" },
+        { id: "masoori_pulav", name: "मसूरी पुलाव (मसूरडाळ)", pulseKey: "masoor_dal", dayCode: 3, dayName: "मंगळवार (आठवडा 2, 4)" },
+        { id: "matar_pulav", name: "मटार पुलाव (वाटाणा)", pulseKey: "vatana", dayCode: 5, dayName: "गुरुवार (आठवडा 2, 4)" },
+        { id: "god_bhat", name: "गोड भात (गुळ साखर)", pulseKey: "gul_sakhar", dayCode: 0, dayName: "विशेष मेन्यू" },
+        { id: "purak_ahar", name: "पूरक आहार (अंडी / केळी)", pulseKey: "purak_ahar", dayCode: 0, dayName: "विशेष मेन्यू" },
+        { id: "doodh_kheer", name: "दूध / खीर", pulseKey: "doodh_powder", dayCode: 0, dayName: "विशेष मेन्यू" },
+        { id: "non_veg", name: "नॉन व्हेज / अंडी", pulseKey: "nil", dayCode: 0, dayName: "विशेष मेन्यू" },
+        { id: "varan_bhat", name: "वरणभात (तूरडाळ)", pulseKey: "tur_dal", dayCode: 0, dayName: "विशेष मेन्यू" },
+        { id: "chana_usal", name: "हरभरा उसळभात (हरभरा)", pulseKey: "chana", dayCode: 0, dayName: "विशेष मेन्यू" },
         { id: "holiday", name: "सुट्टी", pulseKey: null, dayCode: 0, dayName: "सुट्टी" }
       ],
       initialStock: {
@@ -3761,28 +3767,32 @@ const app = {
 
       // Ensure all 4-Week Cyclic Timetable menus exist and have proper pulseSplit
       const officialWeeklyMenus = [
-        { id: "veg_pulav", name: "व्हेजिटेबल पुलाव", pulseKey: "vatana", dayCode: 2, dayName: "सोमवार (आठवडा 1, 3)" },
-        { id: "moong_khichdi", name: "मूगडाळ खिचडी", pulseKey: "moong_dal", dayCode: 3, dayName: "मंगळवार / शुक्रवार" },
-        { id: "moog_shevga_varan", name: "मूग शेवग्याचे वरण", pulseKey: "tur_dal", pulseKeys: ["moong", "tur_dal"], pulseSplit: { moong: 0.010, tur_dal: 0.010 }, dayCode: 4, dayName: "बुधवार" },
-        { id: "chavali_khichdi", name: "चवळी खिचडी", pulseKey: "chavali", dayCode: 5, dayName: "गुरुवार (आठवडा 1, 3)" },
-        { id: "matki_usal", name: "मटकी उसळभात", pulseKey: "matki", dayCode: 6, dayName: "शुक्रवार / शनिवार" },
-        { id: "masale_bhat", name: "मसालेभात", pulseKey: "tur_dal", dayCode: 7, dayName: "शनिवार (आठवडा 1, 3)" },
-        { id: "soya_pulav", name: "सोयाबीन पुलाव", pulseKey: "soyavadi", dayCode: 2, dayName: "सोमवार (आठवडा 2, 4)" },
-        { id: "masoori_pulav", name: "मसूरी पुलाव", pulseKey: "masoor_dal", dayCode: 3, dayName: "मंगळवार (आठवडा 2, 4)" },
-        { id: "matar_pulav", name: "मटार पुलाव", pulseKey: "vatana", dayCode: 5, dayName: "गुरुवार (आठवडा 2, 4)" },
-        { id: "god_bhat", name: "गोड भात", pulseKey: "nil", dayCode: 0, dayName: "विशेष मेन्यू" },
-        { id: "non_veg", name: "नॉन व्हेज / पूरक आहार", pulseKey: "nil", dayCode: 0, dayName: "विशेष मेन्यू" },
-        { id: "varan_bhat", name: "वरणभात", pulseKey: "tur_dal", dayCode: 0, dayName: "विशेष मेन्यू" }
+        { id: "veg_pulav", name: "व्हेजिटेबल पुलाव (वाटाणा)", pulseKey: "vatana", dayCode: 2, dayName: "सोमवार (आठवडा 1, 3)" },
+        { id: "moong_khichdi", name: "मूगडाळ खिचडी (मूगडाळ)", pulseKey: "moong_dal", dayCode: 3, dayName: "मंगळवार / शुक्रवार" },
+        { id: "moog_shevga_varan", name: "मूग शेवग्याचे वरण (तूरडाळ व मूग)", pulseKey: "tur_dal", pulseKeys: ["moong", "tur_dal"], pulseSplit: { moong: 0.010, tur_dal: 0.010 }, dayCode: 4, dayName: "बुधवार" },
+        { id: "chavali_khichdi", name: "चवळी खिचडी (चवळी)", pulseKey: "chavali", dayCode: 5, dayName: "गुरुवार (आठवडा 1, 3)" },
+        { id: "matki_usal", name: "मटकी उसळभात (मटकी)", pulseKey: "matki", dayCode: 6, dayName: "शुक्रवार / शनिवार" },
+        { id: "masale_bhat", name: "मसालेभात (तूरडाळ)", pulseKey: "tur_dal", dayCode: 7, dayName: "शनिवार (आठवडा 1, 3)" },
+        { id: "soya_pulav", name: "सोयाबीन पुलाव (सोयावडी)", pulseKey: "soyavadi", dayCode: 2, dayName: "सोमवार (आठवडा 2, 4)" },
+        { id: "masoori_pulav", name: "मसूरी पुलाव (मसूरडाळ)", pulseKey: "masoor_dal", dayCode: 3, dayName: "मंगळवार (आठवडा 2, 4)" },
+        { id: "matar_pulav", name: "मटार पुलाव (वाटाणा)", pulseKey: "vatana", dayCode: 5, dayName: "गुरुवार (आठवडा 2, 4)" },
+        { id: "god_bhat", name: "गोड भात (गुळ साखर)", pulseKey: "gul_sakhar", dayCode: 0, dayName: "विशेष मेन्यू" },
+        { id: "purak_ahar", name: "पूरक आहार (अंडी / केळी)", pulseKey: "purak_ahar", dayCode: 0, dayName: "विशेष मेन्यू" },
+        { id: "doodh_kheer", name: "दूध / खीर", pulseKey: "doodh_powder", dayCode: 0, dayName: "विशेष मेन्यू" },
+        { id: "non_veg", name: "नॉन व्हेज / अंडी", pulseKey: "nil", dayCode: 0, dayName: "विशेष मेन्यू" },
+        { id: "varan_bhat", name: "वरणभात (तूरडाळ)", pulseKey: "tur_dal", dayCode: 0, dayName: "विशेष मेन्यू" },
+        { id: "chana_usal", name: "हरभरा उसळभात (हरभरा)", pulseKey: "chana", dayCode: 0, dayName: "विशेष मेन्यू" }
       ];
 
       officialWeeklyMenus.forEach(om => {
-        const existing = this.data.menus.find(m => m.id === om.id || m.name === om.name);
+        const existing = this.data.menus.find(m => m.id === om.id || m.name === om.name || (m.name && om.name.startsWith(m.name)));
         if (!existing) {
           this.data.menus.push(om);
         } else {
+          if (!existing.name.includes('(')) existing.name = om.name;
           if (om.pulseSplit) existing.pulseSplit = om.pulseSplit;
           if (om.pulseKeys) existing.pulseKeys = om.pulseKeys;
-          if (om.pulseKey && !existing.pulseKey) existing.pulseKey = om.pulseKey;
+          if (om.pulseKey && (!existing.pulseKey || existing.pulseKey === 'nil')) existing.pulseKey = om.pulseKey;
         }
       });
 
@@ -4461,7 +4471,7 @@ const app = {
    * Strictly synchronized with the actual grains and pulses consumed in that day's record!
    */
   getDisplayMenuName(rec) {
-    if (!rec) return "वरणभात";
+    if (!rec) return "वरणभात (तूरडाळ)";
     if (rec.isHoliday || rec.children === 0) {
       return (rec.isHoliday && rec.remarks && rec.remarks.trim()) ? rec.remarks.trim() : "सुट्टी";
     }
@@ -4470,9 +4480,9 @@ const app = {
     const pulseKeys = ['moong_dal', 'tur_dal', 'masoor_dal', 'matki', 'moong', 'chavali', 'chana', 'vatana', 'soyavadi'];
     const activePulses = pulseKeys.filter(pk => q[pk] && q[pk] > 0.0001);
 
-    // 1. DUAL PULSE: मूग (moong) + तूरडाळ (tur_dal) -> मूग शेवग्याचे वरण
+    // 1. DUAL PULSE: मूग (moong) + तूरडाळ (tur_dal) -> मूग शेवग्याचे वरण (तूरडाळ व मूग)
     if (activePulses.includes('moong') && activePulses.includes('tur_dal')) {
-      return "मूग शेवग्याचे वरण";
+      return "मूग शेवग्याचे वरण (तूरडाळ व मूग)";
     }
 
     // 2. SINGLE PULSE: Exactly 1 pulse consumed on this day
@@ -4480,45 +4490,45 @@ const app = {
       const pk = activePulses[0];
       switch (pk) {
         case 'moong_dal':
-          return "मूगडाळ खिचडी";
+          return "मूगडाळ खिचडी (मूगडाळ)";
         case 'tur_dal':
-          if (rec.menuName && rec.menuName.includes('वरण')) return "वरणभात";
-          return "मसालेभात";
+          if (rec.menuName && rec.menuName.includes('वरण')) return "वरणभात (तूरडाळ)";
+          return "मसालेभात (तूरडाळ)";
         case 'masoor_dal':
-          if (rec.menuName && rec.menuName.includes('खिचडी')) return "मसूरडाळ खिचडी";
-          return "मसूरी पुलाव";
+          if (rec.menuName && rec.menuName.includes('खिचडी')) return "मसूरडाळ खिचडी (मसूरडाळ)";
+          return "मसूरी पुलाव (मसूरडाळ)";
         case 'matki':
-          return "मटकी उसळभात";
+          return "मटकी उसळभात (मटकी)";
         case 'moong':
-          return "मूग उसळभात";
+          return "मूग उसळभात (मूग)";
         case 'chavali':
-          return "चवळी खिचडी";
+          return "चवळी खिचडी (चवळी)";
         case 'chana':
-          return "हरभरा उसळभात";
+          return "हरभरा उसळभात (हरभरा)";
         case 'vatana':
-          if (rec.menuName && rec.menuName.includes('मटार')) return "मटार पुलाव";
-          if (rec.dayCode === 5) return "मटार पुलाव";
-          return "व्हेजिटेबल पुलाव";
+          if (rec.menuName && rec.menuName.includes('मटार')) return "मटार पुलाव (वाटाणा)";
+          if (rec.dayCode === 5) return "मटार पुलाव (वाटाणा)";
+          return "व्हेजिटेबल पुलाव (वाटाणा)";
         case 'soyavadi':
-          return "सोयाबीन पुलाव";
+          return "सोयाबीन पुलाव (सोयावडी)";
       }
     }
 
     // 3. COMBINATION PULSES: e.g. वाटाणा + हरभरा
     if (activePulses.length > 1) {
       if (activePulses.includes('vatana') && activePulses.includes('chana')) {
-        return "उसळभात (वाटाणा/हरभरा)";
+        return "उसळभात (वाटाणा व हरभरा)";
       }
       const pulseNames = activePulses.map(k => (this.data.ingredients[k] ? this.data.ingredients[k].name : k));
       return `उसळभात (${pulseNames.join(', ')})`;
     }
 
-    // 4. ONLY RICE CONSUMED (0 pulse days: गोड भात / नॉन व्हेज)
+    // 4. ONLY RICE CONSUMED (0 pulse days: गोड भात / पूरक आहार)
     if (q.rice && q.rice > 0) {
       if (rec.menuName && (rec.menuName.includes('नॉन') || rec.menuName.includes('अंडी') || rec.menuName.includes('पूरक'))) {
-        return "नॉन व्हेज / पूरक आहार";
+        return "पूरक आहार (अंडी / केळी)";
       }
-      return "गोड भात";
+      return "गोड भात (गुळ साखर)";
     }
 
     // 5. If no quantities recorded yet (planned day or empty day), resolve from 4-week timetable
@@ -4532,7 +4542,7 @@ const app = {
       return rec.menuName.trim();
     }
 
-    return "वरणभात";
+    return "वरणभात (तूरडाळ)";
   },
 
   /**
@@ -5080,22 +5090,22 @@ const app = {
 
     if (isWeek1or3) {
       switch (dayCode) {
-        case 2: return "व्हेजिटेबल पुलाव"; // सोमवार (वाटाणे)
-        case 3: return "मूगडाळ खिचडी";    // मंगळवार (मूगडाळ)
-        case 4: return "मूग शेवग्याचे वरण"; // बुधवार (मूग, तूरडाळ)
-        case 5: return "चवळी खिचडी";       // गुरुवार (चवळी)
-        case 6: return "मटकी उसळभात";      // शुक्रवार (मटकी)
-        case 7: return "मसालेभात";         // शनिवार (तूरडाळ)
+        case 2: return "व्हेजिटेबल पुलाव (वाटाणा)"; // सोमवार (वाटाणे)
+        case 3: return "मूगडाळ खिचडी (मूगडाळ)";    // मंगळवार (मूगडाळ)
+        case 4: return "मूग शेवग्याचे वरण (तूरडाळ व मूग)"; // बुधवार (मूग, तूरडाळ)
+        case 5: return "चवळी खिचडी (चवळी)";       // गुरुवार (चवळी)
+        case 6: return "मटकी उसळभात (मटकी)";      // शुक्रवार (मटकी)
+        case 7: return "मसालेभात (तूरडाळ)";         // शनिवार (तूरडाळ)
       }
     } else {
       // आठवडा 2 (तारीख 8 ते 14) आणि आठवडा 4/5 (तारीख 21 ते 31)
       switch (dayCode) {
-        case 2: return "सोयाबीन पुलाव";    // सोमवार (सोयाबीन वडी)
-        case 3: return "मसूरी पुलाव";       // मंगळवार (मसूरडाळ)
-        case 4: return "मूग शेवग्याचे वरण"; // बुधवार (मूग, तूरडाळ)
-        case 5: return "मटार पुलाव";       // गुरुवार (वाटाणे)
-        case 6: return "मूगडाळ खिचडी";    // शुक्रवार (मूगडाळ)
-        case 7: return "मटकी उसळभात";      // शनिवार (मटकी)
+        case 2: return "सोयाबीन पुलाव (सोयावडी)";    // सोमवार (सोयाबीन वडी)
+        case 3: return "मसूरी पुलाव (मसूरडाळ)";       // मंगळवार (मसूरडाळ)
+        case 4: return "मूग शेवग्याचे वरण (तूरडाळ व मूग)"; // बुधवार (मूग, तूरडाळ)
+        case 5: return "मटार पुलाव (वाटाणा)";       // गुरुवार (वाटाणे)
+        case 6: return "मूगडाळ खिचडी (मूगडाळ)";    // शुक्रवार (मूगडाळ)
+        case 7: return "मटकी उसळभात (मटकी)";      // शनिवार (मटकी)
       }
     }
 
@@ -5103,7 +5113,7 @@ const app = {
     if (matchingMenus.length > 0) {
       return matchingMenus[matchingMenus.length - 1].name;
     }
-    return "मूगडाळ खिचडी";
+    return "मूगडाळ खिचडी (मूगडाळ)";
   },
 
   /**
@@ -5171,10 +5181,10 @@ const app = {
         // 2. Pulse / Dal based on Menu
         let menuObj = this.data.menus.find(m => m.name === selectedMenu);
         if (!menuObj) {
-          const normSel = selectedMenu.replace(/मु/g, 'मू');
-          menuObj = this.data.menus.find(m => m.name.replace(/मु/g, 'मू') === normSel);
+          const normSel = selectedMenu.replace(/मु/g, 'मू').replace(/\s*\(.*?\)/, '').trim();
+          menuObj = this.data.menus.find(m => m.name.replace(/मु/g, 'मू').replace(/\s*\(.*?\)/, '').trim() === normSel);
           if (!menuObj) {
-            menuObj = this.data.menus.find(m => m.name.includes(selectedMenu) || selectedMenu.includes(m.name) || m.name.replace(/मु/g, 'मू').includes(normSel));
+            menuObj = this.data.menus.find(m => m.name.includes(selectedMenu) || selectedMenu.includes(m.name) || m.name.includes(normSel) || normSel.includes(m.name.replace(/\s*\(.*?\)/, '').trim()));
             if (!menuObj) {
               const defName = this.getDefaultMenuForDay(dateStr);
               menuObj = this.data.menus.find(m => m.name === defName);
@@ -6026,21 +6036,21 @@ const app = {
           ? pRec.menuName
           : ((uRec && uRec.menuName && uRec.menuName !== 'सुट्टी')
             ? uRec.menuName
-            : (this.getDefaultMenuForDay(dateStr) || 'वरणभात'));
+            : (this.getDefaultMenuForDay(dateStr) || 'वरणभात (तूरडाळ)'));
 
-        const isKnown = (this.data.menus || []).some(m => m.name === targetMenu);
+        const matchedKnown = (this.data.menus || []).find(m => m.name === targetMenu || (targetMenu && m.name.replace(/\s*\(.*?\)/, '').trim() === targetMenu.replace(/\s*\(.*?\)/, '').trim()));
         const customRow = document.getElementById('dualEntryCustomMenuRow');
         const customInp = document.getElementById('dualEntryCustomMenuName');
 
-        if (isKnown) {
-          menuSel.value = targetMenu;
+        if (matchedKnown) {
+          menuSel.value = matchedKnown.name;
           if (customRow) customRow.style.display = 'none';
         } else if (targetMenu && targetMenu !== 'सुट्टी') {
           menuSel.value = '__custom__';
           if (customRow) customRow.style.display = 'block';
           if (customInp) customInp.value = targetMenu;
         } else {
-          menuSel.value = this.getDefaultMenuForDay(dateStr) || 'वरणभात';
+          menuSel.value = this.getDefaultMenuForDay(dateStr) || 'वरणभात (तूरडाळ)';
           if (customRow) customRow.style.display = 'none';
         }
       }
@@ -7627,31 +7637,35 @@ const app = {
     if (!Array.isArray(this.data.menus)) this.data.menus = [];
 
     const standardMenus = [
-      { id: "veg_pulav", name: "व्हेजिटेबल पुलाव", pulseKey: "vatana", dayCode: 2, dayName: "सोमवार (आठवडा 1, 3)" },
-      { id: "moong_khichdi", name: "मूगडाळ खिचडी", pulseKey: "moong_dal", dayCode: 3, dayName: "मंगळवार / शुक्रवार" },
-      { id: "moog_shevga_varan", name: "मूग शेवग्याचे वरण", pulseKey: "tur_dal", pulseKeys: ["moong", "tur_dal"], pulseSplit: { moong: 0.010, tur_dal: 0.010 }, dayCode: 4, dayName: "बुधवार" },
-      { id: "chavali_khichdi", name: "चवळी खिचडी", pulseKey: "chavali", dayCode: 5, dayName: "गुरुवार (आठवडा 1, 3)" },
-      { id: "matki_usal", name: "मटकी उसळभात", pulseKey: "matki", dayCode: 6, dayName: "शुक्रवार / शनिवार" },
-      { id: "masale_bhat", name: "मसालेभात", pulseKey: "tur_dal", dayCode: 7, dayName: "शनिवार (आठवडा 1, 3)" },
-      { id: "soya_pulav", name: "सोयाबीन पुलाव", pulseKey: "soyavadi", dayCode: 2, dayName: "सोमवार (आठवडा 2, 4)" },
-      { id: "masoori_pulav", name: "मसूरी पुलाव", pulseKey: "masoor_dal", dayCode: 3, dayName: "मंगळवार (आठवडा 2, 4)" },
-      { id: "matar_pulav", name: "मटार पुलाव", pulseKey: "vatana", dayCode: 5, dayName: "गुरुवार (आठवडा 2, 4)" },
-      { id: "god_bhat", name: "गोड भात", pulseKey: "gul_sakhar", dayCode: 0, dayName: "विशेष मेन्यू" },
-      { id: "purak_ahar", name: "पूरक आहार", pulseKey: "purak_ahar", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "veg_pulav", name: "व्हेजिटेबल पुलाव (वाटाणा)", pulseKey: "vatana", dayCode: 2, dayName: "सोमवार (आठवडा 1, 3)" },
+      { id: "moong_khichdi", name: "मूगडाळ खिचडी (मूगडाळ)", pulseKey: "moong_dal", dayCode: 3, dayName: "मंगळवार / शुक्रवार" },
+      { id: "moog_shevga_varan", name: "मूग शेवग्याचे वरण (तूरडाळ व मूग)", pulseKey: "tur_dal", pulseKeys: ["moong", "tur_dal"], pulseSplit: { moong: 0.010, tur_dal: 0.010 }, dayCode: 4, dayName: "बुधवार" },
+      { id: "chavali_khichdi", name: "चवळी खिचडी (चवळी)", pulseKey: "chavali", dayCode: 5, dayName: "गुरुवार (आठवडा 1, 3)" },
+      { id: "matki_usal", name: "मटकी उसळभात (मटकी)", pulseKey: "matki", dayCode: 6, dayName: "शुक्रवार / शनिवार" },
+      { id: "masale_bhat", name: "मसालेभात (तूरडाळ)", pulseKey: "tur_dal", dayCode: 7, dayName: "शनिवार (आठवडा 1, 3)" },
+      { id: "soya_pulav", name: "सोयाबीन पुलाव (सोयावडी)", pulseKey: "soyavadi", dayCode: 2, dayName: "सोमवार (आठवडा 2, 4)" },
+      { id: "masoori_pulav", name: "मसूरी पुलाव (मसूरडाळ)", pulseKey: "masoor_dal", dayCode: 3, dayName: "मंगळवार (आठवडा 2, 4)" },
+      { id: "matar_pulav", name: "मटार पुलाव (वाटाणा)", pulseKey: "vatana", dayCode: 5, dayName: "गुरुवार (आठवडा 2, 4)" },
+      { id: "god_bhat", name: "गोड भात (गुळ साखर)", pulseKey: "gul_sakhar", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "purak_ahar", name: "पूरक आहार (अंडी / केळी)", pulseKey: "purak_ahar", dayCode: 0, dayName: "विशेष मेन्यू" },
       { id: "doodh_kheer", name: "दूध / खीर", pulseKey: "doodh_powder", dayCode: 0, dayName: "विशेष मेन्यू" },
       { id: "non_veg", name: "नॉन व्हेज / अंडी", pulseKey: "nil", dayCode: 0, dayName: "विशेष मेन्यू" },
-      { id: "varan_bhat", name: "वरणभात", pulseKey: "tur_dal", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "varan_bhat", name: "वरणभात (तूरडाळ)", pulseKey: "tur_dal", dayCode: 0, dayName: "विशेष मेन्यू" },
+      { id: "chana_usal", name: "हरभरा उसळभात (हरभरा)", pulseKey: "chana", dayCode: 0, dayName: "विशेष मेन्यू" },
       { id: "holiday", name: "सुट्टी", pulseKey: null, dayCode: 0, dayName: "सुट्टी" }
     ];
 
     standardMenus.forEach(sMenu => {
-      const existing = this.data.menus.find(m => m.id === sMenu.id || m.name === sMenu.name);
+      const existing = this.data.menus.find(m => m.id === sMenu.id || m.name === sMenu.name || (m.name && sMenu.name.startsWith(m.name)));
       if (!existing) {
         this.data.menus.push(sMenu);
       } else {
+        if (!existing.name.includes('(')) existing.name = sMenu.name;
         if (sMenu.id === 'god_bhat' && (!existing.pulseKey || existing.pulseKey === 'nil')) {
           existing.pulseKey = 'gul_sakhar';
         }
+        if (sMenu.pulseSplit) existing.pulseSplit = sMenu.pulseSplit;
+        if (sMenu.pulseKeys) existing.pulseKeys = sMenu.pulseKeys;
       }
     });
   },
@@ -12662,7 +12676,7 @@ const app = {
 
       // Menu dropdown options HTML
       const menuOptsHtml = menuOptions.map(m => {
-        const isSel = (m.name === selectedMenu);
+        const isSel = (m.name === selectedMenu || m.name.replace(/\s*\(.*?\)/, '').trim() === (selectedMenu || '').replace(/\s*\(.*?\)/, '').trim());
         return `<option value="${m.name}" ${isSel ? 'selected' : ''}>${m.name}</option>`;
       }).join('');
 
