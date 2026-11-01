@@ -4703,15 +4703,17 @@ const app = {
       const printSlip = document.getElementById('printSlipContainer');
       const isFormB = this.currentTab === 'formb' || (this.currentTab === 'reports' && this.activeReportsSubtab === 'formb') || document.body.classList.contains('print-formb');
       const isTaste = this.currentTab === 'taste' || document.body.classList.contains('print-taste') || document.body.classList.contains('printing-taste');
+      const isRiceMonthly = this.currentTab === 'ricemonthly' || (this.currentTab === 'reports' && this.activeReportsSubtab === 'ricemonthly') || document.body.classList.contains('print-rice-monthly');
+      const isRiceYearly = this.currentTab === 'riceyearly' || (this.currentTab === 'reports' && this.activeReportsSubtab === 'riceyearly') || document.body.classList.contains('print-rice-yearly');
       const isMonthly = this.currentTab === 'monthly' || (this.currentTab === 'reports' && (this.activeReportsSubtab === 'monthly' || !this.activeReportsSubtab)) || document.body.classList.contains('print-monthly');
       const isYearly = this.currentTab === 'yearly' || (this.currentTab === 'reports' && this.activeReportsSubtab === 'yearly') || document.body.classList.contains('print-yearly');
 
       if (isFormB) {
         if (printSlip) printSlip.innerHTML = '';
         if (typeof this.setPrintPageOrientation === 'function') {
-          this.setPrintPageOrientation('portrait', 'A4', '6mm 8mm 6mm 8mm');
+          this.setPrintPageOrientation('portrait', 'A4', '6mm 10mm 6mm 10mm');
         }
-        document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-slip', 'print-taste', 'printing-taste');
+        document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-slip', 'print-taste', 'printing-taste', 'print-rice-monthly', 'print-rice-yearly');
         document.body.classList.add('print-formb', 'print-portrait');
         const fbPicker = document.getElementById('formbMonthPicker');
         const ym = fbPicker ? fbPicker.value : '';
@@ -4720,20 +4722,42 @@ const app = {
       } else if (isTaste) {
         if (printSlip) printSlip.innerHTML = '';
         if (typeof this.setPrintPageOrientation === 'function') {
-          this.setPrintPageOrientation('portrait', 'A4', '8mm 10mm 8mm 10mm');
+          this.setPrintPageOrientation('portrait', 'A4', '8mm 11mm 8mm 11mm');
         }
-        document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-slip', 'print-formb');
+        document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-slip', 'print-formb', 'print-rice-monthly', 'print-rice-yearly');
         document.body.classList.add('print-taste', 'print-portrait');
         const tMonth = document.getElementById('tasteMonthSelect');
         const ym = tMonth ? tMonth.value : '';
         const mName = ym ? this.getMonthNameMarathi(ym) : '';
         this.preparePrintReportTitle('चव_नोंदवही', mName ? `${mName}_${ym.split('-')[0]}` : ym);
+      } else if (isRiceMonthly) {
+        if (printSlip) printSlip.innerHTML = '';
+        if (typeof this.setPrintPageOrientation === 'function') {
+          this.setPrintPageOrientation('portrait', 'A4', '6mm 10mm 6mm 10mm');
+        }
+        document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-slip', 'print-taste', 'printing-taste', 'print-formb', 'print-rice-yearly');
+        document.body.classList.add('print-rice-monthly', 'print-portrait');
+        const picker = document.getElementById('riceMonthlyPicker');
+        const ym = (picker && picker.value) ? picker.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
+        const [yrS] = ym.split('-');
+        const mName = this.getMonthNameMarathi(ym);
+        this.preparePrintReportTitle('तांदूळ_दैनिक_नोंदवही', `${mName}_${yrS}`);
+      } else if (isRiceYearly) {
+        if (printSlip) printSlip.innerHTML = '';
+        if (typeof this.setPrintPageOrientation === 'function') {
+          this.setPrintPageOrientation('landscape', 'A4', '6mm 10mm 6mm 10mm');
+        }
+        document.body.classList.remove('print-portrait', 'print-formb', 'print-monthly', 'print-yearly', 'print-register', 'print-slip', 'print-taste', 'printing-taste', 'print-rice-monthly');
+        document.body.classList.add('print-rice-yearly', 'print-landscape');
+        const yearSelect = document.getElementById('riceYearlyYearSelect');
+        const finYear = yearSelect ? yearSelect.value : this.getCurrentAcademicYear();
+        this.preparePrintReportTitle('वार्षिक_तांदूळ_उपयोगिता', finYear);
       } else if (isMonthly) {
         if (printSlip) printSlip.innerHTML = '';
         if (typeof this.setPrintPageOrientation === 'function') {
-          this.setPrintPageOrientation('landscape', 'A4', '4mm 6mm 4mm 6mm');
+          this.setPrintPageOrientation('landscape', 'A4', '6mm 10mm 6mm 10mm');
         }
-        document.body.classList.remove('print-portrait', 'print-formb', 'print-yearly', 'print-register', 'print-slip', 'print-taste', 'printing-taste');
+        document.body.classList.remove('print-portrait', 'print-formb', 'print-yearly', 'print-register', 'print-slip', 'print-taste', 'printing-taste', 'print-rice-monthly', 'print-rice-yearly');
         document.body.classList.add('print-monthly', 'print-landscape');
         const mPicker = document.getElementById('monthlyExcelPicker');
         const ym = mPicker ? mPicker.value : '';
@@ -4742,9 +4766,9 @@ const app = {
       } else if (isYearly) {
         if (printSlip) printSlip.innerHTML = '';
         if (typeof this.setPrintPageOrientation === 'function') {
-          this.setPrintPageOrientation('landscape', 'legal', '4mm 6mm 4mm 6mm');
+          this.setPrintPageOrientation('landscape', 'legal', '5mm 10mm 5mm 10mm');
         }
-        document.body.classList.remove('print-portrait', 'print-formb', 'print-monthly', 'print-register', 'print-slip', 'print-taste', 'printing-taste');
+        document.body.classList.remove('print-portrait', 'print-formb', 'print-monthly', 'print-register', 'print-slip', 'print-taste', 'printing-taste', 'print-rice-monthly', 'print-rice-yearly');
         document.body.classList.add('print-yearly', 'print-landscape');
         const ySelect = document.getElementById('yearlyYearSelect');
         const finYear = ySelect ? ySelect.value : this.getCurrentAcademicYear();
@@ -4754,9 +4778,9 @@ const app = {
       } else if (this.currentTab === 'register') {
         if (printSlip) printSlip.innerHTML = '';
         if (typeof this.setPrintPageOrientation === 'function') {
-          this.setPrintPageOrientation('landscape', 'A4', '5mm 8mm 5mm 8mm');
+          this.setPrintPageOrientation('landscape', 'A4', '6mm 10mm 6mm 10mm');
         }
-        document.body.classList.remove('print-portrait', 'print-formb', 'print-slip', 'print-taste', 'printing-taste');
+        document.body.classList.remove('print-portrait', 'print-formb', 'print-slip', 'print-taste', 'printing-taste', 'print-rice-monthly', 'print-rice-yearly');
         document.body.classList.add('print-landscape');
         const regPicker = document.getElementById('registerMonthSelect');
         const ym = regPicker ? regPicker.value : '';
@@ -4765,15 +4789,15 @@ const app = {
       } else {
         if (printSlip) printSlip.innerHTML = '';
         if (typeof this.setPrintPageOrientation === 'function') {
-          this.setPrintPageOrientation('landscape', 'A4', '6mm 8mm 6mm 8mm');
+          this.setPrintPageOrientation('landscape', 'A4', '6mm 10mm 6mm 10mm');
         }
-        document.body.classList.remove('print-portrait', 'print-formb', 'print-slip', 'print-taste', 'printing-taste');
+        document.body.classList.remove('print-portrait', 'print-formb', 'print-slip', 'print-taste', 'printing-taste', 'print-rice-monthly', 'print-rice-yearly');
         document.body.classList.add('print-landscape');
       }
     });
 
     window.addEventListener('afterprint', () => {
-      document.body.classList.remove('print-formb', 'print-taste', 'printing-taste', 'print-portrait', 'print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-slip');
+      document.body.classList.remove('print-formb', 'print-taste', 'printing-taste', 'print-portrait', 'print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-slip', 'print-rice-monthly', 'print-rice-yearly');
       const printSlip = document.getElementById('printSlipContainer');
       if (printSlip) printSlip.innerHTML = '';
     });
@@ -8146,12 +8170,12 @@ const app = {
         orientation: 'portrait',
         paperSize: 'A4',
         elementId: 'printableFormB',
-        customMargin: '4mm 6mm 4mm 6mm'
+        customMargin: '6mm 10mm 6mm 10mm'
       });
       return;
     }
 
-    this.setPrintPageOrientation('portrait', 'A4');
+    this.setPrintPageOrientation('portrait', 'A4', '6mm 10mm 6mm 10mm');
     document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-legal', 'print-slip');
     document.body.classList.add('print-formb', 'print-portrait');
     setTimeout(() => {
@@ -8578,7 +8602,7 @@ const app = {
     });
     htmlToPrint = tempDiv.innerHTML;
 
-    const margin = customMargin || (orientation === 'landscape' ? '4mm 6mm 4mm 6mm' : '8mm 10mm 8mm 10mm');
+    const margin = customMargin || ((paperSize && paperSize.toLowerCase() === 'legal') ? '5mm 10mm 5mm 10mm' : (orientation === 'landscape' ? '6mm 10mm 6mm 10mm' : '8mm 11mm 8mm 11mm'));
     const printDocHtml = `<!DOCTYPE html>
 <html lang="mr">
 <head>
@@ -8682,9 +8706,27 @@ const app = {
       width: 100%;
       overflow-x: auto;
     }
-    .excel-sheet-card, .formb-card, .taste-printable-sheet, .rice-print-card, .rice-yearly-card, .yearly-sheet-card {
+    .formb-card, .taste-printable-sheet, .rice-print-card {
       width: 100% !important;
-      max-width: 100% !important;
+      max-width: 188mm !important;
+      background: #ffffff !important;
+      border: none !important;
+      box-shadow: none !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+    }
+    .excel-sheet-card, .rice-yearly-card {
+      width: 100% !important;
+      max-width: 277mm !important;
+      background: #ffffff !important;
+      border: none !important;
+      box-shadow: none !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+    }
+    .yearly-sheet-card {
+      width: 100% !important;
+      max-width: 335mm !important;
       background: #ffffff !important;
       border: none !important;
       box-shadow: none !important;
@@ -8698,49 +8740,51 @@ const app = {
     }
     th, td {
       border: 0.65pt solid #475569 !important;
-      padding: 2.2px 1.2px !important;
+      padding: 3.5px 1.5px !important;
       text-align: center !important;
       vertical-align: middle !important;
-      font-size: 6.8pt !important;
-      line-height: 1.15 !important;
+      font-size: 7.8pt !important;
+      line-height: 1.25 !important;
     }
     th {
       background: #e2e8f0 !important;
       font-weight: 700 !important;
       color: #0f172a !important;
+      font-size: 7.8pt !important;
     }
     .col-num-row th {
       background: #f1f5f9 !important;
-      font-size: 6.2pt !important;
+      font-size: 6.8pt !important;
       color: #64748b !important;
-      padding: 1px 0.5px !important;
+      padding: 1.5px 0.5px !important;
     }
     .rate-row th {
       background: #fef08a !important;
       color: #854d0e !important;
       font-weight: 800 !important;
+      font-size: 7.8pt !important;
     }
     .excel-title {
-      font-size: 11pt !important;
+      font-size: 13pt !important;
       font-weight: 800 !important;
       text-align: center !important;
       color: #1e3a8a !important;
-      margin: 0 0 3px 0 !important;
+      margin: 0 0 4px 0 !important;
     }
     .excel-school-row {
-      font-size: 7.8pt !important;
-      margin-bottom: 3px !important;
-      padding-bottom: 2px !important;
+      font-size: 8.8pt !important;
+      margin-bottom: 4px !important;
+      padding-bottom: 3px !important;
       border-bottom: 1.2pt solid #1e293b !important;
       display: flex !important;
       justify-content: space-between !important;
       font-weight: 600 !important;
     }
     .footer-stats-row {
-      font-size: 8pt !important;
-      padding: 3px 0 !important;
-      margin-top: 4px !important;
-      margin-bottom: 5px !important;
+      font-size: 8.8pt !important;
+      padding: 5px 0 !important;
+      margin-top: 6px !important;
+      margin-bottom: 6px !important;
       border-top: 1.2pt solid #1e293b !important;
       border-bottom: 1.2pt solid #1e293b !important;
       font-weight: 700 !important;
@@ -8750,22 +8794,24 @@ const app = {
     .footer-sign-row {
       display: flex !important;
       justify-content: space-between !important;
-      margin-top: 18px !important;
+      margin-top: 10px !important;
+      padding-top: 4px !important;
+      font-size: 9pt !important;
       page-break-inside: avoid !important;
     }
     .sign-box {
       text-align: center !important;
-      font-size: 8pt !important;
-      flex: 1 !important;
+      font-size: 8.8pt !important;
+      width: 240px !important;
     }
     .official-formb-table th, .official-formb-table td {
-      font-size: 8.5pt !important;
-      padding: 4px 6px !important;
+      font-size: 8.8pt !important;
+      padding: 4.5px 4px !important;
     }
     /* Specific Form B Single Page A4 Portrait Fit */
     .formb-card {
       width: 100% !important;
-      max-width: 198mm !important;
+      max-width: 188mm !important;
       margin: 0 auto !important;
       padding: 0 !important;
       border: none !important;
@@ -8777,153 +8823,320 @@ const app = {
       border: 1.5pt solid #000 !important;
       font-size: 13pt !important;
       font-weight: 900 !important;
-      padding: 2px 4px !important;
-      margin-bottom: 2px !important;
+      padding: 3px 8px !important;
+      margin-bottom: 3px !important;
       text-align: center !important;
       box-shadow: none !important;
     }
     .formb-sub-title {
-      font-size: 8pt !important;
+      font-size: 8.5pt !important;
       font-weight: 700 !important;
-      margin-bottom: 1px !important;
+      margin-bottom: 2px !important;
       text-align: center !important;
     }
     .formb-samiti-line {
-      font-size: 10.5pt !important;
+      font-size: 11pt !important;
       font-weight: 900 !important;
       margin-bottom: 2px !important;
       text-align: center !important;
     }
     .formb-school-info-line {
-      font-size: 8pt !important;
+      font-size: 9pt !important;
       font-weight: 700 !important;
-      margin-bottom: 2px !important;
+      margin-bottom: 4px !important;
       padding-bottom: 2px !important;
       border-bottom: 1.2pt solid #000 !important;
       display: flex !important;
       justify-content: center !important;
-      gap: 12px !important;
+      gap: 14px !important;
     }
     .formb-meta-box-grid {
       display: grid !important;
       grid-template-columns: 1.05fr 0.95fr !important;
       gap: 3px !important;
-      margin-bottom: 2px !important;
+      margin-bottom: 4px !important;
       font-size: 8pt !important;
     }
     .formb-meta-col {
       border: 1.2pt solid #000 !important;
-      padding: 2px 5px !important;
+      padding: 3px 6px !important;
       display: flex !important;
       flex-direction: column !important;
-      gap: 1px !important;
+      gap: 2px !important;
       background: transparent !important;
     }
     .meta-row {
       display: flex !important;
       justify-content: space-between !important;
       border-bottom: 0.5pt dashed #94a3b8 !important;
-      padding: 1px 0 !important;
+      padding: 1.5px 0 !important;
       font-size: 8pt !important;
     }
     .meta-box-val {
       border: 1pt solid #000 !important;
-      padding: 0 4px !important;
+      padding: 1px 4px !important;
       font-weight: 900 !important;
-      min-width: 36px !important;
+      min-width: 38px !important;
+      font-size: 8pt !important;
       text-align: center !important;
     }
     .formb-table {
       width: 100% !important;
+      max-width: 188mm !important;
       border-collapse: collapse !important;
       table-layout: fixed !important;
-      margin: 2px 0 !important;
+      margin: 2px auto 3px auto !important;
     }
+    .formb-table th:nth-child(1), .formb-table td:nth-child(1) { width: 6% !important; text-align: center !important; }
+    .formb-table th:nth-child(2), .formb-table td:nth-child(2) { width: 20% !important; text-align: left !important; padding-left: 5px !important; }
+    .formb-table th:nth-child(3), .formb-table td:nth-child(3) { width: 10% !important; text-align: right !important; }
+    .formb-table th:nth-child(4), .formb-table td:nth-child(4) { width: 10% !important; text-align: right !important; }
+    .formb-table th:nth-child(5), .formb-table td:nth-child(5) { width: 11% !important; text-align: right !important; }
+    .formb-table th:nth-child(6), .formb-table td:nth-child(6) { width: 11% !important; text-align: right !important; }
+    .formb-table th:nth-child(7), .formb-table td:nth-child(7) { width: 11% !important; text-align: right !important; }
+    .formb-table th:nth-child(8), .formb-table td:nth-child(8) { width: 11% !important; text-align: right !important; }
+    .formb-table th:nth-child(9), .formb-table td:nth-child(9) { width: 10% !important; text-align: center !important; }
     .formb-table th, .formb-table td {
       border: 1pt solid #000 !important;
-      padding: 1.5px 2px !important;
-      font-size: 7.8pt !important;
-      line-height: 1.15 !important;
-      height: 16.5px !important;
+      padding: 2px 2.5px !important;
+      font-size: 8pt !important;
+      line-height: 1.2 !important;
+      height: 17px !important;
       vertical-align: middle !important;
       color: #000000 !important;
     }
     .formb-table th {
       background: #f1f5f9 !important;
       font-weight: 800 !important;
+      font-size: 8pt !important;
       text-align: center !important;
+      padding: 3px 2px !important;
     }
     .fb-cell-demand .print-val {
       font-weight: 900 !important;
-      font-size: 7.8pt !important;
+      font-size: 8.2pt !important;
       text-align: right !important;
       display: block !important;
     }
     .fb-cell-shera .print-val {
-      font-size: 7.2pt !important;
+      font-size: 7.8pt !important;
       text-align: center !important;
       display: block !important;
     }
     .formb-notes {
-      font-size: 7.4pt !important;
+      font-size: 7.5pt !important;
       line-height: 1.2 !important;
-      margin-top: 2px !important;
+      margin-top: 3px !important;
     }
     .formb-warning-note {
       font-style: italic !important;
-      font-size: 7.4pt !important;
-      margin: 1px 0 !important;
+      font-size: 7.8pt !important;
+      margin: 3px 0 4px 0 !important;
+      font-weight: 600 !important;
     }
     .formb-bottom-summary {
       border: 1pt solid #000 !important;
-      padding: 2px 6px !important;
-      margin: 2px 0 !important;
-      font-size: 7.6pt !important;
+      padding: 3px 8px !important;
+      margin: 4px 0 !important;
+      font-size: 8pt !important;
       background: transparent !important;
     }
     .summary-line {
-      margin-bottom: 1px !important;
+      margin-bottom: 2px !important;
       display: flex !important;
       align-items: center !important;
       gap: 4px !important;
     }
     .summary-box-val {
       border: 1pt solid #000 !important;
-      padding: 0 4px !important;
+      padding: 1px 4px !important;
+      font-size: 8pt !important;
       font-weight: 800 !important;
     }
     .formb-activities-grid {
       display: grid !important;
       grid-template-columns: 1fr 1fr !important;
-      gap: 1px 6px !important;
-      font-size: 7.5pt !important;
-      margin: 2px 0 !important;
+      gap: 3px 10px !important;
+      font-size: 8pt !important;
+      margin: 4px 0 !important;
     }
     .formb-cert-line {
-      font-size: 7.5pt !important;
+      font-size: 8pt !important;
       font-weight: 800 !important;
       text-align: center !important;
-      border-top: 0.8pt solid #000 !important;
-      margin: 2px 0 !important;
-      padding-top: 1px !important;
+      border-top: 1pt solid #000 !important;
+      margin: 4px 0 !important;
+      padding-top: 3px !important;
     }
     .formb-signatures {
       display: flex !important;
       justify-content: space-between !important;
-      margin-top: 4px !important;
-      font-size: 8pt !important;
+      margin-top: 6px !important;
+      font-size: 9pt !important;
       font-weight: 800 !important;
       page-break-inside: avoid !important;
     }
     .sign-title {
       font-weight: 900 !important;
-      margin-bottom: 14px !important;
+      margin-bottom: 18px !important;
+      font-size: 9pt !important;
     }
     .fb-input-demand, .fb-input-shera, .fb-act-input {
       display: none !important;
     }
     .print-val {
       display: inline-block !important;
+    }
+
+    /* Rice Special Reports Styling */
+    .rice-print-card {
+      width: 100% !important;
+      max-width: 188mm !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    .rice-reg-title {
+      font-size: 13pt !important;
+      font-weight: 800 !important;
+      text-align: center !important;
+      margin: 0 0 2px 0 !important;
+    }
+    .rice-reg-sub, .rice-reg-meta {
+      font-size: 8pt !important;
+      text-align: center !important;
+      margin-bottom: 4px !important;
+    }
+    .rice-monthly-table {
+      width: 100% !important;
+      max-width: 188mm !important;
+      border-collapse: collapse !important;
+      table-layout: fixed !important;
+      margin: 2px auto 4px auto !important;
+    }
+    .rice-monthly-table th, .rice-monthly-table td {
+      border: 0.75pt solid #000 !important;
+      padding: 3px 2px !important;
+      font-size: 7.8pt !important;
+      line-height: 1.2 !important;
+      vertical-align: middle !important;
+    }
+    .rice-monthly-table th {
+      background: #e2e8f0 !important;
+      font-weight: 800 !important;
+      text-align: center !important;
+    }
+    .rice-monthly-table th:nth-child(1), .rice-monthly-table td:nth-child(1) { width: 6% !important; text-align: center !important; }
+    .rice-monthly-table th:nth-child(2), .rice-monthly-table td:nth-child(2) { width: 8% !important; text-align: center !important; }
+    .rice-monthly-table th:nth-child(3), .rice-monthly-table td:nth-child(3) { width: 7% !important; text-align: center !important; }
+    .rice-monthly-table th:nth-child(4), .rice-monthly-table td:nth-child(4) { width: 12% !important; text-align: right !important; }
+    .rice-monthly-table th:nth-child(5), .rice-monthly-table td:nth-child(5) { width: 12% !important; text-align: right !important; }
+    .rice-monthly-table th:nth-child(6), .rice-monthly-table td:nth-child(6) { width: 12% !important; text-align: right !important; }
+    .rice-monthly-table th:nth-child(7), .rice-monthly-table td:nth-child(7) { width: 8% !important; text-align: center !important; }
+    .rice-monthly-table th:nth-child(8), .rice-monthly-table td:nth-child(8) { width: 13% !important; text-align: right !important; }
+    .rice-monthly-table th:nth-child(9), .rice-monthly-table td:nth-child(9) { width: 13% !important; text-align: right !important; }
+    .rice-monthly-table th:nth-child(10), .rice-monthly-table td:nth-child(10) { width: 9% !important; text-align: center !important; }
+
+    .rice-yearly-card {
+      width: 100% !important;
+      max-width: 277mm !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    .rice-yr-title {
+      font-size: 13pt !important;
+      font-weight: 800 !important;
+      text-align: center !important;
+      margin: 0 0 2px 0 !important;
+    }
+    .rice-yr-subtitle {
+      font-size: 14pt !important;
+      font-weight: 900 !important;
+      color: #1e3a8a !important;
+      text-align: center !important;
+      margin: 0 0 4px 0 !important;
+    }
+    .rice-yr-meta {
+      font-size: 8.5pt !important;
+      text-align: center !important;
+      margin: 3px 0 !important;
+    }
+    .rice-yearly-table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      table-layout: fixed !important;
+      margin: 2px auto 4px auto !important;
+    }
+    .rice-yearly-table th, .rice-yearly-table td {
+      border: 0.75pt solid #000 !important;
+      padding: 3px 1.5px !important;
+      font-size: 7.5pt !important;
+      vertical-align: middle !important;
+    }
+    .rice-yearly-table th {
+      background: #e2e8f0 !important;
+      font-weight: 800 !important;
+      text-align: center !important;
+    }
+    .rice-yearly-table th:nth-child(1), .rice-yearly-table td:nth-child(1) { width: 4% !important; text-align: center !important; }
+    .rice-yearly-table th:nth-child(2), .rice-yearly-table td:nth-child(2) { width: 9% !important; text-align: center !important; }
+    .rice-yearly-table th:nth-child(3), .rice-yearly-table td:nth-child(3) { width: 6% !important; text-align: center !important; }
+    .rice-yearly-table th:nth-child(4), .rice-yearly-table td:nth-child(4) { width: 6% !important; text-align: center !important; }
+    .rice-yearly-table th:nth-child(5), .rice-yearly-table td:nth-child(5) { width: 8% !important; text-align: right !important; }
+    .rice-yearly-table th:nth-child(6), .rice-yearly-table td:nth-child(6) { width: 8% !important; text-align: right !important; }
+    .rice-yearly-table th:nth-child(7), .rice-yearly-table td:nth-child(7) { width: 7% !important; text-align: right !important; }
+    .rice-yearly-table th:nth-child(8), .rice-yearly-table td:nth-child(8) { width: 7% !important; text-align: right !important; }
+    .rice-yearly-table th:nth-child(9), .rice-yearly-table td:nth-child(9) { width: 8% !important; text-align: right !important; }
+    .rice-yearly-table th:nth-child(10), .rice-yearly-table td:nth-child(10) { width: 7% !important; text-align: center !important; }
+    .rice-yearly-table th:nth-child(11), .rice-yearly-table td:nth-child(11) { width: 8% !important; text-align: right !important; }
+    .rice-yearly-table th:nth-child(12), .rice-yearly-table td:nth-child(12) { width: 8% !important; text-align: right !important; }
+    .rice-yearly-table th:nth-child(13), .rice-yearly-table td:nth-child(13) { width: 9% !important; text-align: right !important; }
+    .rice-yearly-table th:nth-child(14), .rice-yearly-table td:nth-child(14) { width: 5% !important; text-align: center !important; }
+
+    .rice-goashwara-section {
+      margin-top: 6px !important;
+    }
+    .rice-goashwara-table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      font-size: 7.8pt !important;
+    }
+    .rice-goashwara-table td {
+      border: 0.75pt solid #000 !important;
+      padding: 2.5px 5px !important;
+    }
+
+    /* Universal Flexbox Alignment for Rice Signatures in Mobile Print Window */
+    .rice-footer-signatures, .rice-yearly-signatures {
+      width: 100% !important;
+      margin-top: 10px !important;
+      page-break-inside: avoid !important;
+    }
+    .rice-footer-signatures > div, .rice-yearly-signatures > div {
+      display: flex !important;
+      flex-direction: row !important;
+      justify-content: space-between !important;
+      align-items: flex-end !important;
+      width: 100% !important;
+      flex-wrap: nowrap !important;
+      gap: 10px !important;
+    }
+    .rice-footer-signatures > div > div, .rice-yearly-signatures > div > div {
+      flex: 1 1 0 !important;
+      min-width: 0 !important;
+      text-align: center !important;
+    }
+    .rice-footer-signatures p, .rice-yearly-signatures p {
+      margin: 0 !important;
+      font-weight: 800 !important;
+      font-size: 8.8pt !important;
+    }
+    .rice-footer-signatures small, .rice-yearly-signatures small {
+      font-size: 7.8pt !important;
+      display: block !important;
     }
   </style>
 </head>
@@ -9032,8 +9245,8 @@ const app = {
       document.head.appendChild(style);
     }
     const margin = customMargin || ((paperSize.toLowerCase() === 'legal')
-      ? '4mm 6mm 4mm 6mm'
-      : (orientation === 'portrait' ? '8mm 10mm 8mm 10mm' : '6mm 10mm 6mm 10mm'));
+      ? '5mm 10mm 5mm 10mm'
+      : (orientation === 'portrait' ? '8mm 11mm 8mm 11mm' : '6mm 10mm 6mm 10mm'));
     style.innerHTML = `@media print { @page { size: ${paperSize} ${orientation}; margin: ${margin}; } }`;
   },
 
@@ -9254,12 +9467,12 @@ const app = {
         orientation: 'portrait',
         paperSize: 'A4',
         elementId: 'riceMonthlyPrintArea',
-        customMargin: '6mm 8mm 6mm 8mm'
+        customMargin: '8mm 11mm 8mm 11mm'
       });
       return;
     }
 
-    this.setPrintPageOrientation('portrait', 'A4');
+    this.setPrintPageOrientation('portrait', 'A4', '8mm 11mm 8mm 11mm');
     document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb', 'print-rice-yearly');
     document.body.classList.add('print-rice-monthly', 'print-portrait');
     setTimeout(() => {

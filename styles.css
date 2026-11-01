@@ -2755,7 +2755,7 @@ body {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 6mm 10mm 6mm 10mm;
+    margin: 8mm 11mm 8mm 11mm;
   }
 
   /* Force background colors and borders to print with accurate contrast */
@@ -2779,14 +2779,18 @@ body {
     overflow: visible !important;
   }
 
-  /* Physical page minimums for mobile browser (Android Chrome/iOS) print engines */
+  /* Physical page bounds: strictly locked inside printable area to prevent left-right spreading */
   body.print-landscape {
     width: 100% !important;
-    min-width: 297mm !important;
+    max-width: 277mm !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
   }
   body.print-portrait {
     width: 100% !important;
-    min-width: 210mm !important;
+    max-width: 188mm !important;
+    min-width: 0 !important;
+    margin: 0 auto !important;
   }
 
   /* Hide all non-printable interactive UI elements & mobile widgets */
@@ -2954,7 +2958,7 @@ body {
   .excel-sheet-card {
     box-sizing: border-box !important;
     width: 100% !important;
-    max-width: 100% !important;
+    max-width: 277mm !important;
     min-width: 0 !important;
     padding: 0 !important;
     margin: 0 auto !important;
@@ -2974,17 +2978,17 @@ body {
   }
 
   .excel-title {
-    font-size: 11pt !important;
+    font-size: 13pt !important;
     font-weight: 800 !important;
-    margin-bottom: 2px !important;
+    margin-bottom: 4px !important;
     text-align: center !important;
     color: #1e3a8a !important;
   }
 
   .excel-school-row {
-    font-size: 7.8pt !important;
-    margin-bottom: 3px !important;
-    padding-bottom: 2px !important;
+    font-size: 8.8pt !important;
+    margin-bottom: 4px !important;
+    padding-bottom: 3px !important;
     border-bottom: 1.2pt solid #1e293b !important;
     display: flex !important;
     justify-content: space-between !important;
@@ -3004,12 +3008,12 @@ body {
   .official-excel-table td,
   body.print-monthly .official-excel-table th,
   body.print-monthly .official-excel-table td {
-    border: 0.65pt solid #475569 !important;
-    padding: 2.2px 1.2px !important;
+    border: 0.75pt solid #334155 !important;
+    padding: 3.2px 1.5px !important;
     text-align: center !important;
     vertical-align: middle !important;
-    font-size: 7.0pt !important;
-    line-height: 1.15 !important;
+    font-size: 7.6pt !important;
+    line-height: 1.25 !important;
     box-sizing: border-box !important;
     word-break: normal !important;
     white-space: normal !important;
@@ -3019,7 +3023,7 @@ body {
   body.print-monthly .official-excel-table th {
     background: #e2e8f0 !important;
     font-weight: 700 !important;
-    font-size: 7.0pt !important;
+    font-size: 7.6pt !important;
     color: #0f172a !important;
   }
 
@@ -3028,22 +3032,23 @@ body {
     background: #fef08a !important;
     font-weight: 800 !important;
     color: #854d0e !important;
+    font-size: 7.6pt !important;
   }
 
   .official-excel-table .col-num-row th,
   body.print-monthly .official-excel-table .col-num-row th {
     background: #f1f5f9 !important;
-    font-size: 6.5pt !important;
+    font-size: 6.8pt !important;
     color: #64748b !important;
-    padding: 1px 0.5px !important;
+    padding: 1.5px 0.5px !important;
   }
 
   body.print-monthly .footer-stats-row,
   .footer-stats-row {
-    font-size: 8pt !important;
-    padding: 3px 0 !important;
-    margin-top: 4px !important;
-    margin-bottom: 5px !important;
+    font-size: 8.8pt !important;
+    padding: 5px 0 !important;
+    margin-top: 6px !important;
+    margin-bottom: 6px !important;
     border-top: 1.2pt solid #1e293b !important;
     border-bottom: 1.2pt solid #1e293b !important;
     font-weight: 700 !important;
@@ -3053,21 +3058,22 @@ body {
 
   body.print-monthly .footer-sign-row,
   .footer-sign-row {
-    font-size: 8pt !important;
+    font-size: 9pt !important;
     padding: 4px 0 0 0 !important;
-    margin-top: 4px !important;
+    margin-top: 8px !important;
     display: flex !important;
     justify-content: space-between !important;
     page-break-inside: avoid !important;
   }
 
   .sign-box {
-    width: 220px !important;
+    width: 240px !important;
     text-align: center !important;
   }
 
-  body.print-monthly .sign-box br:first-child {
-    display: none !important;
+  .sign-box .sign-space,
+  body.print-monthly .sign-box .sign-space {
+    height: 32px !important;
   }
 
   /* -------------------------------------------------------------
@@ -3122,7 +3128,7 @@ body {
     border: none !important;
     box-shadow: none !important;
     width: 100% !important;
-    max-width: 348mm !important;
+    max-width: 335mm !important;
     page-break-inside: avoid !important;
     page-break-after: avoid !important;
   }
@@ -3230,7 +3236,7 @@ body {
     font-size: 10pt !important;
     line-height: 1.35 !important;
     width: 100% !important;
-    max-width: 198mm !important;
+    max-width: 188mm !important;
     margin: 0 auto !important;
     padding: 0 !important;
     overflow: hidden !important;
@@ -3268,10 +3274,10 @@ body {
 
   body.print-formb #printableFormB,
   body.print-formb .formb-card {
-    padding: 2mm 1mm 0 1mm !important;
+    padding: 0 !important;
     margin: 0 auto !important;
     width: 100% !important;
-    max-width: 198mm !important;
+    max-width: 188mm !important;
     border: none !important;
     page-break-inside: avoid !important;
     page-break-after: avoid !important;
@@ -3289,7 +3295,7 @@ body {
   }
 
   body.print-formb .formb-header {
-    margin-bottom: 2px !important;
+    margin-bottom: 4px !important;
     text-align: center !important;
   }
 
@@ -3298,10 +3304,10 @@ body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     border: 1.5pt solid #000000 !important;
-    font-size: 13.5pt !important;
+    font-size: 13pt !important;
     font-weight: 900 !important;
-    padding: 3px 6px !important;
-    margin-bottom: 2px !important;
+    padding: 3px 8px !important;
+    margin-bottom: 3px !important;
     color: #000000 !important;
     text-align: center !important;
     box-shadow: none !important;
@@ -3313,7 +3319,7 @@ body {
   }
 
   body.print-formb .banner-title-section {
-    font-size: 12pt !important;
+    font-size: 11.5pt !important;
     font-weight: 900 !important;
     color: #000000 !important;
   }
@@ -3321,7 +3327,7 @@ body {
   body.print-formb .formb-sub-title {
     font-size: 8.5pt !important;
     font-weight: 700 !important;
-    margin-bottom: 1px !important;
+    margin-bottom: 2px !important;
     color: #000000 !important;
     text-align: center !important;
   }
@@ -3340,33 +3346,33 @@ body {
   }
 
   body.print-formb .formb-school-info-line {
-    font-size: 8.5pt !important;
+    font-size: 9pt !important;
     font-weight: 700 !important;
-    margin-bottom: 3px !important;
+    margin-bottom: 4px !important;
     padding-bottom: 2px !important;
     border-bottom: 1.2pt solid #000000 !important;
     display: flex !important;
     justify-content: center !important;
-    gap: 10px !important;
+    gap: 14px !important;
     color: #000000 !important;
   }
 
   body.print-formb .formb-meta-box-grid {
     display: grid !important;
     grid-template-columns: 1.05fr 0.95fr !important;
-    gap: 4px !important;
-    margin-bottom: 3px !important;
+    gap: 3px !important;
+    margin-bottom: 4px !important;
     font-size: 8pt !important;
   }
 
   body.print-formb .formb-meta-col {
     border: 1.2pt solid #000000 !important;
     border-radius: 0 !important;
-    padding: 2px 6px !important;
+    padding: 3px 6px !important;
     background: transparent !important;
     display: flex !important;
     flex-direction: column !important;
-    gap: 1.5px !important;
+    gap: 2px !important;
   }
 
   body.print-formb .meta-row {
@@ -3374,42 +3380,92 @@ body {
     justify-content: space-between !important;
     align-items: center !important;
     border-bottom: 0.5pt dashed #94a3b8 !important;
-    padding: 1px 0 !important;
+    padding: 1.5px 0 !important;
     font-size: 8pt !important;
   }
 
   body.print-formb .meta-box-val {
     border: 1pt solid #000000 !important;
-    padding: 0 4px !important;
+    padding: 1px 4px !important;
     font-weight: 900 !important;
     min-width: 38px !important;
     text-align: center !important;
     border-radius: 0 !important;
     background: transparent !important;
     color: #000000 !important;
+    font-size: 8pt !important;
   }
 
   body.print-formb .table-responsive {
     overflow: visible !important;
-    margin-top: 1px !important;
-    margin-bottom: 2px !important;
+    margin-top: 2px !important;
+    margin-bottom: 3px !important;
   }
 
   body.print-formb .formb-table {
     width: 100% !important;
+    max-width: 188mm !important;
     font-size: 8pt !important;
-    line-height: 1.15 !important;
+    line-height: 1.2 !important;
     border-collapse: collapse !important;
     table-layout: fixed !important;
+    margin: 2px auto 3px auto !important;
+  }
+
+  body.print-formb .formb-table th:nth-child(1),
+  body.print-formb .formb-table td:nth-child(1) {
+    width: 6% !important;
+    text-align: center !important;
+  }
+  body.print-formb .formb-table th:nth-child(2),
+  body.print-formb .formb-table td:nth-child(2) {
+    width: 20% !important;
+    text-align: left !important;
+    padding-left: 5px !important;
+  }
+  body.print-formb .formb-table th:nth-child(3),
+  body.print-formb .formb-table td:nth-child(3) {
+    width: 10% !important;
+    text-align: right !important;
+  }
+  body.print-formb .formb-table th:nth-child(4),
+  body.print-formb .formb-table td:nth-child(4) {
+    width: 10% !important;
+    text-align: right !important;
+  }
+  body.print-formb .formb-table th:nth-child(5),
+  body.print-formb .formb-table td:nth-child(5) {
+    width: 11% !important;
+    text-align: right !important;
+  }
+  body.print-formb .formb-table th:nth-child(6),
+  body.print-formb .formb-table td:nth-child(6) {
+    width: 11% !important;
+    text-align: right !important;
+  }
+  body.print-formb .formb-table th:nth-child(7),
+  body.print-formb .formb-table td:nth-child(7) {
+    width: 11% !important;
+    text-align: right !important;
+  }
+  body.print-formb .formb-table th:nth-child(8),
+  body.print-formb .formb-table td:nth-child(8) {
+    width: 11% !important;
+    text-align: right !important;
+  }
+  body.print-formb .formb-table th:nth-child(9),
+  body.print-formb .formb-table td:nth-child(9) {
+    width: 10% !important;
+    text-align: center !important;
   }
 
   body.print-formb .formb-table th,
   body.print-formb .formb-table td {
     border: 1pt solid #000000 !important;
-    padding: 2px 2px !important;
+    padding: 2px 2.5px !important;
     vertical-align: middle !important;
     color: #000000 !important;
-    height: 16.5px !important;
+    height: 17px !important;
   }
 
   body.print-formb .formb-table th {
@@ -3417,9 +3473,9 @@ body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
     font-weight: 800 !important;
-    font-size: 7.8pt !important;
+    font-size: 8pt !important;
     text-align: center !important;
-    padding: 2px 1px !important;
+    padding: 3px 2px !important;
   }
 
   body.print-formb .formb-table td {
@@ -3441,27 +3497,27 @@ body {
   body.print-formb .fb-cell-demand .print-val {
     font-weight: 900 !important;
     text-align: right !important;
-    font-size: 8pt !important;
+    font-size: 8.2pt !important;
   }
 
   body.print-formb .fb-cell-shera .print-val {
     text-align: center !important;
-    font-size: 7.5pt !important;
+    font-size: 7.8pt !important;
     font-weight: 600 !important;
   }
 
   body.print-formb .formb-notes {
     font-size: 7.5pt !important;
-    line-height: 1.25 !important;
-    margin-top: 2px !important;
+    line-height: 1.2 !important;
+    margin-top: 3px !important;
     color: #000000 !important;
   }
 
   body.print-formb .formb-warning-note {
     font-style: italic !important;
     font-weight: 600 !important;
-    margin: 2px 0 !important;
-    font-size: 7.5pt !important;
+    margin: 3px 0 4px 0 !important;
+    font-size: 7.8pt !important;
     color: #000000 !important;
   }
 
@@ -3469,67 +3525,68 @@ body {
     background: transparent !important;
     border: 1pt solid #000000 !important;
     border-radius: 0 !important;
-    padding: 3px 6px !important;
-    margin: 2px 0 !important;
-    font-size: 7.8pt !important;
+    padding: 3px 8px !important;
+    margin: 4px 0 !important;
+    font-size: 8pt !important;
   }
 
   body.print-formb .summary-line {
-    margin-bottom: 1.5px !important;
+    margin-bottom: 2px !important;
     gap: 4px !important;
   }
 
   body.print-formb .summary-box-val {
     border: 1pt solid #000000 !important;
-    padding: 0 4px !important;
+    padding: 1px 4px !important;
     font-weight: 800 !important;
     border-radius: 0 !important;
     background: transparent !important;
+    font-size: 8pt !important;
   }
 
   body.print-formb .summary-desc {
-    font-size: 7.5pt !important;
+    font-size: 7.8pt !important;
     color: #000000 !important;
   }
 
   body.print-formb .formb-activities-grid {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
-    gap: 2px 8px !important;
-    margin: 2px 0 !important;
+    gap: 3px 10px !important;
+    margin: 4px 0 !important;
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
-    font-size: 7.8pt !important;
+    font-size: 8pt !important;
   }
 
   body.print-formb .act-label {
-    font-size: 7.8pt !important;
+    font-size: 8pt !important;
     color: #000000 !important;
   }
 
   body.print-formb .act-item .print-val {
-    font-size: 7.8pt !important;
+    font-size: 8pt !important;
     color: #000000 !important;
   }
 
   body.print-formb .formb-cert-line {
     font-weight: 800 !important;
-    font-size: 7.8pt !important;
+    font-size: 8pt !important;
     text-align: center !important;
-    margin: 3px 0 !important;
-    border-top: 0.8pt solid #000000 !important;
-    padding-top: 2px !important;
+    margin: 4px 0 !important;
+    border-top: 1pt solid #000000 !important;
+    padding-top: 3px !important;
     color: #000000 !important;
   }
 
   body.print-formb .formb-signatures {
     display: flex !important;
     justify-content: space-between !important;
-    margin-top: 4px !important;
+    margin-top: 6px !important;
     padding-top: 2px !important;
     page-break-inside: avoid !important;
-    font-size: 8.5pt !important;
+    font-size: 9pt !important;
     font-weight: 800 !important;
     color: #000000 !important;
   }
@@ -3538,6 +3595,7 @@ body {
     font-weight: 900 !important;
     margin-bottom: 18px !important;
     color: #000000 !important;
+    font-size: 9pt !important;
   }
 
   body.print-formb .sign-sub {
@@ -3575,22 +3633,27 @@ body {
 
   .register-table {
     width: 100% !important;
-    font-size: 8pt !important;
-    line-height: 1.25 !important;
+    max-width: 277mm !important;
+    font-size: 8.5pt !important;
+    line-height: 1.3 !important;
     border-collapse: collapse !important;
+    margin: 0 auto !important;
   }
 
   .register-table th,
   .register-table td {
     border: 0.75pt solid #475569 !important;
-    padding: 3px 4px !important;
+    padding: 4.5px 3px !important;
     text-align: center !important;
+    vertical-align: middle !important;
   }
 
   .register-table th {
     background: #e2e8f0 !important;
-    font-size: 7.5pt !important;
+    font-size: 8.2pt !important;
+    font-weight: 800 !important;
     color: #0f172a !important;
+    padding: 5px 3px !important;
   }
 
   .header-row-primary th,
@@ -3638,10 +3701,10 @@ body {
   }
 
   body.print-rice-monthly .rice-print-card {
-    padding: 3mm 2mm !important;
+    padding: 0 !important;
     margin: 0 auto !important;
     width: 100% !important;
-    max-width: 198mm !important;
+    max-width: 188mm !important;
     border: none !important;
     box-shadow: none !important;
   }
@@ -3672,18 +3735,42 @@ body {
 
   body.print-rice-monthly .rice-monthly-table {
     width: 100% !important;
-    font-size: 7.2pt !important;
-    line-height: 1.15 !important;
+    max-width: 188mm !important;
+    font-size: 8pt !important;
+    line-height: 1.25 !important;
     border-collapse: collapse !important;
     table-layout: fixed !important;
+    margin: 0 auto !important;
   }
+
+  body.print-rice-monthly .rice-monthly-table th:nth-child(1),
+  body.print-rice-monthly .rice-monthly-table td:nth-child(1) { width: 6% !important; text-align: center !important; }
+  body.print-rice-monthly .rice-monthly-table th:nth-child(2),
+  body.print-rice-monthly .rice-monthly-table td:nth-child(2) { width: 8% !important; text-align: center !important; }
+  body.print-rice-monthly .rice-monthly-table th:nth-child(3),
+  body.print-rice-monthly .rice-monthly-table td:nth-child(3) { width: 7% !important; text-align: center !important; }
+  body.print-rice-monthly .rice-monthly-table th:nth-child(4),
+  body.print-rice-monthly .rice-monthly-table td:nth-child(4) { width: 12% !important; text-align: right !important; }
+  body.print-rice-monthly .rice-monthly-table th:nth-child(5),
+  body.print-rice-monthly .rice-monthly-table td:nth-child(5) { width: 12% !important; text-align: right !important; }
+  body.print-rice-monthly .rice-monthly-table th:nth-child(6),
+  body.print-rice-monthly .rice-monthly-table td:nth-child(6) { width: 12% !important; text-align: right !important; }
+  body.print-rice-monthly .rice-monthly-table th:nth-child(7),
+  body.print-rice-monthly .rice-monthly-table td:nth-child(7) { width: 8% !important; text-align: center !important; }
+  body.print-rice-monthly .rice-monthly-table th:nth-child(8),
+  body.print-rice-monthly .rice-monthly-table td:nth-child(8) { width: 13% !important; text-align: right !important; }
+  body.print-rice-monthly .rice-monthly-table th:nth-child(9),
+  body.print-rice-monthly .rice-monthly-table td:nth-child(9) { width: 13% !important; text-align: right !important; }
+  body.print-rice-monthly .rice-monthly-table th:nth-child(10),
+  body.print-rice-monthly .rice-monthly-table td:nth-child(10) { width: 9% !important; text-align: center !important; }
 
   body.print-rice-monthly .rice-monthly-table th,
   body.print-rice-monthly .rice-monthly-table td {
     border: 0.75pt solid #000000 !important;
-    padding: 2.2px 1.5px !important;
+    padding: 3.5px 2px !important;
     vertical-align: middle !important;
     color: #000000 !important;
+    height: 20px !important;
   }
 
   body.print-rice-monthly .rice-monthly-table th {
@@ -3694,8 +3781,27 @@ body {
 
   body.print-rice-monthly .rice-footer-signatures {
     page-break-inside: avoid !important;
-    font-size: 8.5pt !important;
-    margin-top: 6px !important;
+    font-size: 9pt !important;
+    margin-top: 10px !important;
+    width: 100% !important;
+  }
+
+  body.print-rice-monthly .rice-footer-signatures > div,
+  .rice-footer-signatures > div {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    width: 100% !important;
+    flex-wrap: nowrap !important;
+    gap: 10px !important;
+  }
+
+  body.print-rice-monthly .rice-footer-signatures > div > div,
+  .rice-footer-signatures > div > div {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    text-align: center !important;
   }
 
   /* -------------------------------------------------------------
@@ -3737,31 +3843,31 @@ body {
   }
 
   body.print-rice-yearly .rice-yearly-card {
-    padding: 3mm 3mm !important;
+    padding: 0 !important;
     margin: 0 auto !important;
     width: 100% !important;
-    max-width: 287mm !important;
+    max-width: 277mm !important;
     border: none !important;
     box-shadow: none !important;
   }
 
   body.print-rice-yearly .rice-yr-title {
-    font-size: 11pt !important;
+    font-size: 13pt !important;
     font-weight: 800 !important;
     text-align: center !important;
   }
 
   body.print-rice-yearly .rice-yr-subtitle {
-    font-size: 13pt !important;
+    font-size: 15pt !important;
     font-weight: 900 !important;
     color: #1e3a8a !important;
     text-align: center !important;
   }
 
   body.print-rice-yearly .rice-yr-meta {
-    font-size: 8pt !important;
+    font-size: 8.8pt !important;
     text-align: center !important;
-    margin-top: 2px !important;
+    margin-top: 4px !important;
   }
 
   body.print-rice-yearly .table-responsive {
@@ -3770,18 +3876,48 @@ body {
 
   body.print-rice-yearly .rice-yearly-table {
     width: 100% !important;
-    font-size: 7.5pt !important;
-    line-height: 1.18 !important;
+    font-size: 8.2pt !important;
+    line-height: 1.25 !important;
     border-collapse: collapse !important;
     table-layout: fixed !important;
   }
 
+  body.print-rice-yearly .rice-yearly-table th:nth-child(1),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(1) { width: 4% !important; text-align: center !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(2),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(2) { width: 9% !important; text-align: center !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(3),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(3) { width: 6% !important; text-align: center !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(4),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(4) { width: 6% !important; text-align: center !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(5),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(5) { width: 8% !important; text-align: right !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(6),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(6) { width: 8% !important; text-align: right !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(7),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(7) { width: 7% !important; text-align: right !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(8),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(8) { width: 7% !important; text-align: right !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(9),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(9) { width: 8% !important; text-align: right !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(10),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(10) { width: 7% !important; text-align: center !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(11),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(11) { width: 8% !important; text-align: right !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(12),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(12) { width: 8% !important; text-align: right !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(13),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(13) { width: 9% !important; text-align: right !important; }
+  body.print-rice-yearly .rice-yearly-table th:nth-child(14),
+  body.print-rice-yearly .rice-yearly-table td:nth-child(14) { width: 5% !important; text-align: center !important; }
+
   body.print-rice-yearly .rice-yearly-table th,
   body.print-rice-yearly .rice-yearly-table td {
     border: 0.75pt solid #000000 !important;
-    padding: 2.8px 2px !important;
+    padding: 3.8px 2px !important;
     vertical-align: middle !important;
     color: #000000 !important;
+    height: 21px !important;
   }
 
   body.print-rice-yearly .rice-yearly-table th {
@@ -3791,20 +3927,39 @@ body {
   }
 
   body.print-rice-yearly .rice-goashwara-table {
-    font-size: 7.2pt !important;
+    font-size: 8pt !important;
     border-collapse: collapse !important;
     width: 100% !important;
   }
 
   body.print-rice-yearly .rice-goashwara-table td {
     border: 0.75pt solid #000000 !important;
-    padding: 2px 4px !important;
+    padding: 3px 6px !important;
   }
 
   body.print-rice-yearly .rice-yearly-signatures {
     page-break-inside: avoid !important;
-    font-size: 8.5pt !important;
-    margin-top: 6px !important;
+    font-size: 9pt !important;
+    margin-top: 10px !important;
+    width: 100% !important;
+  }
+
+  body.print-rice-yearly .rice-yearly-signatures > div,
+  .rice-yearly-signatures > div {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    width: 100% !important;
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+  }
+
+  body.print-rice-yearly .rice-yearly-signatures > div > div,
+  .rice-yearly-signatures > div > div {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    text-align: center !important;
   }
 }
 
@@ -4214,8 +4369,8 @@ body {
     border: none !important;
     box-sizing: border-box !important;
     width: 100% !important;
-    max-width: 100% !important;
-    padding: 8mm 10mm 8mm 10mm !important; /* Dignified 8mm top & bottom, 10mm left & right */
+    max-width: 188mm !important;
+    padding: 0 !important;
     margin: 0 auto !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
@@ -4300,11 +4455,11 @@ body {
   body.printing-taste .taste-register-table th,
   body.printing-taste .taste-register-table td {
     border: 0.6pt solid #334155 !important;
-    padding: 2.2px 3px !important;
-    font-size: 7.5pt !important;
-    line-height: 1.2 !important;
+    padding: 3.5px 3px !important;
+    font-size: 8.2pt !important;
+    line-height: 1.25 !important;
     vertical-align: middle !important;
-    height: 6.8mm !important;
+    height: 7.2mm !important;
   }
 
   body.print-taste .taste-register-table th,
@@ -4313,10 +4468,10 @@ body {
     font-weight: 800 !important;
     color: #0f172a !important;
     text-align: center !important;
-    font-size: 7.8pt !important;
-    padding: 3.5px 3px !important;
+    font-size: 8.5pt !important;
+    padding: 4px 3px !important;
     border-bottom: 1.5pt solid #0f172a !important;
-    height: 7.5mm !important;
+    height: 8mm !important;
   }
 
   /* Fixed Print Column Widths for Balanced Margins */
@@ -4382,8 +4537,8 @@ body {
 
   body.print-taste .taste-signatures-row,
   body.printing-taste .taste-signatures-row {
-    margin-top: 6px !important;
-    padding-top: 4px !important;
+    margin-top: 10px !important;
+    padding-top: 6px !important;
     border-top: 1pt solid #94a3b8 !important;
     display: flex !important;
     justify-content: space-between !important;
@@ -4399,22 +4554,22 @@ body {
 
   body.print-taste .taste-sign-col .sign-space,
   body.printing-taste .taste-sign-col .sign-space {
-    height: 18px !important;
+    height: 35px !important;
   }
 
   body.print-taste .taste-sign-col strong,
   body.printing-taste .taste-sign-col strong {
-    font-size: 7.6pt !important;
+    font-size: 8.8pt !important;
     color: #0f172a !important;
     display: block !important;
-    line-height: 1.2 !important;
+    line-height: 1.25 !important;
   }
 
   body.print-taste .taste-sign-col span,
   body.printing-taste .taste-sign-col span {
-    font-size: 6.8pt !important;
+    font-size: 8pt !important;
     color: #475569 !important;
-    line-height: 1.15 !important;
+    line-height: 1.2 !important;
   }
 }
 
@@ -6209,9 +6364,10 @@ body.level-mode-both #headerSchoolLevelBadge {
     padding: 0 !important;
   }
   body.print-slip #printSlipContainer .stock-print-doc {
-    margin: 0 !important;
-    padding: 4mm 6mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
     width: 100% !important;
+    max-width: 277mm !important;
     min-height: 180mm !important;
     display: flex !important;
     flex-direction: column !important;
