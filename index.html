@@ -676,6 +676,16 @@
           </div>
         </div>
 
+        <!-- Mobile Header Quick Tools (Visible only on mobile <= 768px) -->
+        <div class="mobile-header-tools no-print" id="pmMobileHeaderTools">
+          <button type="button" class="mobile-cloud-btn" onclick="app.handleCloudStatusClick()" title="क्लाऊड सिंक स्थिती" style="width:38px; height:38px; border-radius:10px; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); color:#fff; display:inline-flex; align-items:center; justify-content:center; cursor:pointer;">
+            <span>☁️</span>
+          </button>
+          <button type="button" class="mobile-menu-btn" onclick="app.openMobileMoreDrawer()" title="सर्व मेनू आणि साधने" aria-label="Open Navigation Drawer" style="width:38px; height:38px; border-radius:10px; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:1.25rem; cursor:pointer;">
+            <span>☰</span>
+          </button>
+        </div>
+
         <div class="header-meta">
           <div class="meta-pill" id="currentDateBadge">
             <span class="meta-icon">📅</span>
@@ -703,6 +713,11 @@
           <div class="meta-pill udise-badge" id="headerUdiseBadge" title="शाळा UDISE कोड">
             <span class="meta-icon">🏫</span>
             <span>UDISE: <strong id="headerUdiseCode">27240304501</strong></span>
+          </div>
+          <!-- Global View-Only Header Mode Pill -->
+          <div class="meta-pill" id="headerViewOnlyModePill" style="display: none; background: #dc2626; color: #fff; font-weight: 800; border: 1.5px solid #b91c1c; box-shadow: 0 2px 8px rgba(220, 38, 38, 0.4);" title="केवळ पाहणी मोड (Data Entry बंद)">
+            <span class="meta-icon">🔒</span>
+            <span>केवळ पाहणी मोड (View Only)</span>
           </div>
           <button type="button" class="meta-pill cloud-pill" id="cloudStatusPill" onclick="app.handleCloudStatusClick()" style="cursor: pointer; border: 1px solid rgba(255, 255, 255, 0.22); font-family: inherit; outline: none; -webkit-tap-highlight-color: transparent;" title="Google Firebase क्लाऊड सिंक">
             <span id="cloudStatusDot" class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; margin-right: 4px;"></span>
@@ -746,6 +761,10 @@
           <button class="nav-tab" data-tab="io" onclick="app.switchTab('io')">
             <span class="tab-icon">💾</span>
             <span class="tab-label">डेटा बॅकअप / रिस्टोअर</span>
+          </button>
+          <button class="nav-tab" data-tab="bulk-entry" onclick="app.switchTab('bulk-entry')">
+            <span class="tab-icon">⚡</span>
+            <span class="tab-label">मासिक जलद नोंद</span>
           </button>
           <button class="nav-tab" data-tab="settings" onclick="app.switchTab('settings')">
             <span class="tab-icon">⚙️</span>
@@ -836,7 +855,7 @@
                   </div>
                 </div>
 
-                <form id="dailyEntryForm" novalidate onsubmit="event.preventDefault(); app.saveCurrentRecord();">
+                <form id="dailyEntryForm" novalidate onsubmit="event.preventDefault(); if (app.isViewOnlyMode()) { app.showContactAdminModal(); return false; } app.saveCurrentRecord(); return false;">
                   
                   <!-- Group 1: Date, Day, Holiday & Menu Box -->
                   <div class="entry-section-box" style="margin-bottom: 12px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
@@ -965,9 +984,57 @@
                     </div>
                   </div>
 
+                  <!-- Daily Taste Inspection Box (भोजन चव तपासणी नोंद - ऐच्छिक व स्वयंचलित) -->
+                  <div class="daily-taste-box mb-3" id="dailyTasteSection" style="background: #fdfbf7; border: 1.5px solid #fed7aa; border-radius: 10px; padding: 12px; box-shadow: 0 2px 6px rgba(234, 88, 12, 0.05);">
+                    <div class="d-flex align-items-center justify-content-between mb-2 pb-1 border-bottom" style="border-color: #ffedd5 !important;">
+                      <div class="d-flex align-items-center gap-2">
+                        <span style="font-size: 1.15rem;">🍽️</span>
+                        <strong style="color: #9a3412; font-size: 0.92rem;">दैनिक भोजन चव तपासणी नोंद</strong>
+                      </div>
+                      <span class="badge" style="background: #ffedd5; color: #c2410c; font-size: 0.72rem; border: 1px solid #fed7aa;">ऐच्छिक / ऑटो-सेव्ह</span>
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                      <div class="col-6 col-md-6">
+                        <label for="dailyTasteTesterRole" class="form-label mb-1" style="font-size: 0.78rem; font-weight: 700; color: #475569;">चव घेणारी व्यक्ती:</label>
+                        <select id="dailyTasteTesterRole" class="form-select form-select-sm" style="font-weight: 600;" onchange="app.onDailyTasteRoleChange()">
+                          <option value="headmaster" selected>मुख्याध्यापक</option>
+                          <option value="assistantTeacher">सहशिक्षक</option>
+                          <option value="president">SMC अध्यक्ष</option>
+                          <option value="cook">स्वयंपाकी</option>
+                          <option value="other">इतर व्यक्ती</option>
+                        </select>
+                      </div>
+                      <div class="col-6 col-md-6">
+                        <label for="dailyTasteTesterName" class="form-label mb-1" style="font-size: 0.78rem; font-weight: 700; color: #475569;">व्यक्तीचे नाव:</label>
+                        <input type="text" id="dailyTasteTesterName" class="form-control form-control-sm" placeholder="नाव..." style="font-weight: 600;">
+                      </div>
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                      <div class="col-6 col-md-6">
+                        <label for="dailyTasteTime" class="form-label mb-1" style="font-size: 0.78rem; font-weight: 700; color: #475569;">वेळ (सोम-शुक्र 1:00 PM / शनि 9:30 AM):</label>
+                        <input type="text" id="dailyTasteTime" class="form-control form-control-sm" value="01:00 PM" style="font-weight: 700; color: #0369a1;">
+                      </div>
+                      <div class="col-6 col-md-6">
+                        <label for="dailyTasteQuality" class="form-label mb-1" style="font-size: 0.78rem; font-weight: 700; color: #475569;">अन्नाचा दर्जा:</label>
+                        <select id="dailyTasteQuality" class="form-select form-select-sm" style="font-weight: 700; color: #15803d;">
+                          <option value="उत्कृष्ट" selected>🌟 उत्कृष्ट</option>
+                          <option value="उत्तम">✅ उत्तम</option>
+                          <option value="समाधानकारक">👍 समाधानकारक</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label for="dailyTasteRemark" class="form-label mb-1" style="font-size: 0.78rem; font-weight: 700; color: #475569;">चव अभिप्राय / शेरा:</label>
+                      <input type="text" id="dailyTasteRemark" class="form-control form-control-sm" value="उत्तम: आहार ताजा, चविष्ट आणि अत्यंत चांगल्या प्रकारे शिजलेला आहे." placeholder="अभिप्राय...">
+                    </div>
+                  </div>
+
                   <!-- High Impact Action Buttons Bar -->
                   <div class="d-flex flex-column gap-2 mt-2" id="dailyActionButtonsGroup">
-                    <button type="submit" class="btn btn-hero-save w-100" id="btnSaveDaily" style="font-size: 1.05rem; padding: 12px 20px; font-weight: 800;">
+                    <button type="button" class="btn btn-hero-save w-100" id="btnSaveDaily" onclick="if (app.isViewOnlyMode()) { app.showContactAdminModal(); } else { app.saveCurrentRecord(); }" style="font-size: 1.05rem; padding: 12px 20px; font-weight: 800;">
                       <span>💾 आजची नोंद जतन करा (Save Record)</span>
                     </button>
                     <div class="d-flex gap-2 flex-wrap" id="dailySecondaryActions">
@@ -2517,6 +2584,187 @@
         </div>
       </section>
 
+      <!-- TAB: MONTHLY BULK ENTRY (मासिक जलद नोंद - संपूर्ण महिना बॅक डेटा) -->
+      <section id="tab-bulk-entry" class="tab-panel">
+        <div class="container-fluid">
+          
+          <div class="panel-header no-print">
+            <div class="panel-title-group">
+              <h2 class="panel-title d-flex align-items-center gap-2">
+                <span>⚡ मासिक जलद नोंद (Monthly Bulk Entry)</span>
+                <span class="badge" style="background: #10b981; color: #fff; font-size: 0.8rem;">१-क्लिक महिना भरणे</span>
+              </h2>
+              <p class="panel-desc">मागील महिन्यांचा किंवा चालू महिन्याचा सर्व दिवसांचा उपस्थिती, मेनू व सुट्ट्यांचा डेटा एकाच स्क्रीनवर जलद भरा</p>
+            </div>
+            
+            <div class="panel-actions d-flex align-items-center gap-2 flex-wrap">
+              <!-- School Pat summary badges on top-right (matching screenshot!) -->
+              <div class="d-flex align-items-center gap-2 flex-wrap" id="bulkSchoolPatBadges">
+                <span class="badge" style="background: #dcfce7; color: #166534; font-size: 0.85rem; padding: 6px 12px; border: 1.5px solid #86efac;">
+                  🎒 प्राथमिक (१-५) पट: <strong id="bulkPatPrimaryVal">0</strong> विद्यार्थी
+                </span>
+                <span class="badge dual-only" id="bulkUpperPatBadge" style="background: #dbeafe; color: #1e40af; font-size: 0.85rem; padding: 6px 12px; border: 1.5px solid #93c5fd;">
+                  🎓 उच्च प्राथमिक (६-८) पट: <strong id="bulkPatUpperVal">0</strong> विद्यार्थी
+                </span>
+                <span class="badge" style="background: #f1f5f9; color: #334155; font-size: 0.85rem; padding: 6px 12px; border: 1.5px solid #cbd5e1;">
+                  🏫 एकूण पट: <strong id="bulkPatTotalVal">0</strong> विद्यार्थी
+                </span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="app.switchTab('settings')" title="पटसंख्या बदलण्यासाठी सेटिंग्ज उघडा">
+                  ⚙️ पट बदला
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Controls Bar: Month Picker & Load -->
+          <div class="card mb-3 no-print" style="border: 1.5px solid #e2e8f0; border-radius: 10px; background: #ffffff;">
+            <div class="card-body p-3">
+              <div class="row align-items-center g-3">
+                <div class="col-md-5 col-sm-6">
+                  <label for="bulkMonthInput" class="form-label fw-bold mb-1" style="color: #1e3a8a; font-size: 0.9rem;">
+                    📅 महिना व वर्ष निवडा:
+                  </label>
+                  <div class="input-group">
+                    <input type="month" id="bulkMonthInput" class="form-control fw-bold" onchange="app.onBulkMonthChange()">
+                    <button type="button" class="btn btn-primary fw-bold" onclick="app.loadBulkMonthData()">
+                      <span>🔄 महिना लोड करा</span>
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="col-md-7 col-sm-6 text-md-end">
+                  <div class="d-inline-flex align-items-center gap-2 p-2 rounded" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                    <span style="font-size: 0.85rem; color: #64748b;">निवडलेला महिना:</span>
+                    <strong id="bulkSelectedMonthLabel" style="font-size: 1.05rem; color: #0f172a;">—</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 1-Click Quick Fill Toolbar Card (हुबेहूब स्क्रीनशॉटप्रमाणे!) -->
+          <div class="card mb-3 no-print" style="border: 1.5px solid #86efac; border-radius: 12px; background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%); box-shadow: 0 4px 12px rgba(22, 101, 52, 0.06);">
+            <div class="card-body p-3">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                <div class="d-flex align-items-center gap-2">
+                  <span style="font-size: 1.3rem;">⚡</span>
+                  <div>
+                    <h4 class="m-0 fw-bold" style="color: #166534; font-size: 0.98rem;">जलद भरणे (१-क्लिक शॉर्टकट बटने)</h4>
+                    <small class="text-muted" style="font-size: 0.78rem;">एकाच क्लिकमध्ये संपूर्ण महिन्याची उपस्थिती, मेनू व सुट्ट्या सेट करा</small>
+                  </div>
+                </div>
+                <div class="text-muted small">
+                  <span class="badge bg-light text-dark border">💡 सूचना: पट भरल्यानंतरही तुम्ही प्रत्येक दिवसाची हजेरी हवी तशी बदलू (Edit करू) शकता</span>
+                </div>
+              </div>
+
+              <!-- Shortcut Action Buttons -->
+              <div class="d-flex gap-2 flex-wrap align-items-center">
+                <button type="button" class="btn btn-success fw-bold d-inline-flex align-items-center gap-1 shadow-sm" onclick="app.bulkFill100Percent()" style="font-size: 0.85rem; padding: 7px 14px; border-radius: 8px;" title="सर्व कामकाजाच्या दिवसांना शाळेचा १००% पूर्ण पट भरा">
+                  <span>🟢 सर्व कामकाजाचे दिवस १००% भरा</span>
+                </button>
+                <button type="button" class="btn btn-danger fw-bold d-inline-flex align-items-center gap-1 shadow-sm" onclick="app.bulkAutoSundaysHolidays()" style="font-size: 0.85rem; padding: 7px 14px; border-radius: 8px;" title="महिन्यातील सर्व रविवार ओळखून सुट्टी सेट करा">
+                  <span>🔴 रविवार व सुट्ट्या सेट करा</span>
+                </button>
+                <button type="button" class="btn btn-warning fw-bold text-dark d-inline-flex align-items-center gap-1 shadow-sm" onclick="app.bulkApplyWeeklyMenus()" style="font-size: 0.85rem; padding: 7px 14px; border-radius: 8px; background: #fef08a; border-color: #fde047;" title="सोमवार ते शनिवार वारानुसार अधिकृत मेनू लावा">
+                  <span>🟡 मेनू वारानुसार लावा</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary fw-bold d-inline-flex align-items-center gap-1" onclick="app.bulkClearAll()" style="font-size: 0.85rem; padding: 7px 14px; border-radius: 8px;" title="सर्व रकाने रिकामे / रीसेट करा">
+                  <span>⚪ रिकामे करा</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Month Summary Stats Bar -->
+          <div class="row g-2 mb-3 no-print" id="bulkStatsRow">
+            <div class="col-6 col-md-2">
+              <div class="stat-card p-2 text-center" style="background: #fff; border: 1.5px solid #e2e8f0; border-radius: 8px;">
+                <span class="text-muted d-block small">एकूण दिवस</span>
+                <strong id="bulkStatTotalDays" style="font-size: 1.15rem; color: #0f172a;">0</strong>
+              </div>
+            </div>
+            <div class="col-6 col-md-2">
+              <div class="stat-card p-2 text-center" style="background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 8px;">
+                <span class="text-success d-block small fw-bold">कामाचे दिवस</span>
+                <strong id="bulkStatWorkingDays" style="font-size: 1.15rem; color: #166534;">0</strong>
+              </div>
+            </div>
+            <div class="col-6 col-md-2">
+              <div class="stat-card p-2 text-center" style="background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 8px;">
+                <span class="text-danger d-block small fw-bold">सुट्ट्यांचे दिवस</span>
+                <strong id="bulkStatHolidays" style="font-size: 1.15rem; color: #991b1b;">0</strong>
+              </div>
+            </div>
+            <div class="col-6 col-md-2">
+              <div class="stat-card p-2 text-center" style="background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 8px;">
+                <span class="text-primary d-block small fw-bold">एकूण ताटे / हजेरी</span>
+                <strong id="bulkStatTotalPlates" style="font-size: 1.15rem; color: #1e40af;">0</strong>
+              </div>
+            </div>
+            <div class="col-6 col-md-2">
+              <div class="stat-card p-2 text-center" style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 8px;">
+                <span class="text-warning d-block small fw-bold" style="color: #b45309 !important;">तांदूळ (kg)</span>
+                <strong id="bulkStatTotalRice" style="font-size: 1.15rem; color: #b45309;">0.000 kg</strong>
+              </div>
+            </div>
+            <div class="col-6 col-md-2">
+              <div class="stat-card p-2 text-center" style="background: #faf5ff; border: 1.5px solid #e9d5ff; border-radius: 8px;">
+                <span class="d-block small fw-bold" style="color: #7e22ce;">इंधन खर्च (₹)</span>
+                <strong id="bulkStatTotalFuel" style="font-size: 1.15rem; color: #7e22ce;">₹0.00</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Month Interactive Grid Table Card -->
+          <div class="card mb-4" style="border: 1.5px solid #cbd5e1; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.05);">
+            <div class="card-header d-flex align-items-center justify-content-between p-3" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: #ffffff;">
+              <div class="d-flex align-items-center gap-2">
+                <span style="font-size: 1.2rem;">📋</span>
+                <h3 class="m-0 fw-bold" id="bulkGridCardTitle" style="font-size: 1.05rem; color: #f8fafc;">
+                  दैनिक उपस्थिती व मेनू तक्ता (Month Attendance Sheet)
+                </h3>
+              </div>
+              <button type="button" class="btn btn-success fw-bold shadow-sm" id="btnSaveBulkMonthTop" onclick="app.saveBulkMonthRecords()" style="font-size: 0.95rem; padding: 6px 18px; border-radius: 8px;">
+                <span>💾 संपूर्ण महिना सेव्ह करा</span>
+              </button>
+            </div>
+
+            <div class="table-responsive" style="max-height: 700px; overflow-y: auto;">
+              <table class="table table-hover table-bordered m-0 align-middle bulk-entry-table" id="bulkEntryTable">
+                <thead class="table-light sticky-top" style="z-index: 5; background: #f8fafc; font-size: 0.85rem;">
+                  <tr class="text-center align-middle">
+                    <th style="width: 50px;">दि.</th>
+                    <th style="width: 70px;">वार</th>
+                    <th style="width: 75px;">सुट्टी?</th>
+                    <th style="width: 80px;">शिजवला?</th>
+                    <th style="min-width: 170px;">आजचा मेनू</th>
+                    <th style="width: 110px;" id="bulkThPrimary">इ. १ ते ५ हजेरी<br><small class="text-muted fw-normal" id="bulkThPrimaryPat">पट: 0</small></th>
+                    <th style="width: 110px;" id="bulkThUpper" class="dual-only">इ. ६ ते ८ हजेरी<br><small class="text-muted fw-normal" id="bulkThUpperPat">पट: 0</small></th>
+                    <th style="width: 95px;">तांदूळ (kg)</th>
+                    <th style="width: 95px;">खर्च (₹)</th>
+                    <th style="min-width: 140px;">भाव देणारे / शेरा</th>
+                  </tr>
+                </thead>
+                <tbody id="bulkEntryTableBody" style="font-size: 0.88rem;">
+                  <!-- Dynamic rows generated by JS -->
+                </tbody>
+              </table>
+            </div>
+
+            <div class="card-footer p-3 bg-light d-flex align-items-center justify-content-between flex-wrap gap-2">
+              <div class="small text-muted">
+                <span>टीप: 'संपूर्ण महिना सेव्ह करा' बटणावर क्लिक केल्यावर सर्व दिवसांची नोंद, साठा वापर आणि चव तपासणी नोंद एकाच वेळी जतन होते.</span>
+              </div>
+              <button type="button" class="btn btn-success btn-lg fw-bold px-4 shadow" id="btnSaveBulkMonthBottom" onclick="app.saveBulkMonthRecords()">
+                <span>💾 संपूर्ण महिना सेव्ह करा (Save All Records)</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
       <!-- TAB 7: SETTINGS & RULES (सेटिंग्ज व नियम) -->
       <section id="tab-settings" class="tab-panel">
         <div class="container">
@@ -2905,13 +3153,15 @@
         <span class="bottom-nav-icon">📖</span>
         <span class="bottom-nav-label">नोंदवही</span>
       </button>
+      <button class="bottom-nav-item highlight" data-tab="daily" onclick="app.switchTab('daily'); setTimeout(() => { const i = document.getElementById('entryChildren'); if(i) { i.focus(); i.select(); } }, 150);">
+        <div class="icon-circle">
+          <span>+</span>
+        </div>
+        <span class="bottom-nav-label" style="margin-top: 3px;">हजेरी</span>
+      </button>
       <button class="bottom-nav-item" data-tab="reports" onclick="app.switchTab('reports')">
         <span class="bottom-nav-icon">📑</span>
         <span class="bottom-nav-label">अहवाल</span>
-      </button>
-      <button class="bottom-nav-item" data-tab="taste" onclick="app.switchTab('taste')">
-        <span class="bottom-nav-icon">👅</span>
-        <span class="bottom-nav-label">चव नोंद</span>
       </button>
       <button class="bottom-nav-item" id="bottomNavMoreBtn" onclick="app.openMobileMoreDrawer()">
         <span class="bottom-nav-icon">📱</span>
@@ -2974,6 +3224,10 @@
           <button class="drawer-tile" onclick="app.switchTab('io'); app.closeMobileMoreDrawer();">
             <span class="drawer-tile-icon">💾</span>
             <span class="drawer-tile-label">डेटा बॅकअप</span>
+          </button>
+          <button class="drawer-tile highlight-fast" onclick="app.switchTab('bulk-entry'); app.closeMobileMoreDrawer();">
+            <span class="drawer-tile-icon">⚡</span>
+            <span class="drawer-tile-label">मासिक जलद नोंद</span>
           </button>
           <button class="drawer-tile" onclick="app.switchTab('settings'); app.closeMobileMoreDrawer();">
             <span class="drawer-tile-icon">⚙️</span>
@@ -3652,10 +3906,11 @@
   <div id="printSlipContainer" class="print-only-slip"></div>
 
   <!-- Application Logic Scripts -->
-  <script src="firebase-config.js?v=20261025_01"></script>
-  <script src="cloud-sync.js?v=20261025_01"></script>
-  <script src="excel-engine.js?v=20261025_01"></script>
-  <script src="test-suite.js?v=20261025_01"></script>
-  <script src="app.js?v=20261025_01"></script>
+  <script src="view-only-guard.js?v=20261101_v2"></script>
+  <script src="firebase-config.js?v=20261101_v2"></script>
+  <script src="cloud-sync.js?v=20261101_v2"></script>
+  <script src="excel-engine.js?v=20261101_v2"></script>
+  <script src="test-suite.js?v=20261101_v2"></script>
+  <script src="app.js?v=20261101_v2"></script>
 </body>
 </html>

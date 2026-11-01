@@ -1255,6 +1255,26 @@ const cloudSync = {
                 }
               } catch(e) {}
             }
+
+            // Portal priority check: If portal passed viewOnly=0 or master access is 1, do not let remote view_only override!
+            try {
+              const urlParams = new URLSearchParams(window.location.search);
+              const vo = urlParams.get('viewOnly');
+              if (vo === '0') {
+                pulledAccessMode = 'full';
+              } else if (vo === '1') {
+                pulledAccessMode = 'view_only';
+              } else {
+                const rawMaster = localStorage.getItem('ezyschool_app_access_master');
+                if (rawMaster) {
+                  const master = JSON.parse(rawMaster);
+                  if (master && master[currentUdise] && master[currentUdise]['pm-poshan'] !== undefined) {
+                    pulledAccessMode = (parseInt(master[currentUdise]['pm-poshan'], 10) === 1) ? 'full' : 'view_only';
+                  }
+                }
+              }
+            } catch(e) {}
+
             if (pulledAccessMode) {
               const storageKey = (typeof app !== 'undefined' && app.ACCESS_MODE_STORAGE_PREFIX) ? (app.ACCESS_MODE_STORAGE_PREFIX + currentUdise) : ('MDM_SCHOOL_ACCESS_MODE_' + currentUdise);
               try { localStorage.setItem(storageKey, pulledAccessMode); } catch(e) {}

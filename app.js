@@ -215,6 +215,30 @@ const app = {
    * Initialize Application
    */
   init() {
+    // 1. Immediately prioritize and parse URL parameters from Portal or Direct Link
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlUdise = urlParams.get('udise');
+      if (urlUdise && /^\d{11}$/.test(urlUdise.trim())) {
+        const cleanU = urlUdise.trim();
+        localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, cleanU);
+      }
+      const activeU = (urlUdise && /^\d{11}$/.test(urlUdise.trim())) ? urlUdise.trim() : (localStorage.getItem(this.ACTIVE_UDISE_STORAGE_KEY) || '');
+      const vo = urlParams.get('viewOnly');
+      if (vo === '0') {
+        if (activeU) {
+          localStorage.removeItem('EZYSCHOOL_VIEW_ONLY_' + activeU);
+          localStorage.removeItem('EZYSCHOOL_VIEW_ONLY_' + activeU + '_pm-poshan');
+          localStorage.removeItem('EZYSCHOOL_APP_DISABLED_' + activeU + '_pm-poshan');
+          localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + activeU, 'full');
+        }
+      } else if (vo === '1') {
+        if (activeU) {
+          localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + activeU, 'view_only');
+        }
+      }
+    } catch(e) {}
+
     this.applyGlobalConfig();
     this.setupDatePickers();
     this.ensureStandardMenus();
@@ -261,6 +285,19 @@ const app = {
           .then(r => r.ok ? r.json() : null)
           .then(remoteMode => {
             if (remoteMode) {
+              // Priority Guard: If EzySchool portal passed viewOnly=0 or master access is active, DO NOT let remoteMode overwrite with view_only!
+              try {
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('viewOnly') === '0') return;
+              } catch(e) {}
+              try {
+                const rawM = localStorage.getItem('ezyschool_app_access_master');
+                if (rawM) {
+                  const m = JSON.parse(rawM);
+                  if (m && m[activeUdise] && m[activeUdise]['pm-poshan'] === 1) return;
+                }
+              } catch(e) {}
+
               localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + activeUdise, remoteMode);
               if (this.data && this.data.settings) {
                 this.data.settings.accessMode = remoteMode;
@@ -271,6 +308,26 @@ const app = {
           .catch(() => {});
       }
     }
+
+    // Live access mode broadcast listener from EzySchool parent portal
+    window.addEventListener('message', (ev) => {
+      try {
+        if (!ev || !ev.data) return;
+        const msg = ev.data;
+        if (msg.type === 'EZYSCHOOL_APP_ACCESS_CHANGED' || msg.type === 'EZYSCHOOL_VIEW_ONLY_CHANGE') {
+          const curU = this.getActiveUdise();
+          if (!msg.udise || String(msg.udise).trim() === curU) {
+            if (msg.appId === 'pm-poshan' || msg.appId === 'all' || msg.type === 'EZYSCHOOL_VIEW_ONLY_CHANGE') {
+              const isVO = (msg.isEnabled === 0 || msg.isViewOnly === true);
+              const newMode = isVO ? 'view_only' : 'full';
+              localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + curU, newMode);
+              if (this.data && this.data.settings) this.data.settings.accessMode = newMode;
+              this.updateDailyEntryViewOnlyBanner();
+            }
+          }
+        }
+      } catch(e) {}
+    });
 
     // Auto-populate all Firebase URL inputs across the application
     const effectiveFb = (typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl) 
@@ -1456,31 +1513,76 @@ const app = {
 
   /**
    * Get School Access Mode: 'full' (Data Entry Allowed) or 'view_only' (Data Entry Halted)
-   * Defaults to 'full' for 100% safety & backward compatibility
+   * Portal parameter and master admin access map take supreme authority.
    */
   getSchoolAccessMode(udise) {
-    if (!udise) return 'full';
-    const cleanUdise = String(udise).trim();
+    const cleanUdise = String(udise || this.getActiveUdise() || '').trim();
+
+    // 1. URL parameter 'viewOnly' has supreme authority when embedded in portal
     try {
-      const mode = localStorage.getItem(this.ACCESS_MODE_STORAGE_PREFIX + cleanUdise);
-      if (mode === 'view_only') return 'view_only';
-      if (mode === 'full') return 'full';
+      const urlParams = new URLSearchParams(window.location.search);
+      const vo = urlParams.get('viewOnly');
+      if (vo === '0') {
+        if (cleanUdise) {
+          localStorage.removeItem('EZYSCHOOL_VIEW_ONLY_' + cleanUdise);
+          localStorage.removeItem('EZYSCHOOL_VIEW_ONLY_' + cleanUdise + '_pm-poshan');
+          localStorage.removeItem('EZYSCHOOL_APP_DISABLED_' + cleanUdise + '_pm-poshan');
+          localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + cleanUdise, 'full');
+        }
+        return 'full';
+      }
+      if (vo === '1') {
+        if (cleanUdise) {
+          localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + cleanUdise, 'view_only');
+        }
+        return 'view_only';
+      }
     } catch(e) {}
 
-    // Check school data settings if available
-    try {
-      if (this.data && this.data.settings && this.data.settings.udise === cleanUdise && this.data.settings.accessMode) {
-        return this.data.settings.accessMode;
-      }
-      const sKey = this.getSchoolStorageKey ? this.getSchoolStorageKey(cleanUdise) : `MDM_SCHOOL_DATA_${cleanUdise}`;
-      const raw = localStorage.getItem(sKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.settings && parsed.settings.accessMode) {
-          return parsed.settings.accessMode;
+    // 2. Check EzySchool Master App Access Map (Explicit Admin App Control)
+    if (cleanUdise) {
+      try {
+        const rawMaster = localStorage.getItem('ezyschool_app_access_master');
+        if (rawMaster) {
+          const master = JSON.parse(rawMaster);
+          if (master && master[cleanUdise] && master[cleanUdise]['pm-poshan'] !== undefined) {
+            const val = parseInt(master[cleanUdise]['pm-poshan'], 10);
+            if (val === 1) {
+              localStorage.removeItem('EZYSCHOOL_VIEW_ONLY_' + cleanUdise + '_pm-poshan');
+              localStorage.removeItem('EZYSCHOOL_APP_DISABLED_' + cleanUdise + '_pm-poshan');
+              localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + cleanUdise, 'full');
+              return 'full';
+            }
+            if (val === 0) return 'view_only';
+          }
         }
+      } catch(e) {}
+
+      // 3. Direct Lock Inspection
+      if (localStorage.getItem('EZYSCHOOL_VIEW_ONLY_' + cleanUdise + '_pm-poshan') === '1' ||
+          localStorage.getItem('EZYSCHOOL_APP_DISABLED_' + cleanUdise + '_pm-poshan') === '1' ||
+          localStorage.getItem('EZYSCHOOL_VIEW_ONLY_' + cleanUdise) === '1') {
+        return 'view_only';
       }
-    } catch(e) {}
+
+      const storedMode = localStorage.getItem(this.ACCESS_MODE_STORAGE_PREFIX + cleanUdise);
+      if (storedMode === 'view_only') return 'view_only';
+      if (storedMode === 'full') return 'full';
+    }
+
+    // 3. Check Universal View-Only Guard if initialized
+    if (typeof window.checkEzySchoolViewOnly === 'function') {
+      try {
+        if (!window.checkEzySchoolViewOnly()) return 'full';
+        return 'view_only';
+      } catch(e) {}
+    }
+    if (typeof window.isEzySchoolViewOnly === 'function') {
+      try {
+        if (!window.isEzySchoolViewOnly()) return 'full';
+        return 'view_only';
+      } catch(e) {}
+    }
 
     return 'full';
   },
@@ -1534,7 +1636,65 @@ const app = {
    * Check if current active school (or given udise) is in View Only mode
    */
   isViewOnlyMode(udise = null) {
-    const targetUdise = udise || this.getActiveUdise();
+    const targetUdise = String(udise || this.getActiveUdise() || '').trim();
+
+    // 1. URL parameter 'viewOnly' has supreme authority when running inside portal
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const vo = urlParams.get('viewOnly');
+      if (vo === '0') {
+        // Portal explicitly granted data entry access!
+        if (targetUdise) {
+          localStorage.removeItem('EZYSCHOOL_VIEW_ONLY_' + targetUdise);
+          localStorage.removeItem('EZYSCHOOL_VIEW_ONLY_' + targetUdise + '_pm-poshan');
+          localStorage.removeItem('EZYSCHOOL_APP_DISABLED_' + targetUdise + '_pm-poshan');
+          localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + targetUdise, 'full');
+          if (this.data && this.data.settings) this.data.settings.accessMode = 'full';
+        }
+        return false;
+      }
+      if (vo === '1') {
+        // Portal explicitly closed data entry access!
+        if (targetUdise) {
+          localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + targetUdise, 'view_only');
+          if (this.data && this.data.settings) this.data.settings.accessMode = 'view_only';
+        }
+        return true;
+      }
+    } catch(e) {}
+
+    // 2. Check EzySchool Master App Access Map (Explicit Admin App Control)
+    if (targetUdise) {
+      try {
+        const rawMaster = localStorage.getItem('ezyschool_app_access_master');
+        if (rawMaster) {
+          const master = JSON.parse(rawMaster);
+          if (master && master[targetUdise] && master[targetUdise]['pm-poshan'] !== undefined) {
+            const val = parseInt(master[targetUdise]['pm-poshan'], 10);
+            if (val === 1) {
+              localStorage.removeItem('EZYSCHOOL_VIEW_ONLY_' + targetUdise + '_pm-poshan');
+              localStorage.removeItem('EZYSCHOOL_APP_DISABLED_' + targetUdise + '_pm-poshan');
+              localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + targetUdise, 'full');
+              if (this.data && this.data.settings) this.data.settings.accessMode = 'full';
+              return false;
+            }
+            if (val === 0) return true;
+          }
+        }
+      } catch(e) {}
+
+      // 3. Direct Lock Inspection (When running standalone outside portal)
+      if (localStorage.getItem('EZYSCHOOL_VIEW_ONLY_' + targetUdise + '_pm-poshan') === '1' ||
+          localStorage.getItem('EZYSCHOOL_APP_DISABLED_' + targetUdise + '_pm-poshan') === '1' ||
+          localStorage.getItem('EZYSCHOOL_VIEW_ONLY_' + targetUdise) === '1') {
+        return true;
+      }
+
+      const storedMode = localStorage.getItem(this.ACCESS_MODE_STORAGE_PREFIX + targetUdise);
+      if (storedMode === 'view_only') return true;
+      if (storedMode === 'full') return false;
+    }
+
     if (!targetUdise) return false;
     return this.getSchoolAccessMode(targetUdise) === 'view_only';
   },
@@ -1586,7 +1746,12 @@ const app = {
     const pill = document.getElementById('entryStatusPill');
     const saveBtn = document.getElementById('btnSaveDaily');
     const dualBtn = document.getElementById('btnDualQuickEntry');
+    const headerPill = document.getElementById('headerViewOnlyModePill');
     const isViewOnly = this.isViewOnlyMode();
+
+    if (headerPill) {
+      headerPill.style.display = isViewOnly ? 'inline-flex' : 'none';
+    }
 
     if (banner) {
       if (isViewOnly) {
@@ -1605,20 +1770,61 @@ const app = {
         pill.style.color = '#92400e';
         pill.style.borderColor = '#f59e0b';
       } else {
+        pill.textContent = '🟢 नवीन नोंद';
         pill.style.background = '';
         pill.style.color = '';
         pill.style.borderColor = '';
       }
     }
 
+    // Lock/Unlock all Daily Entry form inputs & controls
+    const dailyInputs = document.querySelectorAll('#dailyEntryForm input, #dailyEntryForm select, #dailyEntryForm textarea');
+    dailyInputs.forEach(inp => {
+      inp.disabled = isViewOnly;
+      inp.readOnly = isViewOnly;
+      if (isViewOnly) {
+        inp.classList.add('ezyschool-vo-locked-input');
+        inp.style.pointerEvents = 'none';
+      } else {
+        inp.classList.remove('ezyschool-vo-locked-input');
+        inp.style.pointerEvents = '';
+      }
+    });
+
+    // Disable Stepper buttons (+/-), Quick Chips, and Counters
+    document.querySelectorAll('.btn-stepper-round, .quick-chip-btn, .counter-btn, .btn-step, .attendance-input-display').forEach(el => {
+      el.disabled = isViewOnly;
+      el.style.pointerEvents = isViewOnly ? 'none' : '';
+      el.style.opacity = isViewOnly ? '0.45' : '';
+      if (isViewOnly) el.setAttribute('tabindex', '-1');
+      else el.removeAttribute('tabindex');
+    });
+
+    // Intercept Form Submit
+    const dailyForm = document.getElementById('dailyEntryForm');
+    if (dailyForm) {
+      dailyForm.onsubmit = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.isViewOnlyMode()) {
+          this.showContactAdminModal();
+          return false;
+        }
+        this.saveCurrentRecord();
+        return false;
+      };
+    }
+
+    // Configure Save Record Button
     if (saveBtn) {
+      saveBtn.type = 'button';
       if (isViewOnly) {
         saveBtn.setAttribute('data-viewonly', 'true');
         saveBtn.innerHTML = '<span>🔒 फक्त पाहणी मोड (डेटा नोंद बंद - ॲडमिन संपर्क)</span>';
-        saveBtn.style.background = '#f59e0b';
-        saveBtn.style.color = '#78350f';
-        saveBtn.style.border = '2px solid #d97706';
-        saveBtn.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.35)';
+        saveBtn.style.background = '#dc2626';
+        saveBtn.style.color = '#ffffff';
+        saveBtn.style.border = '2px solid #b91c1c';
+        saveBtn.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.35)';
         saveBtn.onclick = (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -1627,12 +1833,15 @@ const app = {
         };
       } else {
         saveBtn.removeAttribute('data-viewonly');
-        saveBtn.innerHTML = '<span>💾 आजची नोंद जतन करा (Save Record)</span>';
+        saveBtn.innerHTML = `<span>💾 आजची ${this.getActiveSectionName()} नोंद जतन करा</span>`;
         saveBtn.style.background = '';
         saveBtn.style.color = '';
         saveBtn.style.border = '';
         saveBtn.style.boxShadow = '';
-        saveBtn.onclick = null;
+        saveBtn.onclick = (e) => {
+          e.preventDefault();
+          this.saveCurrentRecord();
+        };
       }
     }
 
@@ -2618,8 +2827,27 @@ const app = {
                 map[u].schoolLevel = item.schoolLevel || map[u].schoolLevel || 'both';
                 map[u].lastActive = item.lastActive || map[u].lastActive || new Date().toISOString();
                 if (item.accessMode) {
-                  map[u].accessMode = item.accessMode;
-                  try { localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + u, item.accessMode); } catch(e) {}
+                  // Priority Guard: Never let stale remote registry overwrite active grant from Portal or Admin map
+                  let isOverriddenByAdmin = false;
+                  try {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.get('viewOnly') === '0' && u === this.getActiveUdise()) isOverriddenByAdmin = true;
+                  } catch(e) {}
+                  try {
+                    const rawM = localStorage.getItem('ezyschool_app_access_master');
+                    if (rawM) {
+                      const m = JSON.parse(rawM);
+                      if (m && m[u] && m[u]['pm-poshan'] === 1) isOverriddenByAdmin = true;
+                    }
+                  } catch(e) {}
+
+                  if (!isOverriddenByAdmin) {
+                    map[u].accessMode = item.accessMode;
+                    try { localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + u, item.accessMode); } catch(e) {}
+                  } else {
+                    map[u].accessMode = 'full';
+                    try { localStorage.setItem(this.ACCESS_MODE_STORAGE_PREFIX + u, 'full'); } catch(e) {}
+                  }
                 } else if (!map[u].accessMode) {
                   map[u].accessMode = this.getSchoolAccessMode(u);
                 }
@@ -3699,6 +3927,12 @@ const app = {
         ? udiseVal
         : (this.getActiveUdise() || '27240304501');
 
+      // Absolute Safety Lock: If school is in View-Only mode, abort writing state and cloud sync!
+      if (typeof this.isViewOnlyMode === 'function' && this.isViewOnlyMode(currentUdise)) {
+        console.warn(`[Security Lock] saveState blocked: School (${currentUdise}) is in View-Only mode.`);
+        return false;
+      }
+
       // Self-heal: If school is currently being saved, remove tombstone
       if (this.isSchoolTombstoned(currentUdise)) {
         this.removeLocalTombstone(currentUdise);
@@ -4039,6 +4273,9 @@ const app = {
 
     const riceMonth = document.getElementById('riceMonthlyPicker');
     if (riceMonth) riceMonth.value = monthStr;
+
+    const bulkMonth = document.getElementById('bulkMonthInput');
+    if (bulkMonth) bulkMonth.value = monthStr;
 
     // Academic Year Auto-Selection (1 April to 31 March)
     const currentFinYear = this.getCurrentAcademicYear();
@@ -4454,6 +4691,9 @@ const app = {
 
       if (isFormB) {
         if (printSlip) printSlip.innerHTML = '';
+        if (typeof this.setPrintPageOrientation === 'function') {
+          this.setPrintPageOrientation('portrait', 'A4', '6mm 8mm 6mm 8mm');
+        }
         document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-slip', 'print-taste', 'printing-taste');
         document.body.classList.add('print-formb', 'print-portrait');
         const fbPicker = document.getElementById('formbMonthPicker');
@@ -4462,6 +4702,9 @@ const app = {
         this.preparePrintReportTitle('प्रपत्र_ब', mName ? `${mName}_${ym.split('-')[0]}` : ym);
       } else if (isTaste) {
         if (printSlip) printSlip.innerHTML = '';
+        if (typeof this.setPrintPageOrientation === 'function') {
+          this.setPrintPageOrientation('portrait', 'A4', '8mm 10mm 8mm 10mm');
+        }
         document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-slip', 'print-formb');
         document.body.classList.add('print-taste', 'print-portrait');
         const tMonth = document.getElementById('tasteMonthSelect');
@@ -4481,6 +4724,9 @@ const app = {
         this.preparePrintReportTitle('मासिक_अहवाल', mName ? `${mName}_${ym.split('-')[0]}` : ym);
       } else if (isYearly) {
         if (printSlip) printSlip.innerHTML = '';
+        if (typeof this.setPrintPageOrientation === 'function') {
+          this.setPrintPageOrientation('landscape', 'legal', '4mm 6mm 4mm 6mm');
+        }
         document.body.classList.remove('print-portrait', 'print-formb', 'print-monthly', 'print-register', 'print-slip', 'print-taste', 'printing-taste');
         document.body.classList.add('print-yearly', 'print-landscape');
         const ySelect = document.getElementById('yearlyYearSelect');
@@ -4490,6 +4736,9 @@ const app = {
         // Handled specifically by printDailySlip or Stock Register Print
       } else if (this.currentTab === 'register') {
         if (printSlip) printSlip.innerHTML = '';
+        if (typeof this.setPrintPageOrientation === 'function') {
+          this.setPrintPageOrientation('landscape', 'A4', '5mm 8mm 5mm 8mm');
+        }
         document.body.classList.remove('print-portrait', 'print-formb', 'print-slip', 'print-taste', 'printing-taste');
         document.body.classList.add('print-landscape');
         const regPicker = document.getElementById('registerMonthSelect');
@@ -4498,6 +4747,9 @@ const app = {
         this.preparePrintReportTitle('दैनिक_नोंदवही', mName ? `${mName}_${ym.split('-')[0]}` : ym);
       } else {
         if (printSlip) printSlip.innerHTML = '';
+        if (typeof this.setPrintPageOrientation === 'function') {
+          this.setPrintPageOrientation('landscape', 'A4', '6mm 8mm 6mm 8mm');
+        }
         document.body.classList.remove('print-portrait', 'print-formb', 'print-slip', 'print-taste', 'printing-taste');
         document.body.classList.add('print-landscape');
       }
@@ -4555,6 +4807,11 @@ const app = {
       const activeU = (this.data && this.data.settings && this.data.settings.udise) || (typeof this.getActiveUdise === 'function' ? this.getActiveUdise() : '');
       udiseBadge.textContent = activeU || '27240304501';
     }
+
+    const headerVoPill = document.getElementById('headerViewOnlyModePill');
+    if (headerVoPill) {
+      headerVoPill.style.display = (typeof this.isViewOnlyMode === 'function' && this.isViewOnlyMode()) ? 'inline-flex' : 'none';
+    }
   },
 
   /**
@@ -4608,6 +4865,9 @@ const app = {
     this.renderRiceYearlyReport();
     this.renderStockView();
     this.renderSettingsView();
+    if (this.currentTab === 'bulk-entry') {
+      this.renderBulkEntryView();
+    }
 
     // Re-evaluate live calculation on Daily Entry if active
     this.renderQuickAttendanceChips();
@@ -4755,6 +5015,9 @@ const app = {
         break;
       case 'stock':
         this.renderStockView();
+        break;
+      case 'bulk-entry':
+        this.renderBulkEntryView();
         break;
       case 'settings':
         this.renderSettingsView();
@@ -4989,6 +5252,74 @@ const app = {
     }
   },
 
+  /**
+   * Helper: Get standard Taste Inspection Time based on Day of Week
+   * Monday to Friday = 01:00 PM (दुपारी ०१:००)
+   * Saturday = 09:30 AM (सकाळी ०९:३० - सकाळची शाळा)
+   */
+  getDefaultTasteTime(dateStr) {
+    if (!dateStr) return '01:00 PM';
+    try {
+      const d = new Date(dateStr + "T12:00:00");
+      return (d.getDay() === 6) ? '09:30 AM' : '01:00 PM';
+    } catch(e) {
+      return '01:00 PM';
+    }
+  },
+
+  /**
+   * Update Daily Taste Inspection card fields on Daily Entry tab
+   */
+  updateDailyTasteFormFields(dateStr) {
+    if (!dateStr) return;
+    const roleEl = document.getElementById('dailyTasteTesterRole');
+    const nameEl = document.getElementById('dailyTasteTesterName');
+    const timeEl = document.getElementById('dailyTasteTime');
+    const qualEl = document.getElementById('dailyTasteQuality');
+    const remEl = document.getElementById('dailyTasteRemark');
+
+    const defaultTime = this.getDefaultTasteTime(dateStr);
+    const existing = (this.data && this.data.tasteRecords) ? this.data.tasteRecords[dateStr] : null;
+    const set = (this.data && this.data.settings) || {};
+    const defaultHm = set.headmaster || 'मुख्याध्यापक';
+
+    if (existing) {
+      if (nameEl) nameEl.value = existing.testerName || defaultHm;
+      if (timeEl) timeEl.value = existing.time || defaultTime;
+      if (qualEl) qualEl.value = existing.quality || 'उत्कृष्ट';
+      if (remEl) remEl.value = existing.tasteRemark || 'उत्तम: आहार ताजा, चविष्ट आणि अत्यंत चांगल्या प्रकारे शिजलेला आहे.';
+      if (roleEl) {
+        if (existing.testerRole === 'मुख्याध्यापक') roleEl.value = 'headmaster';
+        else if (existing.testerRole === 'सहशिक्षक') roleEl.value = 'assistantTeacher';
+        else if (existing.testerRole === 'SMC अध्यक्ष') roleEl.value = 'president';
+        else if (existing.testerRole === 'स्वयंपाकी') roleEl.value = 'cook';
+        else roleEl.value = 'other';
+      }
+    } else {
+      if (roleEl) roleEl.value = 'headmaster';
+      if (nameEl) nameEl.value = defaultHm;
+      if (timeEl) timeEl.value = defaultTime;
+      if (qualEl) qualEl.value = 'उत्कृष्ट';
+      if (remEl) remEl.value = 'उत्तम: आहार ताजा, चविष्ट आणि अत्यंत चांगल्या प्रकारे शिजलेला आहे.';
+    }
+  },
+
+  /**
+   * Handler when Daily Taste Role dropdown changes
+   */
+  onDailyTasteRoleChange() {
+    const roleEl = document.getElementById('dailyTasteTesterRole');
+    const nameEl = document.getElementById('dailyTasteTesterName');
+    if (!roleEl || !nameEl) return;
+    const set = (this.data && this.data.settings) || {};
+    const val = roleEl.value;
+    if (val === 'headmaster') nameEl.value = set.headmaster || 'मुख्याध्यापक';
+    else if (val === 'assistantTeacher') nameEl.value = set.assistantTeacher || 'सहशिक्षक';
+    else if (val === 'president') nameEl.value = set.president || 'अध्यक्ष (शा.व्य.स.)';
+    else if (val === 'cook') nameEl.value = set.cookName || 'स्वयंपाकी';
+    else nameEl.value = '';
+  },
+
   // =========================================================================
   // TAB 1: DAILY ENTRY ACTIONS & EVENT HANDLERS
   // =========================================================================
@@ -5112,12 +5443,6 @@ const app = {
       }
     }
 
-    const saveBtn = document.getElementById('btnSaveDaily');
-    if (saveBtn) {
-      saveBtn.innerHTML = `<span>💾 आजची ${this.getActiveSectionName()} नोंद जतन करा</span>`;
-      saveBtn.classList.remove('btn-locked-paywall');
-    }
-
     const fuelHint = document.getElementById('fuelRateHint');
     if (fuelHint) {
       fuelHint.textContent = `दर: रु. ${this.getActiveFuelRate()} प्रति विद्यार्थी (${this.getActiveSectionName()})`;
@@ -5125,12 +5450,22 @@ const app = {
 
     this.onInputsChanged();
     this.renderRecentDaysRibbon();
+
+    // Populate Daily Taste Inspection fields (defaults to Headmaster, 01:00 PM or 09:30 AM Sat)
+    this.updateDailyTasteFormFields(dateStr);
+
+    // Authoritative View-Only Banner & Form Lock Update (Must run AFTER form inputs & ribbons are built)
+    this.updateDailyEntryViewOnlyBanner();
   },
 
   /**
    * Event: When Holiday toggle changes
    */
   onHolidayToggleChanged() {
+    if (this.isViewOnlyMode()) {
+      this.showContactAdminModal();
+      return;
+    }
     const holidayToggle = document.getElementById('entryHolidayToggle');
     const childrenInput = document.getElementById('entryChildren');
 
@@ -5148,6 +5483,10 @@ const app = {
    * Adjust children count by delta (+1 or -1)
    */
   adjustChildren(delta) {
+    if (this.isViewOnlyMode()) {
+      this.showContactAdminModal();
+      return;
+    }
     const childrenInput = document.getElementById('entryChildren');
     if (!childrenInput) return;
     const maxPat = this.getActivePat();
@@ -5416,12 +5755,24 @@ const app = {
       btn.onclick = () => this.setQuickChildren(c.val);
       container.appendChild(btn);
     });
+
+    if (this.isViewOnlyMode()) {
+      container.querySelectorAll('.quick-chip-btn').forEach(b => {
+        b.disabled = true;
+        b.style.pointerEvents = 'none';
+        b.style.opacity = '0.45';
+      });
+    }
   },
 
   /**
    * Set Attendance via 1-Click Quick Chip
    */
   setQuickChildren(val) {
+    if (this.isViewOnlyMode()) {
+      this.showContactAdminModal();
+      return;
+    }
     const childrenInput = document.getElementById('entryChildren');
     const holidayToggle = document.getElementById('entryHolidayToggle');
     if (childrenInput) childrenInput.value = val;
@@ -5518,33 +5869,54 @@ const app = {
       }
     }
 
-    // स्वयंचलित चव नोंद सिंक: फक्त दैनिक मध्ये नोंद भरल्यावरच चव ऑटो ने भरणे
+    // स्वयंचलित / मॅन्युअल चव नोंद सिंक: दैनिक नोंद सेव्ह करताना चव नोंद आपोआप जतन करणे
     const targetTaste = (activeSection === 'upper') ? this.getActiveTasteRecords('upper') : this.getActiveTasteRecords('primary');
     if (!isHoliday && children > 0) {
-      const existingTaste = targetTaste[dateStr];
-      if (!existingTaste || existingTaste.isAuto) {
-        const dObj = new Date(dateStr + "T12:00:00");
-        const dNum = dObj.getDate();
-        const shortRemarks = ["उत्तम", "चविष्ट", "उत्तम", "चांगली", "चविष्ट"];
-        const rIdx = (dNum - 1) % shortRemarks.length;
-        targetTaste[dateStr] = {
-          date: dateStr,
-          section: activeSection,
-          time: '12:00 PM',
-          menuName: record.menuName,
-          testerName: this.data.settings.headmaster || 'मुख्याध्यापक',
-          testerRole: 'मुख्याध्यापक',
-          quality: 'उत्कृष्ट',
-          tasteRemark: shortRemarks[rIdx],
-          isAuto: true
-        };
-      } else {
-        existingTaste.menuName = record.menuName;
+      const roleEl = document.getElementById('dailyTasteTesterRole');
+      const nameEl = document.getElementById('dailyTasteTesterName');
+      const timeEl = document.getElementById('dailyTasteTime');
+      const qualEl = document.getElementById('dailyTasteQuality');
+      const remEl = document.getElementById('dailyTasteRemark');
+
+      const defTime = this.getDefaultTasteTime(dateStr);
+      const hmDefault = (this.data.settings && this.data.settings.headmaster) || 'मुख्याध्यापक';
+
+      let roleText = 'मुख्याध्यापक';
+      if (roleEl) {
+        if (roleEl.value === 'assistantTeacher') roleText = 'सहशिक्षक';
+        else if (roleEl.value === 'president') roleText = 'SMC अध्यक्ष';
+        else if (roleEl.value === 'cook') roleText = 'स्वयंपाकी';
+        else if (roleEl.value === 'other') roleText = 'इतर व्यक्ती';
+      }
+
+      const testerName = (nameEl && nameEl.value.trim()) ? nameEl.value.trim() : hmDefault;
+      const testerTime = (timeEl && timeEl.value.trim()) ? timeEl.value.trim() : defTime;
+      const quality = (qualEl && qualEl.value) ? qualEl.value : 'उत्कृष्ट';
+      const remark = (remEl && remEl.value.trim()) ? remEl.value.trim() : 'उत्तम: आहार ताजा, चविष्ट आणि अत्यंत चांगल्या प्रकारे शिजलेला आहे.';
+
+      targetTaste[dateStr] = {
+        date: dateStr,
+        section: activeSection,
+        time: testerTime,
+        menuName: record.menuName,
+        testerName: testerName,
+        testerRole: roleText,
+        quality: quality,
+        tasteRemark: remark,
+        isAuto: false
+      };
+      // Also sync to upper taste records if composite school
+      if (this.data.settings && this.data.settings.schoolLevel === 'both') {
+        if (!this.data.tasteRecordsUpper) this.data.tasteRecordsUpper = {};
+        this.data.tasteRecordsUpper[dateStr] = Object.assign({}, targetTaste[dateStr]);
       }
     } else {
       // ज्या दिवशी आहार भरला नाही (सुट्टी किंवा 0 मुले), त्या दिवशी चव नोंद कोरी ठेवणे
-      if (targetTaste[dateStr] && targetTaste[dateStr].isAuto) {
+      if (targetTaste[dateStr]) {
         delete targetTaste[dateStr];
+      }
+      if (this.data.tasteRecordsUpper && this.data.tasteRecordsUpper[dateStr]) {
+        delete this.data.tasteRecordsUpper[dateStr];
       }
     }
 
@@ -6126,12 +6498,13 @@ const app = {
       const shortRemarks = ["उत्तम", "चविष्ट", "उत्तम", "चांगली", "चविष्ट"];
       const rIdx = (dObj.getDate() - 1) % shortRemarks.length;
 
+      const tasteTime = this.getDefaultTasteTime(dateStr);
       if (pChildren > 0) {
         if (!this.data.tasteRecords) this.data.tasteRecords = {};
         this.data.tasteRecords[dateStr] = {
           date: dateStr,
           section: 'primary',
-          time: '12:00 PM',
+          time: tasteTime,
           menuName: recPrimary.menuName,
           testerName: this.data.settings.headmaster || 'मुख्याध्यापक',
           testerRole: 'मुख्याध्यापक',
@@ -6145,7 +6518,7 @@ const app = {
         this.data.tasteRecordsUpper[dateStr] = {
           date: dateStr,
           section: 'upper',
-          time: '12:00 PM',
+          time: tasteTime,
           menuName: recUpper.menuName,
           testerName: this.data.settings.headmaster || 'मुख्याध्यापक',
           testerRole: 'मुख्याध्यापक',
@@ -6300,6 +6673,20 @@ const app = {
         <p style="font-size: 12px; text-align: right;">मुख्याध्यापक / स्वयंपाकी स्वाक्षरी</p>
       </div>
     `;
+
+    const isMobile = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    const isEmbedded = (window.self !== window.top);
+    if (isMobile || isEmbedded) {
+      this.openMobilePrintWindow({
+        title: `दैनिक_पोषण_स्लिप_${dateStr}`,
+        reportType: 'slip',
+        orientation: 'portrait',
+        paperSize: 'A4',
+        contentHtml: printContainer.innerHTML,
+        customMargin: '8mm 10mm 8mm 10mm'
+      });
+      return;
+    }
 
     document.body.classList.remove('print-formb', 'print-monthly', 'print-yearly', 'print-register');
     document.body.classList.add('print-slip', 'print-portrait');
@@ -6863,7 +7250,23 @@ const app = {
     const ym = (ymInp && ymInp.value) ? ymInp.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
     const [yrS] = ym.split('-');
     const mName = this.getMonthNameMarathi(ym);
+    const reportTitle = `दैनिक_नोंदवही_${mName}_${yrS}`;
     this.preparePrintReportTitle('दैनिक_नोंदवही', `${mName}_${yrS}`);
+
+    const isMobile = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    const isEmbedded = (window.self !== window.top);
+
+    if (isMobile || isEmbedded) {
+      this.openMobilePrintWindow({
+        title: reportTitle,
+        reportType: 'register',
+        orientation: 'landscape',
+        paperSize: 'A4',
+        elementId: 'registerTable',
+        customMargin: '5mm 8mm 5mm 8mm'
+      });
+      return;
+    }
 
     this.setPrintPageOrientation('landscape');
     document.body.classList.remove('print-portrait', 'print-formb', 'print-yearly', 'print-monthly');
@@ -7135,7 +7538,23 @@ const app = {
     const ym = (picker && picker.value) ? picker.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
     const [yrS] = ym.split('-');
     const mName = this.getMonthNameMarathi(ym);
+    const reportTitle = `मासिक_अहवाल_${mName}_${yrS}`;
     this.preparePrintReportTitle('मासिक_अहवाल', `${mName}_${yrS}`);
+
+    const isMobile = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    const isEmbedded = (window.self !== window.top);
+
+    if (isMobile || isEmbedded) {
+      this.openMobilePrintWindow({
+        title: reportTitle,
+        reportType: 'monthly',
+        orientation: 'landscape',
+        paperSize: 'A4',
+        elementId: 'printableExcelSheet',
+        customMargin: '4mm 6mm 4mm 6mm'
+      });
+      return;
+    }
 
     this.setPrintPageOrientation('landscape', 'A4', '4mm 6mm 4mm 6mm');
     document.body.classList.remove('print-portrait', 'print-formb', 'print-yearly', 'print-register', 'print-taste');
@@ -7663,7 +8082,23 @@ const app = {
     const ym = (picker && picker.value) ? picker.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
     const [yrS] = ym.split('-');
     const mName = this.getMonthNameMarathi(ym);
+    const reportTitle = `प्रपत्र_ब_${mName}_${yrS}`;
     this.preparePrintReportTitle('प्रपत्र_ब', `${mName}_${yrS}`);
+
+    const isMobile = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    const isEmbedded = (window.self !== window.top);
+
+    if (isMobile || isEmbedded) {
+      this.openMobilePrintWindow({
+        title: reportTitle,
+        reportType: 'formb',
+        orientation: 'portrait',
+        paperSize: 'A4',
+        elementId: 'printableFormB',
+        customMargin: '4mm 6mm 4mm 6mm'
+      });
+      return;
+    }
 
     this.setPrintPageOrientation('portrait', 'A4');
     document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-legal', 'print-slip');
@@ -8015,7 +8450,23 @@ const app = {
     this.switchTab('yearly');
     const yearSelect = document.getElementById('yearlyYearSelect');
     const finYear = yearSelect ? yearSelect.value : this.getCurrentAcademicYear();
+    const reportTitle = `वार्षिक_अहवाल_${finYear}`;
     this.preparePrintReportTitle('वार्षिक_अहवाल', finYear);
+
+    const isMobile = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    const isEmbedded = (window.self !== window.top);
+
+    if (isMobile || isEmbedded) {
+      this.openMobilePrintWindow({
+        title: reportTitle,
+        reportType: 'yearly',
+        orientation: 'landscape',
+        paperSize: 'legal',
+        elementId: 'yearlyReportPrintArea',
+        customMargin: '4mm 6mm 4mm 6mm'
+      });
+      return;
+    }
 
     this.setPrintPageOrientation('landscape', 'legal');
     document.body.classList.remove('print-portrait', 'print-formb', 'print-monthly', 'print-register');
@@ -8023,6 +8474,503 @@ const app = {
     setTimeout(() => {
       window.print();
     }, 150);
+  },
+
+  openMobilePrintWindow(options) {
+    const {
+      title = 'अहवाल',
+      reportType = 'monthly',
+      orientation = 'landscape',
+      paperSize = 'A4',
+      elementId = null,
+      contentHtml = '',
+      customMargin = null
+    } = options;
+
+    let htmlToPrint = contentHtml;
+    if (!htmlToPrint && elementId) {
+      const el = document.getElementById(elementId);
+      if (el) {
+        htmlToPrint = el.outerHTML;
+      }
+    }
+
+    if (!htmlToPrint) {
+      window.print();
+      return;
+    }
+
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlToPrint;
+    tempDiv.querySelectorAll('.no-print, .mobile-scroll-hint, .btn, .filter-actions, .panel-header, select, input, textarea').forEach(n => {
+      if (n.tagName === 'SELECT') {
+        const span = document.createElement('span');
+        span.textContent = n.options && n.options[n.selectedIndex] ? n.options[n.selectedIndex].text : n.value;
+        span.style.fontWeight = 'bold';
+        n.parentNode.replaceChild(span, n);
+      } else if (n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') {
+        const pSibling = n.parentElement ? n.parentElement.querySelector('.print-val') : null;
+        if (pSibling) {
+          if (n.value && n.value !== '0' && (!pSibling.textContent || pSibling.textContent === '_________________')) {
+            pSibling.textContent = n.value;
+          }
+          n.remove();
+        } else {
+          const span = document.createElement('span');
+          span.textContent = n.value || '';
+          span.style.fontWeight = 'bold';
+          n.parentNode.replaceChild(span, n);
+        }
+      } else {
+        n.remove();
+      }
+    });
+    htmlToPrint = tempDiv.innerHTML;
+
+    const margin = customMargin || (orientation === 'landscape' ? '4mm 6mm 4mm 6mm' : '8mm 10mm 8mm 10mm');
+    const printDocHtml = `<!DOCTYPE html>
+<html lang="mr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #f8fafc;
+      font-family: 'Noto Sans Devanagari', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #0f172a;
+      -webkit-font-smoothing: antialiased;
+    }
+    @page {
+      size: ${paperSize} ${orientation};
+      margin: ${margin};
+    }
+    @media print {
+      html, body {
+        background: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+      }
+      .no-print, .mobile-print-header {
+        display: none !important;
+      }
+      .print-wrapper {
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        background: #ffffff !important;
+        width: 100% !important;
+        max-width: none !important;
+      }
+    }
+    .mobile-print-header {
+      position: sticky;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 99999;
+      background: #091e42;
+      color: #ffffff;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+    .mobile-print-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #f8fafc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 55%;
+    }
+    .mobile-print-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-m-print {
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-m-close {
+      background: #ef4444;
+      color: #ffffff;
+      border: none;
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .print-wrapper {
+      padding: 10px;
+      margin: 0 auto;
+      background: #ffffff;
+      box-sizing: border-box;
+      width: 100%;
+      overflow-x: auto;
+    }
+    .excel-sheet-card, .formb-card, .taste-printable-sheet, .rice-print-card, .rice-yearly-card, .yearly-sheet-card {
+      width: 100% !important;
+      max-width: 100% !important;
+      background: #ffffff !important;
+      border: none !important;
+      box-shadow: none !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+    }
+    table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      table-layout: auto !important;
+    }
+    th, td {
+      border: 0.65pt solid #475569 !important;
+      padding: 2.2px 1.2px !important;
+      text-align: center !important;
+      vertical-align: middle !important;
+      font-size: 6.8pt !important;
+      line-height: 1.15 !important;
+    }
+    th {
+      background: #e2e8f0 !important;
+      font-weight: 700 !important;
+      color: #0f172a !important;
+    }
+    .col-num-row th {
+      background: #f1f5f9 !important;
+      font-size: 6.2pt !important;
+      color: #64748b !important;
+      padding: 1px 0.5px !important;
+    }
+    .rate-row th {
+      background: #fef08a !important;
+      color: #854d0e !important;
+      font-weight: 800 !important;
+    }
+    .excel-title {
+      font-size: 11pt !important;
+      font-weight: 800 !important;
+      text-align: center !important;
+      color: #1e3a8a !important;
+      margin: 0 0 3px 0 !important;
+    }
+    .excel-school-row {
+      font-size: 7.8pt !important;
+      margin-bottom: 3px !important;
+      padding-bottom: 2px !important;
+      border-bottom: 1.2pt solid #1e293b !important;
+      display: flex !important;
+      justify-content: space-between !important;
+      font-weight: 600 !important;
+    }
+    .footer-stats-row {
+      font-size: 8pt !important;
+      padding: 3px 0 !important;
+      margin-top: 4px !important;
+      margin-bottom: 5px !important;
+      border-top: 1.2pt solid #1e293b !important;
+      border-bottom: 1.2pt solid #1e293b !important;
+      font-weight: 700 !important;
+      display: flex !important;
+      justify-content: space-between !important;
+    }
+    .footer-sign-row {
+      display: flex !important;
+      justify-content: space-between !important;
+      margin-top: 18px !important;
+      page-break-inside: avoid !important;
+    }
+    .sign-box {
+      text-align: center !important;
+      font-size: 8pt !important;
+      flex: 1 !important;
+    }
+    .official-formb-table th, .official-formb-table td {
+      font-size: 8.5pt !important;
+      padding: 4px 6px !important;
+    }
+    /* Specific Form B Single Page A4 Portrait Fit */
+    .formb-card {
+      width: 100% !important;
+      max-width: 198mm !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      border: none !important;
+      box-shadow: none !important;
+      page-break-inside: avoid !important;
+    }
+    .formb-title-banner {
+      background: #fef08a !important;
+      border: 1.5pt solid #000 !important;
+      font-size: 13pt !important;
+      font-weight: 900 !important;
+      padding: 2px 4px !important;
+      margin-bottom: 2px !important;
+      text-align: center !important;
+      box-shadow: none !important;
+    }
+    .formb-sub-title {
+      font-size: 8pt !important;
+      font-weight: 700 !important;
+      margin-bottom: 1px !important;
+      text-align: center !important;
+    }
+    .formb-samiti-line {
+      font-size: 10.5pt !important;
+      font-weight: 900 !important;
+      margin-bottom: 2px !important;
+      text-align: center !important;
+    }
+    .formb-school-info-line {
+      font-size: 8pt !important;
+      font-weight: 700 !important;
+      margin-bottom: 2px !important;
+      padding-bottom: 2px !important;
+      border-bottom: 1.2pt solid #000 !important;
+      display: flex !important;
+      justify-content: center !important;
+      gap: 12px !important;
+    }
+    .formb-meta-box-grid {
+      display: grid !important;
+      grid-template-columns: 1.05fr 0.95fr !important;
+      gap: 3px !important;
+      margin-bottom: 2px !important;
+      font-size: 8pt !important;
+    }
+    .formb-meta-col {
+      border: 1.2pt solid #000 !important;
+      padding: 2px 5px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 1px !important;
+      background: transparent !important;
+    }
+    .meta-row {
+      display: flex !important;
+      justify-content: space-between !important;
+      border-bottom: 0.5pt dashed #94a3b8 !important;
+      padding: 1px 0 !important;
+      font-size: 8pt !important;
+    }
+    .meta-box-val {
+      border: 1pt solid #000 !important;
+      padding: 0 4px !important;
+      font-weight: 900 !important;
+      min-width: 36px !important;
+      text-align: center !important;
+    }
+    .formb-table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      table-layout: fixed !important;
+      margin: 2px 0 !important;
+    }
+    .formb-table th, .formb-table td {
+      border: 1pt solid #000 !important;
+      padding: 1.5px 2px !important;
+      font-size: 7.8pt !important;
+      line-height: 1.15 !important;
+      height: 16.5px !important;
+      vertical-align: middle !important;
+      color: #000000 !important;
+    }
+    .formb-table th {
+      background: #f1f5f9 !important;
+      font-weight: 800 !important;
+      text-align: center !important;
+    }
+    .fb-cell-demand .print-val {
+      font-weight: 900 !important;
+      font-size: 7.8pt !important;
+      text-align: right !important;
+      display: block !important;
+    }
+    .fb-cell-shera .print-val {
+      font-size: 7.2pt !important;
+      text-align: center !important;
+      display: block !important;
+    }
+    .formb-notes {
+      font-size: 7.4pt !important;
+      line-height: 1.2 !important;
+      margin-top: 2px !important;
+    }
+    .formb-warning-note {
+      font-style: italic !important;
+      font-size: 7.4pt !important;
+      margin: 1px 0 !important;
+    }
+    .formb-bottom-summary {
+      border: 1pt solid #000 !important;
+      padding: 2px 6px !important;
+      margin: 2px 0 !important;
+      font-size: 7.6pt !important;
+      background: transparent !important;
+    }
+    .summary-line {
+      margin-bottom: 1px !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+    }
+    .summary-box-val {
+      border: 1pt solid #000 !important;
+      padding: 0 4px !important;
+      font-weight: 800 !important;
+    }
+    .formb-activities-grid {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 1px 6px !important;
+      font-size: 7.5pt !important;
+      margin: 2px 0 !important;
+    }
+    .formb-cert-line {
+      font-size: 7.5pt !important;
+      font-weight: 800 !important;
+      text-align: center !important;
+      border-top: 0.8pt solid #000 !important;
+      margin: 2px 0 !important;
+      padding-top: 1px !important;
+    }
+    .formb-signatures {
+      display: flex !important;
+      justify-content: space-between !important;
+      margin-top: 4px !important;
+      font-size: 8pt !important;
+      font-weight: 800 !important;
+      page-break-inside: avoid !important;
+    }
+    .sign-title {
+      font-weight: 900 !important;
+      margin-bottom: 14px !important;
+    }
+    .fb-input-demand, .fb-input-shera, .fb-act-input {
+      display: none !important;
+    }
+    .print-val {
+      display: inline-block !important;
+    }
+  </style>
+</head>
+<body class="print-${orientation}">
+  <div class="mobile-print-header no-print">
+    <div class="mobile-print-title">🖨️ ${title}</div>
+    <div class="mobile-print-actions">
+      <button class="btn-m-print" onclick="window.print()">🖨️ प्रिंट / PDF सेव्ह करा</button>
+      <button class="btn-m-close" onclick="window.close()">✕ बंद करा</button>
+    </div>
+  </div>
+  <div class="print-wrapper">
+    ${htmlToPrint}
+  </div>
+  <script>
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        try {
+          window.focus();
+          window.print();
+        } catch(e) {}
+      }, 450);
+    });
+  <\/script>
+</body>
+</html>`;
+
+    // Create Blob URL for Safari/Mobile seamless opening
+    let blobUrl = null;
+    try {
+      const blob = new Blob([printDocHtml], { type: 'text/html;charset=utf-8' });
+      blobUrl = URL.createObjectURL(blob);
+    } catch(e) {}
+
+    let printWin = null;
+    try {
+      if (blobUrl) {
+        printWin = window.open(blobUrl, '_blank');
+      } else {
+        printWin = window.open('', '_blank');
+      }
+    } catch(e) {}
+
+    if (printWin) {
+      if (!blobUrl) {
+        try {
+          printWin.document.open();
+          printWin.document.write(printDocHtml);
+          printWin.document.close();
+        } catch(e) {}
+      }
+      return;
+    }
+
+    // Fallback for iPhone Safari / popup blocked: in-page fullscreen print preview sheet
+    this.showInPagePrintModal({
+      title: title,
+      orientation: orientation,
+      paperSize: paperSize,
+      margin: margin,
+      htmlContent: htmlToPrint,
+      blobUrl: blobUrl
+    });
+  },
+
+  showInPagePrintModal(options) {
+    const { title, orientation, paperSize, margin, htmlContent, blobUrl } = options;
+
+    let existingModal = document.getElementById('ezyschoolMobilePrintModal');
+    if (existingModal) existingModal.remove();
+
+    this.setPrintPageOrientation(orientation, paperSize, margin);
+
+    const modal = document.createElement('div');
+    modal.id = 'ezyschoolMobilePrintModal';
+    modal.className = 'ezyschool-mobile-print-modal';
+    modal.innerHTML = `
+      <div class="ezyschool-mp-header no-print">
+        <div class="ezyschool-mp-title">🖨️ ${title}</div>
+        <div class="ezyschool-mp-actions">
+          <button type="button" class="btn-mp-print" onclick="window.print()">🖨️ प्रिंट / PDF</button>
+          ${blobUrl ? `<a href="${blobUrl}" target="_blank" class="btn-mp-open">🌐 नवीन टॅब</a>` : ''}
+          <button type="button" class="btn-mp-close" onclick="document.body.classList.remove('has-mobile-print-active'); document.getElementById('ezyschoolMobilePrintModal').remove();">✕ बंद</button>
+        </div>
+      </div>
+      <div class="ezyschool-mp-body print-wrapper">
+        ${htmlContent}
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.body.classList.add('has-mobile-print-active');
+
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'EZYSCHOOL_TRIGGER_PRINT', orientation: orientation, paperSize: paperSize }, '*');
+      }
+    } catch(e) {}
   },
 
   setPrintPageOrientation(orientation, paperSize = 'A4', customMargin = null) {
@@ -8242,7 +9190,23 @@ const app = {
     const ym = (picker && picker.value) ? picker.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
     const [yrS] = ym.split('-');
     const mName = this.getMonthNameMarathi(ym);
+    const reportTitle = `तांदूळ_दैनिक_नोंदवही_${mName}_${yrS}`;
     this.preparePrintReportTitle('तांदूळ_दैनिक_नोंदवही', `${mName}_${yrS}`);
+
+    const isMobile = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    const isEmbedded = (window.self !== window.top);
+
+    if (isMobile || isEmbedded) {
+      this.openMobilePrintWindow({
+        title: reportTitle,
+        reportType: 'ricemonthly',
+        orientation: 'portrait',
+        paperSize: 'A4',
+        elementId: 'riceMonthlyPrintArea',
+        customMargin: '6mm 8mm 6mm 8mm'
+      });
+      return;
+    }
 
     this.setPrintPageOrientation('portrait', 'A4');
     document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb', 'print-rice-yearly');
@@ -8563,7 +9527,23 @@ const app = {
     this.switchReportsSubtab('riceyearly');
     const yearSelect = document.getElementById('riceYearlyYearSelect');
     const finYear = yearSelect ? yearSelect.value : this.getCurrentAcademicYear();
+    const reportTitle = `वार्षिक_तांदूळ_उपयोगिता_${finYear}`;
     this.preparePrintReportTitle('वार्षिक_तांदूळ_उपयोगिता', finYear);
+
+    const isMobile = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    const isEmbedded = (window.self !== window.top);
+
+    if (isMobile || isEmbedded) {
+      this.openMobilePrintWindow({
+        title: reportTitle,
+        reportType: 'riceyearly',
+        orientation: 'landscape',
+        paperSize: 'A4',
+        elementId: 'riceYearlyPrintArea',
+        customMargin: '4mm 6mm 4mm 6mm'
+      });
+      return;
+    }
 
     this.setPrintPageOrientation('landscape', 'A4');
     document.body.classList.remove('print-portrait', 'print-formb', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-rice-monthly');
@@ -8936,7 +9916,7 @@ const app = {
         const remarkIdx = (d - 1) % standardShortRemarks.length;
         taste = {
           date: dateStr,
-          time: '12:00 PM',
+          time: this.getDefaultTasteTime(dateStr),
           menuName: menuName,
           testerName: set.headmaster || 'मुख्याध्यापक',
           testerRole: 'मुख्याध्यापक',
@@ -9010,7 +9990,7 @@ const app = {
     }
 
     if (dateInput) dateInput.value = targetDate;
-    if (timeInput) timeInput.value = '12:00 PM';
+    if (timeInput) timeInput.value = this.getDefaultTasteTime(targetDate);
 
     const rec = this.data.records ? this.data.records[targetDate] : null;
     const defMenu = rec ? this.getDisplayMenuName(rec) : this.getDefaultMenuForDay(targetDate);
@@ -9287,7 +10267,7 @@ const app = {
 
       tasteRecords[dateStr] = {
         date: dateStr,
-        time: (existing && existing.time) ? existing.time : '12:00 PM',
+        time: (existing && existing.time) ? existing.time : this.getDefaultTasteTime(dateStr),
         menuName: menuName,
         testerName: (existing && existing.testerName) ? existing.testerName : (set.headmaster || 'मुख्याध्यापक'),
         testerRole: (existing && existing.testerRole) ? existing.testerRole : 'मुख्याध्यापक',
@@ -9311,7 +10291,23 @@ const app = {
     const ym = (sel && sel.value) ? sel.value : (this.currentMonth || new Date().toISOString().substring(0, 7));
     const [yrS] = ym.split('-');
     const mName = this.getMonthNameMarathi(ym);
+    const reportTitle = `चव_नोंदवही_${mName}_${yrS}`;
     this.preparePrintReportTitle('चव_नोंदवही', `${mName}_${yrS}`);
+
+    const isMobile = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    const isEmbedded = (window.self !== window.top);
+
+    if (isMobile || isEmbedded) {
+      this.openMobilePrintWindow({
+        title: reportTitle,
+        reportType: 'taste',
+        orientation: 'portrait',
+        paperSize: 'A4',
+        elementId: 'tastePrintableArea',
+        customMargin: '8mm 10mm 8mm 10mm'
+      });
+      return;
+    }
 
     this.setPrintPageOrientation('portrait', 'A4', '8mm 10mm 8mm 10mm');
     document.body.classList.remove('print-landscape', 'print-monthly', 'print-yearly', 'print-register', 'print-legal', 'print-slip', 'print-formb');
@@ -9856,6 +10852,21 @@ const app = {
     if (typeof this.setPrintPageOrientation === 'function') {
       this.setPrintPageOrientation('landscape', 'A4', '12mm 15mm 12mm 15mm');
     }
+
+    const isMobile = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    const isEmbedded = (window.self !== window.top);
+    if (isMobile || isEmbedded) {
+      this.openMobilePrintWindow({
+        title: `वर्तमान_साठा_नोंदवही_${todayFormatted.replace(/\//g, '-')}`,
+        reportType: 'stock',
+        orientation: 'landscape',
+        paperSize: 'A4',
+        contentHtml: printContainer.innerHTML,
+        customMargin: '8mm 10mm 8mm 10mm'
+      });
+      return;
+    }
+
     document.body.classList.remove('print-portrait', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
     document.body.classList.add('print-slip', 'print-landscape');
     setTimeout(() => {
@@ -9999,6 +11010,21 @@ const app = {
     if (typeof this.setPrintPageOrientation === 'function') {
       this.setPrintPageOrientation('landscape', 'A4', '12mm 15mm 12mm 15mm');
     }
+
+    const isMobile = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    const isEmbedded = (window.self !== window.top);
+    if (isMobile || isEmbedded) {
+      this.openMobilePrintWindow({
+        title: `वर्तमान_साठा_नोंदवही_${todayFormatted.replace(/\//g, '-')}`,
+        reportType: 'stock',
+        orientation: 'landscape',
+        paperSize: 'A4',
+        contentHtml: printContainer.innerHTML,
+        customMargin: '8mm 10mm 8mm 10mm'
+      });
+      return;
+    }
+
     document.body.classList.remove('print-portrait', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
     document.body.classList.add('print-slip', 'print-landscape');
     setTimeout(() => {
@@ -10152,6 +11178,21 @@ const app = {
     if (typeof this.setPrintPageOrientation === 'function') {
       this.setPrintPageOrientation('landscape', 'A4', '12mm 15mm 12mm 15mm');
     }
+
+    const isMobile = (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth <= 768);
+    const isEmbedded = (window.self !== window.top);
+    if (isMobile || isEmbedded) {
+      this.openMobilePrintWindow({
+        title: `वर्तमान_साठा_नोंदवही_${todayFormatted.replace(/\//g, '-')}`,
+        reportType: 'stock',
+        orientation: 'landscape',
+        paperSize: 'A4',
+        contentHtml: printContainer.innerHTML,
+        customMargin: '8mm 10mm 8mm 10mm'
+      });
+      return;
+    }
+
     document.body.classList.remove('print-portrait', 'print-monthly', 'print-yearly', 'print-register', 'print-taste', 'print-formb');
     document.body.classList.add('print-slip', 'print-landscape');
     setTimeout(() => {
@@ -11507,6 +12548,515 @@ const app = {
 
   confirmResetAllData() {
     this.clearAllDataAndStartZero();
+  },
+
+  // =========================================================================
+  // TAB: MONTHLY BULK ENTRY (मासिक जलद नोंद - संपूर्ण महिना बॅक डेटा)
+  // =========================================================================
+
+  onBulkMonthChange() {
+    const inp = document.getElementById('bulkMonthInput');
+    if (inp && inp.value) {
+      this.renderBulkEntryView(inp.value);
+    }
+  },
+
+  loadBulkMonthData() {
+    const inp = document.getElementById('bulkMonthInput');
+    const m = (inp && inp.value) ? inp.value : this.getCurrentMonthString();
+    this.renderBulkEntryView(m);
+  },
+
+  renderBulkEntryView(monthStr = null) {
+    let targetMonth = monthStr;
+    const monthInput = document.getElementById('bulkMonthInput');
+    if (!targetMonth) {
+      targetMonth = (monthInput && monthInput.value) ? monthInput.value : this.getCurrentMonthString();
+    }
+    if (monthInput && monthInput.value !== targetMonth) {
+      monthInput.value = targetMonth;
+    }
+
+    const [yrStr, moStr] = targetMonth.split('-');
+    const year = parseInt(yrStr, 10);
+    const month = parseInt(moStr, 10); // 1 to 12
+    const totalDays = new Date(year, month, 0).getDate();
+
+    const monthNames = [
+      '', 'जानेवारी', 'फेब्रुवारी', 'मार्च', 'एप्रिल', 'मे', 'जून',
+      'जुलै', 'ऑगस्ट', 'सप्टेंबर', 'ऑक्टोबर', 'नोव्हेंबर', 'डिसेंबर'
+    ];
+    const monthTitle = `${monthNames[month]} ${year}`;
+
+    const labelEl = document.getElementById('bulkSelectedMonthLabel');
+    if (labelEl) labelEl.textContent = monthTitle;
+    const cardTitle = document.getElementById('bulkGridCardTitle');
+    if (cardTitle) cardTitle.textContent = `📋 ${monthTitle} - दैनिक उपस्थिती व मेनू तक्ता`;
+
+    // School level & Pat
+    const sLevel = (this.data && this.data.settings && this.data.settings.schoolLevel) || 'both';
+    const isDual = (sLevel === 'both');
+    const isUpperOnly = (sLevel === 'upper');
+    const patP = this.getActivePat('primary');
+    const patU = this.getActivePat('upper');
+    const patTotal = isDual ? (patP + patU) : (isUpperOnly ? patU : patP);
+
+    const patPEl = document.getElementById('bulkPatPrimaryVal');
+    const patUEl = document.getElementById('bulkPatUpperVal');
+    const patTotEl = document.getElementById('bulkPatTotalVal');
+    if (patPEl) patPEl.textContent = patP;
+    if (patUEl) patUEl.textContent = patU;
+    if (patTotEl) patTotEl.textContent = patTotal;
+
+    const thPPat = document.getElementById('bulkThPrimaryPat');
+    const thUPat = document.getElementById('bulkThUpperPat');
+    if (thPPat) thPPat.textContent = `पट: ${patP}`;
+    if (thUPat) thUPat.textContent = `पट: ${patU}`;
+
+    // Show/hide upper columns based on dual
+    document.querySelectorAll('#bulkUpperPatBadge, #bulkThUpper, .bulk-col-upper').forEach(el => {
+      el.style.display = isDual ? '' : 'none';
+    });
+
+    const tbody = document.getElementById('bulkEntryTableBody');
+    if (!tbody) return;
+
+    const pRecords = (this.data && this.data.records) || {};
+    const uRecords = (this.data && this.data.recordsUpper) || {};
+    const menuOptions = (this.data && this.data.menus) || [];
+
+    let rowsHtml = '';
+
+    for (let d = 1; d <= totalDays; d++) {
+      const dStr = String(d).padStart(2, '0');
+      const dateStr = `${targetMonth}-${dStr}`;
+      const dObj = new Date(dateStr + "T12:00:00");
+      const dayOfWeek = dObj.getDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
+      const isSunday = (dayOfWeek === 0);
+      const dayName = this.getDayNameMarathi(dateStr);
+      const shortDay = dayName.slice(0, 3);
+
+      const existingP = pRecords[dateStr];
+      const existingU = uRecords[dateStr];
+
+      let isHoliday = isSunday;
+      let isCooked = !isSunday;
+      let primaryAtt = isSunday ? 0 : patP; // 100% full pat by default (editable!)
+      let upperAtt = isSunday ? 0 : patU;   // 100% full pat by default (editable!)
+      let selectedMenu = this.getDefaultMenuForDay(dateStr);
+      let remarks = isSunday ? 'रविवार' : '';
+
+      if (existingP) {
+        isHoliday = !!existingP.isHoliday;
+        isCooked = !isHoliday && (existingP.children > 0);
+        primaryAtt = existingP.children;
+        if (existingP.menuName) selectedMenu = existingP.menuName;
+        remarks = existingP.remarks || (isHoliday ? (isSunday ? 'रविवार' : 'सुट्टी') : '');
+      }
+
+      if (existingU) {
+        upperAtt = existingU.children;
+      }
+
+      const rowClass = isSunday ? 'bulk-row-sunday' : (isHoliday ? 'bulk-row-holiday' : '');
+
+      // Menu dropdown options HTML
+      const menuOptsHtml = menuOptions.map(m => {
+        const isSel = (m.name === selectedMenu);
+        return `<option value="${m.name}" ${isSel ? 'selected' : ''}>${m.name}</option>`;
+      }).join('');
+
+      // Live calculate initial row values
+      const calcP = this.calculateDay(dateStr, isHoliday ? 0 : primaryAtt, selectedMenu, isHoliday ? 0 : primaryAtt, null, 'primary');
+      const calcU = isDual ? this.calculateDay(dateStr, isHoliday ? 0 : upperAtt, selectedMenu, isHoliday ? 0 : upperAtt, null, 'upper') : null;
+
+      const rowRice = +( (calcP.quantities?.rice || 0) + (calcU ? (calcU.quantities?.rice || 0) : 0) ).toFixed(3);
+      const rowFuel = +( (calcP.fuelCost || 0) + (calcU ? (calcU.fuelCost || 0) : 0) ).toFixed(2);
+
+      rowsHtml += `
+        <tr id="bulkRow_${d}" class="${rowClass}" data-date="${dateStr}" data-day="${d}" data-sunday="${isSunday ? '1' : '0'}">
+          <td class="text-center font-bold" style="padding: 6px;">
+            <strong style="font-size: 0.92rem; color: #1e3a8a;">${d}</strong>
+          </td>
+          <td class="text-center" style="padding: 6px;">
+            <span class="bulk-day-badge">${shortDay}</span>
+          </td>
+          <td class="text-center" style="padding: 4px;">
+            <input type="checkbox" class="form-check-input bulk-cb-holiday" id="bulkHol_${d}" ${isHoliday ? 'checked' : ''} onchange="app.onBulkRowChanged(${d})">
+          </td>
+          <td class="text-center" style="padding: 4px;">
+            <input type="checkbox" class="form-check-input bulk-cb-cooked" id="bulkCooked_${d}" ${isCooked ? 'checked' : ''} onchange="app.onBulkRowChanged(${d})">
+          </td>
+          <td style="padding: 4px;">
+            <select class="form-select form-select-sm bulk-menu-select" id="bulkMenu_${d}" ${isHoliday ? 'disabled' : ''} onchange="app.onBulkRowChanged(${d})">
+              <option value="-- मेनू निवडा --">-- मेनू निवडा --</option>
+              ${menuOptsHtml}
+            </select>
+          </td>
+          <td class="text-center" style="padding: 4px;">
+            <input type="number" class="bulk-att-input bulk-inp-primary" id="bulkAttP_${d}" min="0" max="${patP}" value="${isHoliday ? 0 : primaryAtt}" ${isHoliday ? 'disabled' : ''} oninput="app.onBulkRowChanged(${d})">
+          </td>
+          <td class="text-center bulk-col-upper" style="padding: 4px; display: ${isDual ? '' : 'none'};">
+            <input type="number" class="bulk-att-input bulk-inp-upper" id="bulkAttU_${d}" min="0" max="${patU}" value="${isHoliday ? 0 : upperAtt}" ${isHoliday ? 'disabled' : ''} oninput="app.onBulkRowChanged(${d})">
+          </td>
+          <td class="text-center" style="padding: 4px;">
+            <span class="bulk-calc-badge-rice" id="bulkRice_${d}">${rowRice.toFixed(3)}</span>
+          </td>
+          <td class="text-center" style="padding: 4px;">
+            <span class="bulk-calc-badge-fuel" id="bulkFuel_${d}">₹${rowFuel.toFixed(2)}</span>
+          </td>
+          <td style="padding: 4px;">
+            <input type="text" class="form-control form-control-sm bulk-inp-remark" id="bulkRem_${d}" value="${remarks}" placeholder="शेरा / सुट्टी...">
+          </td>
+        </tr>
+      `;
+    }
+
+    tbody.innerHTML = rowsHtml;
+    this.updateBulkMonthStats();
+  },
+
+  onBulkRowChanged(dayNum) {
+    const row = document.getElementById(`bulkRow_${dayNum}`);
+    if (!row) return;
+
+    const dateStr = row.dataset.date;
+    const isSunday = row.dataset.sunday === '1';
+    const holCb = document.getElementById(`bulkHol_${dayNum}`);
+    const cookCb = document.getElementById(`bulkCooked_${dayNum}`);
+    const menuSel = document.getElementById(`bulkMenu_${dayNum}`);
+    const attPInp = document.getElementById(`bulkAttP_${dayNum}`);
+    const attUInp = document.getElementById(`bulkAttU_${dayNum}`);
+    const remInp = document.getElementById(`bulkRem_${dayNum}`);
+    const riceBadge = document.getElementById(`bulkRice_${dayNum}`);
+    const fuelBadge = document.getElementById(`bulkFuel_${dayNum}`);
+
+    const isHoliday = holCb ? holCb.checked : false;
+
+    if (isHoliday) {
+      if (cookCb) cookCb.checked = false;
+      if (menuSel) menuSel.disabled = true;
+      if (attPInp) { attPInp.value = 0; attPInp.disabled = true; }
+      if (attUInp) { attUInp.value = 0; attUInp.disabled = true; }
+      if (remInp && (!remInp.value.trim() || remInp.value === '')) {
+        remInp.value = isSunday ? 'रविवार' : 'सुट्टी';
+      }
+      row.className = isSunday ? 'bulk-row-sunday' : 'bulk-row-holiday';
+    } else {
+      if (cookCb && !cookCb.checked) cookCb.checked = true;
+      if (menuSel) menuSel.disabled = false;
+      if (attPInp) {
+        attPInp.disabled = false;
+        if (parseInt(attPInp.value, 10) === 0) attPInp.value = this.getActivePat('primary');
+      }
+      if (attUInp) {
+        attUInp.disabled = false;
+        if (parseInt(attUInp.value, 10) === 0) attUInp.value = this.getActivePat('upper');
+      }
+      if (remInp && (remInp.value === 'रविवार' || remInp.value === 'सुट्टी')) {
+        remInp.value = '';
+      }
+      row.className = '';
+    }
+
+    // Recalculate row math
+    const sLevel = (this.data && this.data.settings && this.data.settings.schoolLevel) || 'both';
+    const isDual = (sLevel === 'both');
+    const pVal = (!isHoliday && attPInp) ? Math.max(0, parseInt(attPInp.value, 10) || 0) : 0;
+    const uVal = (!isHoliday && attUInp) ? Math.max(0, parseInt(attUInp.value, 10) || 0) : 0;
+    const menuVal = (menuSel && menuSel.value !== '-- मेनू निवडा --') ? menuSel.value : this.getDefaultMenuForDay(dateStr);
+
+    const calcP = this.calculateDay(dateStr, pVal, menuVal, pVal, null, 'primary');
+    const calcU = isDual ? this.calculateDay(dateStr, uVal, menuVal, uVal, null, 'upper') : null;
+
+    const rowRice = +( (calcP.quantities?.rice || 0) + (calcU ? (calcU.quantities?.rice || 0) : 0) ).toFixed(3);
+    const rowFuel = +( (calcP.fuelCost || 0) + (calcU ? (calcU.fuelCost || 0) : 0) ).toFixed(2);
+
+    if (riceBadge) riceBadge.textContent = rowRice.toFixed(3);
+    if (fuelBadge) fuelBadge.textContent = `₹${rowFuel.toFixed(2)}`;
+
+    this.updateBulkMonthStats();
+  },
+
+  updateBulkMonthStats() {
+    const rows = document.querySelectorAll('#bulkEntryTableBody tr');
+    let totalDays = rows.length;
+    let workingDays = 0;
+    let holidays = 0;
+    let totalPlates = 0;
+    let totalRice = 0;
+    let totalFuel = 0;
+
+    const sLevel = (this.data && this.data.settings && this.data.settings.schoolLevel) || 'both';
+    const isDual = (sLevel === 'both');
+
+    rows.forEach(tr => {
+      const d = tr.dataset.day;
+      const holCb = document.getElementById(`bulkHol_${d}`);
+      const isHol = holCb ? holCb.checked : false;
+
+      if (isHol) {
+        holidays++;
+      } else {
+        workingDays++;
+        const pInp = document.getElementById(`bulkAttP_${d}`);
+        const uInp = document.getElementById(`bulkAttU_${d}`);
+        const pAtt = pInp ? (parseInt(pInp.value, 10) || 0) : 0;
+        const uAtt = (isDual && uInp) ? (parseInt(uInp.value, 10) || 0) : 0;
+        totalPlates += (pAtt + uAtt);
+
+        const rBadge = document.getElementById(`bulkRice_${d}`);
+        const fBadge = document.getElementById(`bulkFuel_${d}`);
+        if (rBadge) totalRice += (parseFloat(rBadge.textContent) || 0);
+        if (fBadge) totalFuel += (parseFloat(fBadge.textContent.replace('₹', '')) || 0);
+      }
+    });
+
+    const elTotalDays = document.getElementById('bulkStatTotalDays');
+    const elWorkingDays = document.getElementById('bulkStatWorkingDays');
+    const elHolidays = document.getElementById('bulkStatHolidays');
+    const elTotalPlates = document.getElementById('bulkStatTotalPlates');
+    const elTotalRice = document.getElementById('bulkStatTotalRice');
+    const elTotalFuel = document.getElementById('bulkStatTotalFuel');
+
+    if (elTotalDays) elTotalDays.textContent = totalDays;
+    if (elWorkingDays) elWorkingDays.textContent = workingDays;
+    if (elHolidays) elHolidays.textContent = holidays;
+    if (elTotalPlates) elTotalPlates.textContent = totalPlates;
+    if (elTotalRice) elTotalRice.textContent = `${totalRice.toFixed(3)} kg`;
+    if (elTotalFuel) elTotalFuel.textContent = `₹${totalFuel.toFixed(2)}`;
+  },
+
+  bulkFill100Percent() {
+    const patP = this.getActivePat('primary');
+    const patU = this.getActivePat('upper');
+    const rows = document.querySelectorAll('#bulkEntryTableBody tr');
+    let count = 0;
+
+    rows.forEach(tr => {
+      const d = tr.dataset.day;
+      const holCb = document.getElementById(`bulkHol_${d}`);
+      if (holCb && !holCb.checked) {
+        const attP = document.getElementById(`bulkAttP_${d}`);
+        const attU = document.getElementById(`bulkAttU_${d}`);
+        if (attP) attP.value = patP;
+        if (attU) attU.value = patU;
+        this.onBulkRowChanged(d);
+        count++;
+      }
+    });
+
+    this.showToast(`✅ सर्व ${count} कामकाजाच्या दिवसांसाठी १००% पट (${patP} विद्यार्थी) भरला!`, 'success');
+  },
+
+  bulkAutoSundaysHolidays() {
+    const rows = document.querySelectorAll('#bulkEntryTableBody tr');
+    let sundayCount = 0;
+
+    rows.forEach(tr => {
+      const d = tr.dataset.day;
+      const isSunday = (tr.dataset.sunday === '1');
+      if (isSunday) {
+        const holCb = document.getElementById(`bulkHol_${d}`);
+        const remInp = document.getElementById(`bulkRem_${d}`);
+        if (holCb) holCb.checked = true;
+        if (remInp && !remInp.value) remInp.value = 'रविवार';
+        this.onBulkRowChanged(d);
+        sundayCount++;
+      }
+    });
+
+    this.showToast(`🔴 महिन्यातील सर्व ${sundayCount} रविवार सुट्टी म्हणून सेट केले!`, 'info');
+  },
+
+  bulkApplyWeeklyMenus() {
+    const rows = document.querySelectorAll('#bulkEntryTableBody tr');
+    let appliedCount = 0;
+
+    rows.forEach(tr => {
+      const d = tr.dataset.day;
+      const dateStr = tr.dataset.date;
+      const holCb = document.getElementById(`bulkHol_${d}`);
+      if (holCb && !holCb.checked) {
+        const menuSel = document.getElementById(`bulkMenu_${d}`);
+        if (menuSel) {
+          const defMenu = this.getDefaultMenuForDay(dateStr);
+          menuSel.value = defMenu;
+          this.onBulkRowChanged(d);
+          appliedCount++;
+        }
+      }
+    });
+
+    this.showToast(`🟡 सर्व ${appliedCount} कामकाजाच्या दिवसांसाठी वारानुसार मेनू लावला!`, 'success');
+  },
+
+  bulkClearAll() {
+    if (!confirm('आपणास या महिन्यातील सर्व भरलेली हजेरी व नोंदी रीसेट करायच्या आहेत का?')) return;
+    const rows = document.querySelectorAll('#bulkEntryTableBody tr');
+    rows.forEach(tr => {
+      const d = tr.dataset.day;
+      const isSunday = (tr.dataset.sunday === '1');
+      const holCb = document.getElementById(`bulkHol_${d}`);
+      const cookCb = document.getElementById(`bulkCooked_${d}`);
+      const attP = document.getElementById(`bulkAttP_${d}`);
+      const attU = document.getElementById(`bulkAttU_${d}`);
+      const remInp = document.getElementById(`bulkRem_${d}`);
+
+      if (isSunday) {
+        if (holCb) holCb.checked = true;
+        if (cookCb) cookCb.checked = false;
+        if (attP) attP.value = 0;
+        if (attU) attU.value = 0;
+        if (remInp) remInp.value = 'रविवार';
+      } else {
+        if (holCb) holCb.checked = false;
+        if (cookCb) cookCb.checked = false;
+        if (attP) attP.value = 0;
+        if (attU) attU.value = 0;
+        if (remInp) remInp.value = '';
+      }
+      this.onBulkRowChanged(d);
+    });
+
+    this.showToast('⚪ सर्व नोंदी रीसेट करण्यात आल्या आहेत.', 'info');
+  },
+
+  saveBulkMonthRecords() {
+    if (this.isViewOnlyMode()) {
+      this.showContactAdminModal();
+      return;
+    }
+
+    const rows = document.querySelectorAll('#bulkEntryTableBody tr');
+    if (!rows || rows.length === 0) {
+      this.showToast('❌ टेबलमध्ये कोणताही डेटा उपलब्ध नाही.', 'warning');
+      return;
+    }
+
+    const sLevel = (this.data && this.data.settings && this.data.settings.schoolLevel) || 'both';
+    const isDual = (sLevel === 'both');
+    const isUpperOnly = (sLevel === 'upper');
+
+    if (!this.data.records) this.data.records = {};
+    if (!this.data.recordsUpper) this.data.recordsUpper = {};
+    if (!this.data.tasteRecords) this.data.tasteRecords = {};
+    if (!this.data.tasteRecordsUpper) this.data.tasteRecordsUpper = {};
+
+    let savedDays = 0;
+    let savedWorking = 0;
+    let savedHolidays = 0;
+    const nowIso = new Date().toISOString();
+    const hmName = (this.data.settings && this.data.settings.headmaster) || 'मुख्याध्यापक';
+
+    rows.forEach(tr => {
+      const d = tr.dataset.day;
+      const dateStr = tr.dataset.date;
+      const isSunday = (tr.dataset.sunday === '1');
+
+      const holCb = document.getElementById(`bulkHol_${d}`);
+      const cookCb = document.getElementById(`bulkCooked_${d}`);
+      const menuSel = document.getElementById(`bulkMenu_${d}`);
+      const attP = document.getElementById(`bulkAttP_${d}`);
+      const attU = document.getElementById(`bulkAttU_${d}`);
+      const remInp = document.getElementById(`bulkRem_${d}`);
+
+      const isHoliday = holCb ? holCb.checked : false;
+      const isCooked = cookCb ? cookCb.checked : false;
+      const pCount = (!isHoliday && attP) ? Math.max(0, parseInt(attP.value, 10) || 0) : 0;
+      const uCount = (!isHoliday && attU) ? Math.max(0, parseInt(attU.value, 10) || 0) : 0;
+      const menuVal = (menuSel && menuSel.value !== '-- मेनू निवडा --') ? menuSel.value : this.getDefaultMenuForDay(dateStr);
+      const remarkVal = remInp ? remInp.value.trim() : '';
+
+      if (isHoliday || (!isCooked && pCount === 0 && uCount === 0)) {
+        // Save Holiday record
+        savedHolidays++;
+        const holMenu = isHoliday ? 'सुट्टी' : menuVal;
+        const holRemark = remarkVal || (isSunday ? 'रविवार' : 'सुट्टी');
+
+        const holRecP = this.calculateDay(dateStr, 0, holMenu, 0, null, 'primary');
+        holRecP.isHoliday = true;
+        holRecP.remarks = holRemark;
+        holRecP.savedAt = nowIso;
+        holRecP.updatedAt = nowIso;
+        this.data.records[dateStr] = holRecP;
+
+        if (isDual || isUpperOnly) {
+          const holRecU = this.calculateDay(dateStr, 0, holMenu, 0, null, 'upper');
+          holRecU.isHoliday = true;
+          holRecU.remarks = holRemark;
+          holRecU.savedAt = nowIso;
+          holRecU.updatedAt = nowIso;
+          this.data.recordsUpper[dateStr] = holRecU;
+        }
+
+        // Remove automatic taste record on holidays if any
+        if (this.data.tasteRecords[dateStr] && this.data.tasteRecords[dateStr].isAuto) {
+          delete this.data.tasteRecords[dateStr];
+        }
+        if (this.data.tasteRecordsUpper[dateStr] && this.data.tasteRecordsUpper[dateStr].isAuto) {
+          delete this.data.tasteRecordsUpper[dateStr];
+        }
+      } else {
+        // Save Working Day record
+        savedWorking++;
+        const recP = this.calculateDay(dateStr, pCount, menuVal, pCount, null, 'primary');
+        recP.remarks = remarkVal;
+        recP.savedAt = nowIso;
+        recP.updatedAt = nowIso;
+        this.data.records[dateStr] = recP;
+
+        if (isDual || isUpperOnly) {
+          const recU = this.calculateDay(dateStr, uCount, menuVal, uCount, null, 'upper');
+          recU.remarks = remarkVal;
+          recU.savedAt = nowIso;
+          recU.updatedAt = nowIso;
+          this.data.recordsUpper[dateStr] = recU;
+        }
+
+        // Automatic Taste record under Headmaster's name (01:00 PM on Mon-Fri, 09:30 AM on Sat)
+        if (!this.data.tasteRecords[dateStr] || this.data.tasteRecords[dateStr].isAuto) {
+          const tasteTime = this.getDefaultTasteTime(dateStr);
+          const tasteObj = {
+            date: dateStr,
+            time: tasteTime,
+            menuName: recP.menuName || menuVal,
+            testerRole: 'मुख्याध्यापक',
+            testerName: hmName,
+            quality: 'उत्कृष्ट',
+            tasteRemark: 'उत्तम: आहार ताजा, चविष्ट आणि अत्यंत चांगल्या प्रकारे शिजलेला आहे.',
+            isAuto: true
+          };
+          this.data.tasteRecords[dateStr] = tasteObj;
+          if (isDual) {
+            this.data.tasteRecordsUpper[dateStr] = Object.assign({}, tasteObj);
+          }
+        }
+      }
+      savedDays++;
+    });
+
+    // Remove tombstones if active records are restored
+    if (this.data.deletedRecordDates) {
+      this.data.deletedRecordDates = this.data.deletedRecordDates.filter(d => !this.data.records[d]);
+    }
+    if (this.data.deletedRecordDatesUpper) {
+      this.data.deletedRecordDatesUpper = this.data.deletedRecordDatesUpper.filter(d => !this.data.recordsUpper[d]);
+    }
+
+    // Save state
+    this.saveState();
+
+    // Trigger cloud push
+    if (typeof cloudSync !== 'undefined' && typeof cloudSync.scheduleDebouncedPush === 'function') {
+      cloudSync.scheduleDebouncedPush(true);
+    }
+
+    // Refresh all views
+    this.refreshAllViews();
+
+    const mLabel = document.getElementById('bulkSelectedMonthLabel')?.textContent || '';
+    this.showToast(`🎉 ${mLabel} मधील सर्व ${savedDays} दिवसांच्या नोंदी (कामाचे दिवस: ${savedWorking}, सुट्ट्या: ${savedHolidays}) यशस्वीरीत्या जतन झाल्या!`, 'success');
   },
 
   // =========================================================================

@@ -963,6 +963,72 @@ const testSuite = {
           }
         }
       }
+    },
+    {
+      id: 28,
+      name: "Test 28: मासिक जलद नोंद (Monthly Bulk Entry) व दैनिक चव नोंद एकत्रीकरण पडताळणी",
+      description: "एकाच स्क्रीनवर संपूर्ण महिन्याची १००% हजेरी, रविवार व सुट्ट्या सेट करणे, वारानुसार मेनू लावणे, आणि दैनिक चव वेळेचे नियम (सोम-शुक्र 1:00 PM, शनि 9:30 AM) व पाहणी मोड सुरक्षा पडताळणी.",
+      run() {
+        const testUdise = "27240304501";
+        const origMode = localStorage.getItem(app.ACCESS_MODE_STORAGE_PREFIX + testUdise);
+        const origActiveUdise = localStorage.getItem(app.ACTIVE_UDISE_STORAGE_KEY);
+        const origSettingsUdise = (app.data && app.data.settings) ? app.data.settings.udise : null;
+
+        try {
+          localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, testUdise);
+          if (app.data && app.data.settings) app.data.settings.udise = testUdise;
+
+          // 1. Taste Inspection Smart Time Verification (सोम-शुक्र 01:00 PM / शनिवार 09:30 AM)
+          const timeMon = app.getDefaultTasteTime("2026-11-02"); // Monday
+          const timeSat = app.getDefaultTasteTime("2026-11-07"); // Saturday
+          const passTasteTime = (timeMon === '01:00 PM') && (timeSat === '09:30 AM');
+
+          // 2. Sunday & Holiday Detection for November 2026
+          const d1Obj = new Date("2026-11-01T12:00:00");
+          const isNov1Sunday = (d1Obj.getDay() === 0); // 1 Nov 2026 is Sunday
+
+          // 3. Day calculation with 100% full pat
+          const testPat = app.getActivePat('primary') || 9;
+          const calcMon = app.calculateDay("2026-11-02", testPat, "मूगडाळ खिचडी", testPat, null, 'primary');
+          const passCalc = calcMon && (calcMon.children === testPat) && (calcMon.quantities.rice > 0) && (calcMon.fuelCost > 0);
+
+          // 4. View-Only Security Guard on Bulk Save
+          app.setSchoolAccessMode(testUdise, 'view_only');
+          let modalOpened = false;
+          const origModalFn = app.showContactAdminModal;
+          app.showContactAdminModal = () => { modalOpened = true; };
+
+          app.saveBulkMonthRecords();
+          const passBulkViewOnlyGuard = (modalOpened === true);
+          app.showContactAdminModal = origModalFn;
+          app.setSchoolAccessMode(testUdise, 'full');
+
+          // 5. Weekly default menu resolution
+          const defMonMenu = app.getDefaultMenuForDay("2026-11-02");
+          const passMenu = (typeof defMonMenu === 'string' && defMonMenu.length > 0 && defMonMenu !== 'सुट्टी');
+
+          const passed = passTasteTime && isNov1Sunday && passCalc && passBulkViewOnlyGuard && passMenu;
+
+          return {
+            passed,
+            details: `चव वेळ (सोम-शुक्र 1:00 PM, शनि 9:30 AM): ${passTasteTime ? 'अचूक' : 'त्रुटी'}, रविवार ओळख: ${isNov1Sunday ? 'यशस्वी' : 'त्रुटी'}, १००% पट हिशोब (तांदूळ व खर्च): ${passCalc ? 'अचूक' : 'त्रुटी'}, पाहणी मोड (View Only) सुरक्षा ब्लॉक: ${passBulkViewOnlyGuard ? 'सक्रिय' : 'त्रुटी'}, वारानुसार मेनू सायकल: ${passMenu ? 'सुरू' : 'त्रुटी'}`
+          };
+        } finally {
+          if (origMode) {
+            localStorage.setItem(app.ACCESS_MODE_STORAGE_PREFIX + testUdise, origMode);
+          } else {
+            localStorage.removeItem(app.ACCESS_MODE_STORAGE_PREFIX + testUdise);
+          }
+          if (origActiveUdise) {
+            localStorage.setItem(app.ACTIVE_UDISE_STORAGE_KEY, origActiveUdise);
+          } else {
+            localStorage.removeItem(app.ACTIVE_UDISE_STORAGE_KEY);
+          }
+          if (app.data && app.data.settings && origSettingsUdise) {
+            app.data.settings.udise = origSettingsUdise;
+          }
+        }
+      }
     }
   ],
 
