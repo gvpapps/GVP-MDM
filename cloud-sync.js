@@ -208,16 +208,16 @@ const cloudSync = {
       this.updateUIStatus();
     });
 
-    // Mobile backgrounding & screen lock protection
+    // Mobile backgrounding & screen lock protection: instant sync on return
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
           this.flushPendingPush();
         } else if (document.visibilityState === 'visible') {
-          // User returned to tab / unlocked phone: pull fresh changes from other devices
+          // User returned to tab / unlocked phone: pull fresh changes from other devices immediately
           const activeU = this.getSchoolUdise();
           if (this.config.enabled && this.getEffectiveFirebaseUrl() && activeU && activeU.length === 11) {
-            this.pullFromCloud(true, activeU);
+            this.checkAndSyncIfChanged(activeU);
           }
         }
       });
@@ -231,20 +231,98 @@ const cloudSync = {
     window.addEventListener('focus', () => {
       const activeU = this.getSchoolUdise();
       if (this.config.enabled && this.getEffectiveFirebaseUrl() && activeU && activeU.length === 11) {
-        this.pullFromCloud(true, activeU);
+        this.checkAndSyncIfChanged(activeU);
       }
     });
 
-    // Multi-device periodic sync: every 60s, automatically pull fresh changes from other devices if tab is visible
+    // Google Docs Real-Time Fast Watcher: every 6s check remote changes if tab is visible
     if (this.backgroundSyncInterval) clearInterval(this.backgroundSyncInterval);
     this.backgroundSyncInterval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      if (this.isSyncing) return;
-      const activeU = this.getSchoolUdise();
-      if (this.config.enabled && this.getEffectiveFirebaseUrl() && activeU && activeU.length === 11) {
-        this.pullFromCloud(true, activeU);
+      this.checkAndSyncIfChanged();
+    }, 6000);
+  },
+
+  /**
+   * Google Docs Real-time Sync: Live Server-Sent Events listener for Firebase RTDB
+   */
+  setupRealtimeListener(targetUdise = null) {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    const activeU = targetUdise || this.getSchoolUdise();
+    if (!cleanBaseUrl || !activeU || activeU.length !== 11) return;
+
+    const cloudKey = this.getCloudKey(activeU);
+    if (this.currentSseKey === cloudKey && this.sseSource && this.sseSource.readyState !== 2) {
+      return; // Already actively listening for this school
+    }
+
+    if (this.sseSource) {
+      try { this.sseSource.close(); } catch(e) {}
+      this.sseSource = null;
+    }
+
+    try {
+      const sseUrl = `${cleanBaseUrl}/mdm_schools/${cloudKey}/updatedAt.json`;
+      const es = new EventSource(sseUrl);
+      this.sseSource = es;
+      this.currentSseKey = cloudKey;
+
+      es.addEventListener('put', (event) => {
+        try {
+          if (!event || !event.data) return;
+          const parsed = JSON.parse(event.data);
+          const newTime = (parsed && typeof parsed === 'object') ? parsed.data : parsed;
+          if (newTime && typeof newTime === 'string') {
+            const localTimeMs = this.config.lastSyncTime ? new Date(this.config.lastSyncTime).getTime() : 0;
+            const remoteTimeMs = new Date(newTime).getTime();
+            if (remoteTimeMs > localTimeMs && !this.isSyncing && !this.isPushing) {
+              this.pullFromCloud(true, activeU);
+            }
+          }
+        } catch(e) {}
+      });
+
+      es.onerror = () => {
+        try { es.close(); } catch(e) {}
+        this.sseSource = null;
+      };
+    } catch(e) {
+      this.sseSource = null;
+    }
+  },
+
+  /**
+   * Check lightweight remote updatedAt timestamp and pull fresh changes if newer
+   */
+  async checkAndSyncIfChanged(targetUdise = null) {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
+    if (this.isSyncing || this.isPushing || this.hasPendingPush) return false;
+    const activeU = targetUdise || this.getSchoolUdise();
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!this.config.enabled || !cleanBaseUrl || !activeU || activeU.length !== 11) return false;
+
+    // Ensure SSE is active
+    if (!this.sseSource) {
+      this.setupRealtimeListener(activeU);
+    }
+
+    try {
+      const cloudKey = this.getCloudKey(activeU);
+      const res = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/updatedAt.json?t=${Date.now()}`, { cache: 'no-store' }, 4000);
+      if (res && res.ok) {
+        const remoteTime = await res.json();
+        if (remoteTime && typeof remoteTime === 'string') {
+          const localTimeMs = this.config.lastSyncTime ? new Date(this.config.lastSyncTime).getTime() : 0;
+          const remoteTimeMs = new Date(remoteTime).getTime();
+          if (remoteTimeMs > localTimeMs && !this.isSyncing && !this.isPushing) {
+            await this.pullFromCloud(true, activeU);
+            return true;
+          }
+        }
       }
-    }, 60000);
+    } catch(e) {}
+    return false;
   },
 
   /**
@@ -278,6 +356,11 @@ const cloudSync = {
       this.config.lastError = '';
       this.saveConfig();
       this.updateUIStatus();
+      if (this.sseSource) {
+        try { this.sseSource.close(); } catch(e) {}
+        this.sseSource = null;
+      }
+      this.setupRealtimeListener(newUdise);
     }
   },
 
@@ -927,24 +1010,34 @@ const cloudSync = {
       if (existingRemote && existingRemote.appData) {
         const remoteData = existingRemote.appData;
 
-        // Active dates being saved/retained locally (Smart Revival: never tombstone active records!)
-        const activePushDatesP = new Set(Object.keys(dataToPush.records || {}));
-        const activePushDatesU = new Set(Object.keys(dataToPush.recordsUpper || {}));
-
-        // Union of deleted record date tombstones (strictly excludes any newly active/saved records)
+        // Authoritative Multi-Device Tombstones across devices
         const mergedDeletedRecordDates = Array.from(new Set([
           ...(dataToPush.deletedRecordDates || []),
           ...(remoteData.deletedRecordDates || [])
-        ])).filter(d => !activePushDatesP.has(d));
+        ]));
         const mergedDeletedRecordDatesUpper = Array.from(new Set([
           ...(dataToPush.deletedRecordDatesUpper || []),
           ...(remoteData.deletedRecordDatesUpper || [])
-        ])).filter(d => !activePushDatesU.has(d));
+        ]));
 
         const mergedRecords = this.mergeDayRecordsMap(dataToPush.records, remoteData.records, true, mergedDeletedRecordDates);
         const mergedRecordsUpper = this.mergeDayRecordsMap(dataToPush.recordsUpper, remoteData.recordsUpper, true, mergedDeletedRecordDatesUpper);
         const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, dataToPush.tasteRecords || {});
         const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, dataToPush.tasteRecordsUpper || {});
+
+        // Hard Purge of deleted dates
+        mergedDeletedRecordDates.forEach(d => {
+          delete mergedRecords[d];
+          delete mergedTaste[d];
+          if (dataToPush.records) delete dataToPush.records[d];
+          if (dataToPush.tasteRecords) delete dataToPush.tasteRecords[d];
+        });
+        mergedDeletedRecordDatesUpper.forEach(d => {
+          delete mergedRecordsUpper[d];
+          delete mergedTasteUpper[d];
+          if (dataToPush.recordsUpper) delete dataToPush.recordsUpper[d];
+          if (dataToPush.tasteRecordsUpper) delete dataToPush.tasteRecordsUpper[d];
+        });
         const mergedStock = this.mergeStockBalances(dataToPush.initialStock, remoteData.initialStock, true);
         const mergedStockUpper = this.mergeStockBalances(dataToPush.initialStockUpper, remoteData.initialStockUpper, true);
         const mergedSettings = this.mergeSettings(dataToPush.settings, remoteData.settings, currentUdise, false);
@@ -1028,6 +1121,7 @@ const cloudSync = {
           app.data.stockReceipts = mergedReceipts;
           app.data.stockReceiptsUpper = mergedReceiptsUpper;
           app.data.deletedStockReceiptIds = mergedDeletedReceipts;
+          app.data.deletedStockReceiptSigs = mergedDeletedReceiptSigs;
           app.data.damagedStock = mergedDamaged;
           app.data.damagedStockUpper = mergedDamagedUpper;
           app.data.deletedDamagedIds = mergedDeletedDamaged;
@@ -1207,25 +1301,36 @@ const cloudSync = {
               }
             }
 
-            // Active dates present strictly locally (Strict Anti-Resurrection: never let stale remote dates wipe tombstones!)
-            const activeLocalDatesP = new Set(Object.keys(baseData.records || {}));
-            const activeLocalDatesU = new Set(Object.keys(baseData.recordsUpper || {}));
-
-            // Union of deleted record date tombstones (strictly excludes any actively present LOCAL records)
+            // Authoritative Multi-Device Tombstone Union:
+            // Remote deletions MUST override any stale local records across devices (Google Docs sync)
             const mergedDeletedRecordDates = Array.from(new Set([
               ...(baseData.deletedRecordDates || []),
               ...(remoteData.deletedRecordDates || [])
-            ])).filter(d => !activeLocalDatesP.has(d));
+            ]));
             const mergedDeletedRecordDatesUpper = Array.from(new Set([
               ...(baseData.deletedRecordDatesUpper || []),
               ...(remoteData.deletedRecordDatesUpper || [])
-            ])).filter(d => !activeLocalDatesU.has(d));
+            ]));
 
-            // Smart Conflict-Free Merge: Local + Remote (Protects local populated data from being wiped)
+            // Smart Conflict-Free Merge: Local + Remote (Excluding all deleted tombstones)
             const mergedRecords = this.mergeDayRecordsMap(baseData.records, remoteRecords, false, mergedDeletedRecordDates);
             const mergedRecordsUpper = this.mergeDayRecordsMap(baseData.recordsUpper, remoteData.recordsUpper || {}, false, mergedDeletedRecordDatesUpper);
             const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, baseData.tasteRecords || {});
             const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, baseData.tasteRecordsUpper || {});
+
+            // Hard Purge of deleted dates from records & taste records
+            mergedDeletedRecordDates.forEach(d => {
+              delete mergedRecords[d];
+              delete mergedTaste[d];
+              if (baseData.records) delete baseData.records[d];
+              if (baseData.tasteRecords) delete baseData.tasteRecords[d];
+            });
+            mergedDeletedRecordDatesUpper.forEach(d => {
+              delete mergedRecordsUpper[d];
+              delete mergedTasteUpper[d];
+              if (baseData.recordsUpper) delete baseData.recordsUpper[d];
+              if (baseData.tasteRecordsUpper) delete baseData.tasteRecordsUpper[d];
+            });
             const mergedStock = this.mergeStockBalances(baseData.initialStock, remoteData.initialStock, false);
             const mergedStockUpper = this.mergeStockBalances(baseData.initialStockUpper, remoteData.initialStockUpper, false);
             const mergedSettings = this.mergeSettings(baseData.settings, remoteData.settings, currentUdise, true);
@@ -1715,6 +1820,15 @@ const cloudSync = {
           body: JSON.stringify(existingTombs)
         }, 5000);
       }
+
+      // Touch updatedAt on Firebase to alert all other devices in real-time
+      const nowIso = new Date().toISOString();
+      await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/updatedAt.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nowIso)
+      }, 5000).catch(() => {});
+
       return true;
     } catch(e) {
       console.warn("Could not delete record on cloud:", e);
@@ -1769,6 +1883,14 @@ const cloudSync = {
               body: JSON.stringify(delSigs)
             }, 6000)
           ]);
+
+          // Touch updatedAt on Firebase to alert all other devices in real-time
+          const nowIso = new Date().toISOString();
+          await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/updatedAt.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(nowIso)
+          }, 5000).catch(() => {});
         }
       }
       return true;

@@ -6677,7 +6677,7 @@ const app = {
   /**
    * Delete current day's record for active section
    */
-  deleteCurrentDayRecord() {
+  async deleteCurrentDayRecord() {
     if (this.isViewOnlyMode()) {
       this.showContactAdminModal();
       return;
@@ -6727,7 +6727,11 @@ const app = {
     // Direct Instant Cloud Purge
     const curUdise = this.getActiveUdise();
     if (typeof cloudSync !== 'undefined' && typeof cloudSync.deleteDayRecordFromCloud === 'function') {
-      cloudSync.deleteDayRecordFromCloud(curUdise, dateStr, isUpper ? 'upper' : 'primary').catch(() => {});
+      try {
+        await cloudSync.deleteDayRecordFromCloud(curUdise, dateStr, isUpper ? 'upper' : 'primary');
+      } catch (err) {
+        console.warn('Cloud delete notice:', err);
+      }
       if (typeof cloudSync.pushToCloud === 'function') {
         cloudSync.pushToCloud(true, curUdise);
       }
@@ -7370,7 +7374,7 @@ const app = {
         console.warn('Cloud delete notice:', err);
       }
       if (cloudSync.pushToCloud) {
-        cloudSync.pushToCloud(false, curUdise);
+        cloudSync.pushToCloud(true, curUdise);
       }
     }
 
@@ -12006,7 +12010,7 @@ const app = {
     this.renderStockView();
   },
 
-  deleteStockReceipt(receiptIdOrIdx, section = this.stockViewFilter || this.activeSection) {
+  async deleteStockReceipt(receiptIdOrIdx, section = this.stockViewFilter || this.activeSection) {
     if (this.isViewOnlyMode()) {
       this.showContactAdminModal();
       return;
@@ -12056,7 +12060,11 @@ const app = {
 
             const activeU = this.getActiveUdise();
             if (typeof cloudSync !== 'undefined' && typeof cloudSync.deleteStockReceiptFromCloud === 'function') {
-              cloudSync.deleteStockReceiptFromCloud(activeU, delId, delSig, altSec).catch(() => {});
+              try {
+                await cloudSync.deleteStockReceiptFromCloud(activeU, delId, delSig, altSec);
+              } catch (err) {
+                console.warn('Cloud delete notice:', err);
+              }
             }
             if (typeof cloudSync !== 'undefined' && typeof cloudSync.pushToCloud === 'function') {
               cloudSync.pushToCloud(true);
@@ -12091,7 +12099,11 @@ const app = {
 
         const activeU = this.getActiveUdise();
         if (typeof cloudSync !== 'undefined' && typeof cloudSync.deleteStockReceiptFromCloud === 'function') {
-          cloudSync.deleteStockReceiptFromCloud(activeU, delId, delSig, section).catch(() => {});
+          try {
+            await cloudSync.deleteStockReceiptFromCloud(activeU, delId, delSig, section);
+          } catch (err) {
+            console.warn('Cloud delete notice:', err);
+          }
         }
         if (typeof cloudSync !== 'undefined' && typeof cloudSync.pushToCloud === 'function') {
           cloudSync.pushToCloud(true);
