@@ -3660,10 +3660,53 @@ const app = {
           formBRemarks: parsed.formBRemarks || {},
           formBActivityDates: parsed.formBActivityDates || {},
           monthlyRates: parsed.monthlyRates || {},
+          menusUpdatedAt: parsed.menusUpdatedAt || null,
+          deletedRecordTimestamps: parsed.deletedRecordTimestamps || {},
+          deletedRecordTimestampsUpper: parsed.deletedRecordTimestampsUpper || {},
+          deletedStockReceiptTimestamps: parsed.deletedStockReceiptTimestamps || {},
           initialSampleLoaded: (parsed.initialSampleLoaded === true)
         };
       } else {
         this.data = defaultData;
+      }
+
+      // Time-Aware Tombstone Reconciliation (Rule 1, 2, 3):
+      // If a record exists and is newer than the tombstone, discard the obsolete tombstone!
+      if (Array.isArray(this.data.deletedRecordDates) && this.data.records) {
+        this.data.deletedRecordDates = this.data.deletedRecordDates.filter(d => {
+          const rec = this.data.records[d];
+          if (!rec) return true;
+          const tombIso = (this.data.deletedRecordTimestamps && this.data.deletedRecordTimestamps[d]) || null;
+          const tombTime = tombIso ? Date.parse(tombIso) : 0;
+          let recTime = 0;
+          if (rec.updatedAt) {
+            const t = Date.parse(rec.updatedAt);
+            if (!isNaN(t)) recTime = t;
+          }
+          if (recTime > tombTime) {
+            if (this.data.deletedRecordTimestamps) delete this.data.deletedRecordTimestamps[d];
+            return false; // Obsolete tombstone cleared!
+          }
+          return true;
+        });
+      }
+      if (Array.isArray(this.data.deletedRecordDatesUpper) && this.data.recordsUpper) {
+        this.data.deletedRecordDatesUpper = this.data.deletedRecordDatesUpper.filter(d => {
+          const rec = this.data.recordsUpper[d];
+          if (!rec) return true;
+          const tombIso = (this.data.deletedRecordTimestampsUpper && this.data.deletedRecordTimestampsUpper[d]) || null;
+          const tombTime = tombIso ? Date.parse(tombIso) : 0;
+          let recTime = 0;
+          if (rec.updatedAt) {
+            const t = Date.parse(rec.updatedAt);
+            if (!isNaN(t)) recTime = t;
+          }
+          if (recTime > tombTime) {
+            if (this.data.deletedRecordTimestampsUpper) delete this.data.deletedRecordTimestampsUpper[d];
+            return false;
+          }
+          return true;
+        });
       }
 
       this.ensureFormBIngredients();
@@ -4063,6 +4106,10 @@ const app = {
         recordsUpper: this.data.recordsUpper || {},
         deletedRecordDates: this.data.deletedRecordDates || [],
         deletedRecordDatesUpper: this.data.deletedRecordDatesUpper || [],
+        deletedRecordTimestamps: this.data.deletedRecordTimestamps || {},
+        deletedRecordTimestampsUpper: this.data.deletedRecordTimestampsUpper || {},
+        deletedStockReceiptTimestamps: this.data.deletedStockReceiptTimestamps || {},
+        menusUpdatedAt: this.data.menusUpdatedAt || null,
         tasteRecords: this.data.tasteRecords,
         tasteRecordsUpper: this.data.tasteRecordsUpper || {},
         customDemands: this.data.customDemands,
@@ -5987,11 +6034,23 @@ const app = {
       if (this.data.deletedRecordDatesUpper) {
         this.data.deletedRecordDatesUpper = this.data.deletedRecordDatesUpper.filter(d => d !== dateStr);
       }
+      if (this.data.deletedRecordTimestampsUpper) {
+        delete this.data.deletedRecordTimestampsUpper[dateStr];
+      }
+      if (typeof cloudSync !== 'undefined' && typeof cloudSync.markQueueDirty === 'function') {
+        cloudSync.markQueueDirty('recordsUpper', dateStr);
+      }
     } else {
       if (!this.data.records) this.data.records = {};
       this.data.records[dateStr] = record;
       if (this.data.deletedRecordDates) {
         this.data.deletedRecordDates = this.data.deletedRecordDates.filter(d => d !== dateStr);
+      }
+      if (this.data.deletedRecordTimestamps) {
+        delete this.data.deletedRecordTimestamps[dateStr];
+      }
+      if (typeof cloudSync !== 'undefined' && typeof cloudSync.markQueueDirty === 'function') {
+        cloudSync.markQueueDirty('records', dateStr);
       }
     }
 
@@ -6702,17 +6761,28 @@ const app = {
     const confirmMsg = `तुम्हाला खरोखरच दि. ${formattedDate} ची (${this.getActiveSectionName()}) नोंद पूर्णपणे हटवायची आहे का?\n\nही नोंद हटवल्यास मासिक नोंदवही व ताळेबंदातून ती कायमची वगळली जाईल.`;
     if (!confirm(confirmMsg)) return;
 
+    const nowIso = new Date().toISOString();
     if (isUpper) {
       if (this.data.recordsUpper) delete this.data.recordsUpper[dateStr];
       if (!this.data.deletedRecordDatesUpper) this.data.deletedRecordDatesUpper = [];
       if (!this.data.deletedRecordDatesUpper.includes(dateStr)) {
         this.data.deletedRecordDatesUpper.push(dateStr);
       }
+      if (!this.data.deletedRecordTimestampsUpper) this.data.deletedRecordTimestampsUpper = {};
+      this.data.deletedRecordTimestampsUpper[dateStr] = nowIso;
+      if (typeof cloudSync !== 'undefined' && typeof cloudSync.markQueueDirty === 'function') {
+        cloudSync.markQueueDirty('recordsUpper', dateStr);
+      }
     } else {
       if (this.data.records) delete this.data.records[dateStr];
       if (!this.data.deletedRecordDates) this.data.deletedRecordDates = [];
       if (!this.data.deletedRecordDates.includes(dateStr)) {
         this.data.deletedRecordDates.push(dateStr);
+      }
+      if (!this.data.deletedRecordTimestamps) this.data.deletedRecordTimestamps = {};
+      this.data.deletedRecordTimestamps[dateStr] = nowIso;
+      if (typeof cloudSync !== 'undefined' && typeof cloudSync.markQueueDirty === 'function') {
+        cloudSync.markQueueDirty('records', dateStr);
       }
     }
 
@@ -7345,6 +7415,7 @@ const app = {
     const curUdise = this.getActiveUdise();
 
     // 1. Delete locally from memory & record tombstone
+    const nowIso = new Date().toISOString();
     if (sec === 'upper') {
       if (this.data.recordsUpper && this.data.recordsUpper[dateStr]) {
         delete this.data.recordsUpper[dateStr];
@@ -7353,6 +7424,11 @@ const app = {
       if (!this.data.deletedRecordDatesUpper.includes(dateStr)) {
         this.data.deletedRecordDatesUpper.push(dateStr);
       }
+      if (!this.data.deletedRecordTimestampsUpper) this.data.deletedRecordTimestampsUpper = {};
+      this.data.deletedRecordTimestampsUpper[dateStr] = nowIso;
+      if (typeof cloudSync !== 'undefined' && typeof cloudSync.markQueueDirty === 'function') {
+        cloudSync.markQueueDirty('recordsUpper', dateStr);
+      }
     } else {
       if (this.data.records && this.data.records[dateStr]) {
         delete this.data.records[dateStr];
@@ -7360,6 +7436,11 @@ const app = {
       if (!this.data.deletedRecordDates) this.data.deletedRecordDates = [];
       if (!this.data.deletedRecordDates.includes(dateStr)) {
         this.data.deletedRecordDates.push(dateStr);
+      }
+      if (!this.data.deletedRecordTimestamps) this.data.deletedRecordTimestamps = {};
+      this.data.deletedRecordTimestamps[dateStr] = nowIso;
+      if (typeof cloudSync !== 'undefined' && typeof cloudSync.markQueueDirty === 'function') {
+        cloudSync.markQueueDirty('records', dateStr);
       }
     }
 
@@ -7799,7 +7880,8 @@ const app = {
         this.data.menus.push(Object.assign({}, sMenu));
         hasChanged = true;
       } else {
-        if (existing.name !== sMenu.name) {
+        // Anti-revert: Never overwrite custom user menu names!
+        if (!existing.name) {
           existing.name = sMenu.name;
           hasChanged = true;
         }
@@ -12049,16 +12131,22 @@ const app = {
             if (!this.data.deletedStockReceiptIds.includes(delId)) {
               this.data.deletedStockReceiptIds.push(delId);
             }
+            if (!this.data.deletedStockReceiptTimestamps) this.data.deletedStockReceiptTimestamps = {};
+            this.data.deletedStockReceiptTimestamps[delId] = new Date().toISOString();
             if (delSig) {
               if (!this.data.deletedStockReceiptSigs) this.data.deletedStockReceiptSigs = [];
               if (!this.data.deletedStockReceiptSigs.includes(delSig)) {
                 this.data.deletedStockReceiptSigs.push(delSig);
               }
+              this.data.deletedStockReceiptTimestamps[delSig] = new Date().toISOString();
             }
             altReceipts.splice(aIdx, 1);
             this.saveState(false, true);
 
             const activeU = this.getActiveUdise();
+            if (typeof cloudSync !== 'undefined' && typeof cloudSync.markQueueDirty === 'function') {
+              cloudSync.markQueueDirty('stockReceipts');
+            }
             if (typeof cloudSync !== 'undefined' && typeof cloudSync.deleteStockReceiptFromCloud === 'function') {
               try {
                 await cloudSync.deleteStockReceiptFromCloud(activeU, delId, delSig, altSec);
@@ -12088,16 +12176,22 @@ const app = {
         if (!this.data.deletedStockReceiptIds.includes(delId)) {
           this.data.deletedStockReceiptIds.push(delId);
         }
+        if (!this.data.deletedStockReceiptTimestamps) this.data.deletedStockReceiptTimestamps = {};
+        this.data.deletedStockReceiptTimestamps[delId] = new Date().toISOString();
         if (delSig) {
           if (!this.data.deletedStockReceiptSigs) this.data.deletedStockReceiptSigs = [];
           if (!this.data.deletedStockReceiptSigs.includes(delSig)) {
             this.data.deletedStockReceiptSigs.push(delSig);
           }
+          this.data.deletedStockReceiptTimestamps[delSig] = new Date().toISOString();
         }
         targetReceipts.splice(index, 1);
         this.saveState(false, true);
 
         const activeU = this.getActiveUdise();
+        if (typeof cloudSync !== 'undefined' && typeof cloudSync.markQueueDirty === 'function') {
+          cloudSync.markQueueDirty('stockReceipts');
+        }
         if (typeof cloudSync !== 'undefined' && typeof cloudSync.deleteStockReceiptFromCloud === 'function') {
           try {
             await cloudSync.deleteStockReceiptFromCloud(activeU, delId, delSig, section);
@@ -14053,22 +14147,40 @@ const app = {
       }
     });
 
+    const nowIso = new Date().toISOString();
     // Also sync existing records that used the old name for this menu!
     this.data.menus.forEach((m, idx) => {
       const old = oldMenus[idx];
-      if (old && old.name && m.name && old.name !== m.name) {
-        if (this.data.records) {
-          Object.keys(this.data.records).forEach(dateStr => {
-            const rec = this.data.records[dateStr];
-            if (rec && rec.menuName === old.name) {
-              rec.menuName = m.name;
-            }
-          });
+      if (old && (old.name !== m.name || old.pulseKey !== m.pulseKey || old.dayCode !== m.dayCode)) {
+        m.updatedAt = nowIso;
+        if (old.name && m.name && old.name !== m.name) {
+          if (this.data.records) {
+            Object.keys(this.data.records).forEach(dateStr => {
+              const rec = this.data.records[dateStr];
+              if (rec && rec.menuName === old.name) {
+                rec.menuName = m.name;
+                rec.updatedAt = nowIso;
+              }
+            });
+          }
+          if (this.data.recordsUpper) {
+            Object.keys(this.data.recordsUpper).forEach(dateStr => {
+              const rec = this.data.recordsUpper[dateStr];
+              if (rec && rec.menuName === old.name) {
+                rec.menuName = m.name;
+                rec.updatedAt = nowIso;
+              }
+            });
+          }
         }
       }
     });
 
-    if (this.data.settings) this.data.settings.updatedAt = new Date().toISOString();
+    this.data.menusUpdatedAt = nowIso;
+    if (this.data.settings) this.data.settings.updatedAt = nowIso;
+    if (typeof cloudSync !== 'undefined' && typeof cloudSync.markQueueDirty === 'function') {
+      cloudSync.markQueueDirty('menus');
+    }
     this.saveState(false, true);
     this.populateMenuDropdown();
     this.renderManualGrainsCheckboxes();

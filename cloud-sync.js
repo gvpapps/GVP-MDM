@@ -404,6 +404,52 @@ const cloudSync = {
     }
   },
 
+  // Universal Sync Queue across all tabs (Rule 4)
+  syncQueue: {
+    records: new Set(),
+    recordsUpper: new Set(),
+    menus: false,
+    ingredients: false,
+    stockReceipts: false,
+    settings: false
+  },
+
+  markQueueDirty(domain, key = null) {
+    if (!this.syncQueue) {
+      this.syncQueue = { records: new Set(), recordsUpper: new Set(), menus: false, ingredients: false, stockReceipts: false, settings: false };
+    }
+    if (key && (domain === 'records' || domain === 'recordsUpper')) {
+      if (!this.syncQueue[domain]) this.syncQueue[domain] = new Set();
+      this.syncQueue[domain].add(key);
+    } else if (this.syncQueue[domain] !== undefined) {
+      this.syncQueue[domain] = true;
+    }
+  },
+
+  isQueueDirty(domain, key = null) {
+    if (!this.syncQueue) return false;
+    if (key && (domain === 'records' || domain === 'recordsUpper')) {
+      return this.syncQueue[domain] && this.syncQueue[domain].has(key);
+    }
+    return !!this.syncQueue[domain];
+  },
+
+  clearQueue(domain = null, key = null) {
+    if (!this.syncQueue) return;
+    if (!domain) {
+      if (this.syncQueue.records) this.syncQueue.records.clear();
+      if (this.syncQueue.recordsUpper) this.syncQueue.recordsUpper.clear();
+      this.syncQueue.menus = false;
+      this.syncQueue.ingredients = false;
+      this.syncQueue.stockReceipts = false;
+      this.syncQueue.settings = false;
+    } else if (key && (domain === 'records' || domain === 'recordsUpper')) {
+      if (this.syncQueue[domain]) this.syncQueue[domain].delete(key);
+    } else if (this.syncQueue[domain] !== undefined) {
+      this.syncQueue[domain] = false;
+    }
+  },
+
   /**
    * Smart Conflict-Free Merge for a single day record
    * Truly preserves user edits (even if setting 0 kids or holiday) based on edit timestamp
@@ -438,9 +484,9 @@ const cloudSync = {
   },
 
   /**
-   * Smart Conflict-Free Merge for daily records dictionary
+   * Universal Timestamp-Aware & Queue-Protected Merge for Daily Records (Rules 1, 2, 3, 4)
    */
-  mergeDayRecordsMap(mapA, mapB, preferA = true, deletedDates = []) {
+  mergeDayRecordsMap(mapA, mapB, preferA = true, deletedDates = [], tombTimestamps = {}, dirtyQueueSet = null) {
     if (Array.isArray(preferA)) {
       deletedDates = preferA;
       preferA = true;
@@ -452,9 +498,35 @@ const cloudSync = {
     const delSet = new Set(Array.isArray(deletedDates) ? deletedDates : []);
 
     allKeys.forEach(k => {
-      if (delSet.has(k)) return; // Strictly exclude deleted dates from merge
       const recA = mapA ? mapA[k] : null;
       const recB = mapB ? mapB[k] : null;
+
+      // Rule 4: Sync Queue Protection (Local unpushed changes can NEVER be overwritten by incoming pull)
+      if (dirtyQueueSet && dirtyQueueSet.has(k) && recA) {
+        result[k] = Object.assign({}, recA);
+        return;
+      }
+
+      // Rule 1 & 2: Time-Aware Tombstone Evaluation
+      if (delSet.has(k)) {
+        const timeA = recA ? new Date(recA.updatedAt || recA.savedAt || 0).getTime() : 0;
+        const timeB = recB ? new Date(recB.updatedAt || recB.savedAt || 0).getTime() : 0;
+        const bestRecTime = Math.max(timeA, timeB);
+        const tombIso = (tombTimestamps && tombTimestamps[k]) ? tombTimestamps[k] : null;
+        const tombTime = tombIso ? new Date(tombIso).getTime() : 0;
+
+        let shouldDelete = true;
+        if (bestRecTime > 0 && tombTime > 0) {
+          // If the record was saved AFTER the deletion event, the record WINS!
+          if (bestRecTime > tombTime) shouldDelete = false;
+        }
+
+        if (shouldDelete) {
+          return; // Truly deleted
+        }
+      }
+
+      // Rule 3: Optimistic Locking / Last-Write-Wins
       const merged = this.mergeDayRecord(recA, recB, preferA);
       if (merged) result[k] = merged;
     });
@@ -832,14 +904,20 @@ const cloudSync = {
   },
 
   /**
-   * Smart Merge for Menus (Daily food items / pulses assignment)
+   * Smart Timestamp-Aware Merge for Menus (Rule 1, 2, 3)
+   * User customizations from Settings tab are 100% PRESERVED and NEVER overwritten by canonical strings!
    */
   mergeMenus(localMenus, remoteMenus, preferRemote = false) {
     const l = Array.isArray(localMenus) ? localMenus : [];
     const r = Array.isArray(remoteMenus) ? remoteMenus : [];
     if (l.length === 0 && r.length === 0) return [];
 
-    const CANONICAL_MENU_NAMES = {
+    // Rule 4: If local menus are actively queued as dirty, local always wins!
+    if (this.isQueueDirty && this.isQueueDirty('menus')) {
+      preferRemote = false;
+    }
+
+    const CANONICAL_MENU_DEFAULTS = {
       veg_pulav: "व्हेजिटेबल पुलाव (वाटाणा)",
       moong_khichdi: "मूगडाळ खिचडी (मूगडाळ)",
       moog_shevga_varan: "मूग शेवग्याचे वरण (तूरडाळ व मूग)",
@@ -858,34 +936,67 @@ const cloudSync = {
       holiday: "सुट्टी"
     };
 
-    const getCanonicalName = (m) => {
-      if (!m) return "";
-      if (m.id && CANONICAL_MENU_NAMES[m.id]) return CANONICAL_MENU_NAMES[m.id];
-      const clean = (m.name || '').replace(/\s*\(.*?\)/, '').trim();
-      for (const k of Object.keys(CANONICAL_MENU_NAMES)) {
-        const canClean = CANONICAL_MENU_NAMES[k].replace(/\s*\(.*?\)/, '').trim();
-        if (clean === canClean) return CANONICAL_MENU_NAMES[k];
+    const normalizeTime = (item) => {
+      if (!item) return 0;
+      if (item.updatedAt) {
+        const t = Date.parse(item.updatedAt);
+        if (!isNaN(t) && t > 0) return t;
       }
-      return m.name || "";
+      return 0;
     };
 
-    const base = preferRemote ? r : l;
-    const secondary = preferRemote ? l : r;
-    const merged = base.map(item => {
-      const copy = Object.assign({}, item);
-      const can = getCanonicalName(copy);
-      if (can) copy.name = can;
-      return copy;
+    // Index menus by ID
+    const localMap = new Map();
+    l.forEach(m => {
+      if (m && m.id) localMap.set(m.id, m);
     });
 
-    secondary.forEach(item => {
-      const exists = merged.some(m => (m.id && item.id && m.id === item.id) || (m.name && item.name && m.name === item.name));
-      if (!exists) {
-        const copy = Object.assign({}, item);
-        const can = getCanonicalName(copy);
-        if (can) copy.name = can;
-        merged.push(copy);
+    const remoteMap = new Map();
+    r.forEach(m => {
+      if (m && m.id) remoteMap.set(m.id, m);
+    });
+
+    // Determine all unique IDs in deterministic order (maintaining local order first)
+    const allIds = [];
+    l.forEach(m => { if (m && m.id && !allIds.includes(m.id)) allIds.push(m.id); });
+    r.forEach(m => { if (m && m.id && !allIds.includes(m.id)) allIds.push(m.id); });
+
+    const merged = [];
+    allIds.forEach(id => {
+      const loc = localMap.get(id);
+      const rem = remoteMap.get(id);
+
+      let winner = null;
+      if (loc && !rem) {
+        winner = Object.assign({}, loc);
+      } else if (!loc && rem) {
+        winner = Object.assign({}, rem);
+      } else {
+        // Both exist: compare timestamps (Rule 1 & 3)
+        const locTime = normalizeTime(loc);
+        const remTime = normalizeTime(rem);
+
+        if (locTime > remTime) {
+          winner = Object.assign({}, rem, loc);
+        } else if (remTime > locTime) {
+          winner = Object.assign({}, loc, rem);
+        } else {
+          // Timestamps tie:
+          // If local has canonical default name and remote has untimestamped legacy name, keep canonical!
+          if (loc && loc.name && CANONICAL_MENU_DEFAULTS[id] && loc.name === CANONICAL_MENU_DEFAULTS[id]) {
+            winner = Object.assign({}, rem, loc);
+          } else {
+            winner = preferRemote ? Object.assign({}, loc, rem) : Object.assign({}, rem, loc);
+          }
+        }
       }
+
+      // Fallback only if name is completely empty
+      if (winner && !winner.name && CANONICAL_MENU_DEFAULTS[id]) {
+        winner.name = CANONICAL_MENU_DEFAULTS[id];
+      }
+
+      if (winner) merged.push(winner);
     });
 
     return merged;
@@ -1019,24 +1130,66 @@ const cloudSync = {
           ...(dataToPush.deletedRecordDatesUpper || []),
           ...(remoteData.deletedRecordDatesUpper || [])
         ]));
+        const mergedDeletedRecordTimestamps = Object.assign({}, remoteData.deletedRecordTimestamps || {}, dataToPush.deletedRecordTimestamps || {});
+        const mergedDeletedRecordTimestampsUpper = Object.assign({}, remoteData.deletedRecordTimestampsUpper || {}, dataToPush.deletedRecordTimestampsUpper || {});
 
-        const mergedRecords = this.mergeDayRecordsMap(dataToPush.records, remoteData.records, true, mergedDeletedRecordDates);
-        const mergedRecordsUpper = this.mergeDayRecordsMap(dataToPush.recordsUpper, remoteData.recordsUpper, true, mergedDeletedRecordDatesUpper);
+        const queueSet = (this.syncQueue && this.syncQueue.records) ? this.syncQueue.records : null;
+        const queueSetUpper = (this.syncQueue && this.syncQueue.recordsUpper) ? this.syncQueue.recordsUpper : null;
+
+        const mergedRecords = this.mergeDayRecordsMap(dataToPush.records, remoteData.records, true, mergedDeletedRecordDates, mergedDeletedRecordTimestamps, queueSet);
+        const mergedRecordsUpper = this.mergeDayRecordsMap(dataToPush.recordsUpper, remoteData.recordsUpper, true, mergedDeletedRecordDatesUpper, mergedDeletedRecordTimestampsUpper, queueSetUpper);
         const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, dataToPush.tasteRecords || {});
         const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, dataToPush.tasteRecordsUpper || {});
 
-        // Hard Purge of deleted dates
+        // Time-Aware Purge of deleted dates (Rule 1, 2, 3):
+        // Only delete if the tombstone is strictly NEWER or equal to the record's updatedAt!
+        // If the record was edited/created AFTER the tombstone, the record WINS and the obsolete tombstone is dropped!
+        const activeDeletedDates = [];
         mergedDeletedRecordDates.forEach(d => {
-          delete mergedRecords[d];
-          delete mergedTaste[d];
-          if (dataToPush.records) delete dataToPush.records[d];
-          if (dataToPush.tasteRecords) delete dataToPush.tasteRecords[d];
+          if (queueSet && queueSet.has(d)) return;
+          const rec = mergedRecords[d] || (dataToPush.records && dataToPush.records[d]);
+          const tombIso = mergedDeletedRecordTimestamps[d];
+          const tombTime = tombIso ? Date.parse(tombIso) : 0;
+          let recTime = 0;
+          if (rec && rec.updatedAt) {
+            const t = Date.parse(rec.updatedAt);
+            if (!isNaN(t)) recTime = t;
+          }
+
+          if (rec && recTime > tombTime) {
+            // Record is newer than the tombstone! Keep record, drop obsolete tombstone.
+            delete mergedDeletedRecordTimestamps[d];
+          } else {
+            // Truly deleted
+            delete mergedRecords[d];
+            delete mergedTaste[d];
+            if (dataToPush.records) delete dataToPush.records[d];
+            if (dataToPush.tasteRecords) delete dataToPush.tasteRecords[d];
+            activeDeletedDates.push(d);
+          }
         });
+
+        const activeDeletedDatesUpper = [];
         mergedDeletedRecordDatesUpper.forEach(d => {
-          delete mergedRecordsUpper[d];
-          delete mergedTasteUpper[d];
-          if (dataToPush.recordsUpper) delete dataToPush.recordsUpper[d];
-          if (dataToPush.tasteRecordsUpper) delete dataToPush.tasteRecordsUpper[d];
+          if (queueSetUpper && queueSetUpper.has(d)) return;
+          const rec = mergedRecordsUpper[d] || (dataToPush.recordsUpper && dataToPush.recordsUpper[d]);
+          const tombIso = mergedDeletedRecordTimestampsUpper[d];
+          const tombTime = tombIso ? Date.parse(tombIso) : 0;
+          let recTime = 0;
+          if (rec && rec.updatedAt) {
+            const t = Date.parse(rec.updatedAt);
+            if (!isNaN(t)) recTime = t;
+          }
+
+          if (rec && recTime > tombTime) {
+            delete mergedDeletedRecordTimestampsUpper[d];
+          } else {
+            delete mergedRecordsUpper[d];
+            delete mergedTasteUpper[d];
+            if (dataToPush.recordsUpper) delete dataToPush.recordsUpper[d];
+            if (dataToPush.tasteRecordsUpper) delete dataToPush.tasteRecordsUpper[d];
+            activeDeletedDatesUpper.push(d);
+          }
         });
         const mergedStock = this.mergeStockBalances(dataToPush.initialStock, remoteData.initialStock, true);
         const mergedStockUpper = this.mergeStockBalances(dataToPush.initialStockUpper, remoteData.initialStockUpper, true);
@@ -1082,8 +1235,10 @@ const cloudSync = {
         dataToPush = Object.assign({}, dataToPush, {
           records: mergedRecords,
           recordsUpper: mergedRecordsUpper,
-          deletedRecordDates: mergedDeletedRecordDates,
-          deletedRecordDatesUpper: mergedDeletedRecordDatesUpper,
+          deletedRecordDates: activeDeletedDates,
+          deletedRecordDatesUpper: activeDeletedDatesUpper,
+          deletedRecordTimestamps: mergedDeletedRecordTimestamps,
+          deletedRecordTimestampsUpper: mergedDeletedRecordTimestampsUpper,
           tasteRecords: mergedTaste,
           tasteRecordsUpper: mergedTasteUpper,
           initialStock: mergedStock,
@@ -1108,8 +1263,10 @@ const cloudSync = {
         if (typeof app !== 'undefined' && app.data && (typeof app.getActiveUdise === 'function' && app.getActiveUdise() === currentUdise)) {
           app.data.records = mergedRecords;
           app.data.recordsUpper = mergedRecordsUpper;
-          app.data.deletedRecordDates = mergedDeletedRecordDates;
-          app.data.deletedRecordDatesUpper = mergedDeletedRecordDatesUpper;
+          app.data.deletedRecordDates = activeDeletedDates;
+          app.data.deletedRecordDatesUpper = activeDeletedDatesUpper;
+          app.data.deletedRecordTimestamps = mergedDeletedRecordTimestamps;
+          app.data.deletedRecordTimestampsUpper = mergedDeletedRecordTimestampsUpper;
           app.data.tasteRecords = mergedTaste;
           app.data.tasteRecordsUpper = mergedTasteUpper;
           app.data.initialStock = mergedStock;
@@ -1194,6 +1351,9 @@ const cloudSync = {
             }, 8000).catch(() => {});
           } catch (infoErr) {}
         }
+
+        // Rule 4: Clear syncQueue after successful remote sync
+        this.clearQueue();
 
         this.config.status = 'synced';
         this.config.lastSyncTime = new Date().toISOString();
@@ -1311,25 +1471,64 @@ const cloudSync = {
               ...(baseData.deletedRecordDatesUpper || []),
               ...(remoteData.deletedRecordDatesUpper || [])
             ]));
+            const mergedDeletedRecordTimestamps = Object.assign({}, remoteData.deletedRecordTimestamps || {}, baseData.deletedRecordTimestamps || {});
+            const mergedDeletedRecordTimestampsUpper = Object.assign({}, remoteData.deletedRecordTimestampsUpper || {}, baseData.deletedRecordTimestampsUpper || {});
+
+            const queueSet = (this.syncQueue && this.syncQueue.records) ? this.syncQueue.records : null;
+            const queueSetUpper = (this.syncQueue && this.syncQueue.recordsUpper) ? this.syncQueue.recordsUpper : null;
 
             // Smart Conflict-Free Merge: Local + Remote (Excluding all deleted tombstones)
-            const mergedRecords = this.mergeDayRecordsMap(baseData.records, remoteRecords, false, mergedDeletedRecordDates);
-            const mergedRecordsUpper = this.mergeDayRecordsMap(baseData.recordsUpper, remoteData.recordsUpper || {}, false, mergedDeletedRecordDatesUpper);
+            const mergedRecords = this.mergeDayRecordsMap(baseData.records, remoteRecords, false, mergedDeletedRecordDates, mergedDeletedRecordTimestamps, queueSet);
+            const mergedRecordsUpper = this.mergeDayRecordsMap(baseData.recordsUpper, remoteData.recordsUpper || {}, false, mergedDeletedRecordDatesUpper, mergedDeletedRecordTimestampsUpper, queueSetUpper);
             const mergedTaste = Object.assign({}, remoteData.tasteRecords || {}, baseData.tasteRecords || {});
             const mergedTasteUpper = Object.assign({}, remoteData.tasteRecordsUpper || {}, baseData.tasteRecordsUpper || {});
 
-            // Hard Purge of deleted dates from records & taste records
+            // Time-Aware Purge of deleted dates (Rule 1, 2, 3):
+            // Only delete if the tombstone is strictly NEWER or equal to the record's updatedAt!
+            const activeDeletedDates = [];
             mergedDeletedRecordDates.forEach(d => {
-              delete mergedRecords[d];
-              delete mergedTaste[d];
-              if (baseData.records) delete baseData.records[d];
-              if (baseData.tasteRecords) delete baseData.tasteRecords[d];
+              if (queueSet && queueSet.has(d)) return;
+              const rec = mergedRecords[d] || (baseData.records && baseData.records[d]);
+              const tombIso = mergedDeletedRecordTimestamps[d];
+              const tombTime = tombIso ? Date.parse(tombIso) : 0;
+              let recTime = 0;
+              if (rec && rec.updatedAt) {
+                const t = Date.parse(rec.updatedAt);
+                if (!isNaN(t)) recTime = t;
+              }
+
+              if (rec && recTime > tombTime) {
+                delete mergedDeletedRecordTimestamps[d];
+              } else {
+                delete mergedRecords[d];
+                delete mergedTaste[d];
+                if (baseData.records) delete baseData.records[d];
+                if (baseData.tasteRecords) delete baseData.tasteRecords[d];
+                activeDeletedDates.push(d);
+              }
             });
+
+            const activeDeletedDatesUpper = [];
             mergedDeletedRecordDatesUpper.forEach(d => {
-              delete mergedRecordsUpper[d];
-              delete mergedTasteUpper[d];
-              if (baseData.recordsUpper) delete baseData.recordsUpper[d];
-              if (baseData.tasteRecordsUpper) delete baseData.tasteRecordsUpper[d];
+              if (queueSetUpper && queueSetUpper.has(d)) return;
+              const rec = mergedRecordsUpper[d] || (baseData.recordsUpper && baseData.recordsUpper[d]);
+              const tombIso = mergedDeletedRecordTimestampsUpper[d];
+              const tombTime = tombIso ? Date.parse(tombIso) : 0;
+              let recTime = 0;
+              if (rec && rec.updatedAt) {
+                const t = Date.parse(rec.updatedAt);
+                if (!isNaN(t)) recTime = t;
+              }
+
+              if (rec && recTime > tombTime) {
+                delete mergedDeletedRecordTimestampsUpper[d];
+              } else {
+                delete mergedRecordsUpper[d];
+                delete mergedTasteUpper[d];
+                if (baseData.recordsUpper) delete baseData.recordsUpper[d];
+                if (baseData.tasteRecordsUpper) delete baseData.tasteRecordsUpper[d];
+                activeDeletedDatesUpper.push(d);
+              }
             });
             const mergedStock = this.mergeStockBalances(baseData.initialStock, remoteData.initialStock, false);
             const mergedStockUpper = this.mergeStockBalances(baseData.initialStockUpper, remoteData.initialStockUpper, false);
@@ -1373,8 +1572,10 @@ const cloudSync = {
             const mergedTarget = Object.assign({}, baseData, {
               records: mergedRecords,
               recordsUpper: mergedRecordsUpper,
-              deletedRecordDates: mergedDeletedRecordDates,
-              deletedRecordDatesUpper: mergedDeletedRecordDatesUpper,
+              deletedRecordDates: activeDeletedDates,
+              deletedRecordDatesUpper: activeDeletedDatesUpper,
+              deletedRecordTimestamps: mergedDeletedRecordTimestamps,
+              deletedRecordTimestampsUpper: mergedDeletedRecordTimestampsUpper,
               tasteRecords: mergedTaste,
               tasteRecordsUpper: mergedTasteUpper,
               initialStock: mergedStock,
