@@ -31,6 +31,10 @@ const cloudSync = {
   hasPendingPush: false,
   debounceTimer: null,
   SYNC_STORAGE_KEY: 'MDM_CLOUD_SYNC_CONFIG',
+  lastRemoteUpdatedAt: null,
+  broadcastChannel: null,
+  tabId: 'tab_' + Math.random().toString(36).substring(2, 9),
+  sseReconnectTimer: null,
 
   /**
    * Helper: Normalize & sanitize Firebase RTDB URL
@@ -115,6 +119,7 @@ const cloudSync = {
   init() {
     this.loadConfig();
     this.applyGlobalConfig();
+    this.setupBroadcastChannel();
     this.bindOnlineEvents();
 
     const activeUdise = this.getSchoolUdise();
@@ -123,8 +128,9 @@ const cloudSync = {
     // Auto-fill DOM inputs
     this.populateFormInputs();
 
-    // Auto pull on startup ONLY IF Firebase is enabled, URL exists, AND a school is authenticated & logged in
+    // Live EventSource SSE Listener & Auto pull on startup
     if (this.config.enabled && effectiveUrl && activeUdise && activeUdise.length === 11) {
+      this.setupRealtimeListener(activeUdise);
       setTimeout(() => {
         this.pullFromCloud(true);
       }, 700);
@@ -192,6 +198,46 @@ const cloudSync = {
     }
   },
 
+  /**
+   * Multi-Tab Instant Synchronization (Same Device 0ms BroadcastChannel)
+   */
+  setupBroadcastChannel() {
+    if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') return;
+    if (this.broadcastChannel) return;
+    try {
+      this.broadcastChannel = new BroadcastChannel('MDM_REALTIME_SYNC');
+      this.broadcastChannel.onmessage = (msg) => {
+        if (!msg || !msg.data) return;
+        const { type, udise, senderId, updatedAt } = msg.data;
+        if (senderId === this.tabId) return; // Ignore messages from this own tab
+        const activeU = this.getSchoolUdise();
+        if (udise && activeU && udise === activeU) {
+          if (updatedAt) this.lastRemoteUpdatedAt = updatedAt;
+          if (!this.isSyncing && !this.isPushing) {
+            this.pullFromCloud(true, activeU);
+          }
+        }
+      };
+    } catch (e) {
+      console.warn('[CloudSync] BroadcastChannel init notice:', e);
+    }
+  },
+
+  broadcastLocalChange(type = 'DATA_UPDATED', udise = null) {
+    if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') return;
+    if (!this.broadcastChannel) this.setupBroadcastChannel();
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({
+          type,
+          udise: udise || this.getSchoolUdise(),
+          updatedAt: this.lastRemoteUpdatedAt || new Date().toISOString(),
+          senderId: this.tabId
+        });
+      } catch (e) {}
+    }
+  },
+
   bindOnlineEvents() {
     if (typeof window === 'undefined') return;
 
@@ -235,16 +281,17 @@ const cloudSync = {
       }
     });
 
-    // Google Docs Real-Time Fast Watcher: every 6s check remote changes if tab is visible
+    // Google Docs Real-Time Fast Watcher: every 3.5s check remote changes if tab is visible
     if (this.backgroundSyncInterval) clearInterval(this.backgroundSyncInterval);
     this.backgroundSyncInterval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       this.checkAndSyncIfChanged();
-    }, 6000);
+    }, 3500);
   },
 
   /**
    * Google Docs Real-time Sync: Live Server-Sent Events listener for Firebase RTDB
+   * Clock-Skew Immune & Auto-Reconnecting
    */
   setupRealtimeListener(targetUdise = null) {
     if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
@@ -268,24 +315,51 @@ const cloudSync = {
       this.sseSource = es;
       this.currentSseKey = cloudKey;
 
-      es.addEventListener('put', (event) => {
+      const handleSseMessage = (event) => {
         try {
           if (!event || !event.data) return;
           const parsed = JSON.parse(event.data);
-          const newTime = (parsed && typeof parsed === 'object') ? parsed.data : parsed;
+          let newTime = null;
+          if (typeof parsed === 'string') newTime = parsed;
+          else if (parsed && typeof parsed.data === 'string') newTime = parsed.data;
+          else if (parsed && parsed.data && typeof parsed.data.updatedAt === 'string') newTime = parsed.data.updatedAt;
+          else if (parsed && typeof parsed.updatedAt === 'string') newTime = parsed.updatedAt;
+
           if (newTime && typeof newTime === 'string') {
-            const localTimeMs = this.config.lastSyncTime ? new Date(this.config.lastSyncTime).getTime() : 0;
-            const remoteTimeMs = new Date(newTime).getTime();
-            if (remoteTimeMs > localTimeMs && !this.isSyncing && !this.isPushing) {
-              this.pullFromCloud(true, activeU);
+            const trimmed = newTime.trim();
+            if (!trimmed) return;
+
+            // First event: seed our knowledge of the remote timestamp
+            if (!this.lastRemoteUpdatedAt) {
+              this.lastRemoteUpdatedAt = trimmed;
+              return;
+            }
+
+            // Clock-Skew Immune Check: If the remote timestamp changed, trigger live pull!
+            if (trimmed !== this.lastRemoteUpdatedAt) {
+              this.lastRemoteUpdatedAt = trimmed;
+              if (!this.isSyncing && !this.isPushing && !this.hasPendingPush) {
+                this.pullFromCloud(true, activeU);
+              }
             }
           }
         } catch(e) {}
-      });
+      };
+
+      es.addEventListener('put', handleSseMessage);
+      es.addEventListener('patch', handleSseMessage);
 
       es.onerror = () => {
-        try { es.close(); } catch(e) {}
-        this.sseSource = null;
+        // Native EventSource automatically attempts to reconnect on connection drops.
+        // We only re-initialize if the browser permanently closed it (readyState === 2).
+        if (es.readyState === 2) {
+          this.sseSource = null;
+          if (this.sseReconnectTimer) clearTimeout(this.sseReconnectTimer);
+          this.sseReconnectTimer = setTimeout(() => {
+            const curU = this.getSchoolUdise();
+            if (curU) this.setupRealtimeListener(curU);
+          }, 3500);
+        }
       };
     } catch(e) {
       this.sseSource = null;
@@ -293,17 +367,18 @@ const cloudSync = {
   },
 
   /**
-   * Check lightweight remote updatedAt timestamp and pull fresh changes if newer
+   * Check lightweight remote updatedAt timestamp and pull fresh changes if changed
+   * Clock-Skew Immune & High Speed (3.5s)
    */
   async checkAndSyncIfChanged(targetUdise = null) {
-    if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
     if (this.isSyncing || this.isPushing || this.hasPendingPush) return false;
     const activeU = targetUdise || this.getSchoolUdise();
     const cleanBaseUrl = this.getEffectiveFirebaseUrl();
     if (!this.config.enabled || !cleanBaseUrl || !activeU || activeU.length !== 11) return false;
 
-    // Ensure SSE is active
-    if (!this.sseSource) {
+    // Ensure SSE listener is active
+    if (!this.sseSource || this.sseSource.readyState === 2) {
       this.setupRealtimeListener(activeU);
     }
 
@@ -313,9 +388,11 @@ const cloudSync = {
       if (res && res.ok) {
         const remoteTime = await res.json();
         if (remoteTime && typeof remoteTime === 'string') {
-          const localTimeMs = this.config.lastSyncTime ? new Date(this.config.lastSyncTime).getTime() : 0;
-          const remoteTimeMs = new Date(remoteTime).getTime();
-          if (remoteTimeMs > localTimeMs && !this.isSyncing && !this.isPushing) {
+          const trimmed = remoteTime.trim();
+          if (!this.lastRemoteUpdatedAt) {
+            this.lastRemoteUpdatedAt = trimmed;
+          } else if (trimmed !== this.lastRemoteUpdatedAt && !this.isSyncing && !this.isPushing && !this.hasPendingPush) {
+            this.lastRemoteUpdatedAt = trimmed;
             await this.pullFromCloud(true, activeU);
             return true;
           }
@@ -1355,10 +1432,12 @@ const cloudSync = {
         // Rule 4: Clear syncQueue after successful remote sync
         this.clearQueue();
 
+        this.lastRemoteUpdatedAt = payload.updatedAt;
         this.config.status = 'synced';
-        this.config.lastSyncTime = new Date().toISOString();
+        this.config.lastSyncTime = payload.updatedAt;
         this.config.lastError = '';
         this.saveConfig();
+        this.broadcastLocalChange('RECORD_SAVED', currentUdise);
 
         const recCount = Object.keys(dataToPush.records || {}).length;
         if (!isSilent && typeof app !== 'undefined') {
@@ -1674,6 +1753,7 @@ const cloudSync = {
             }
           }
 
+          this.lastRemoteUpdatedAt = json.updatedAt || new Date().toISOString();
           this.config.status = 'synced';
           this.config.lastSyncTime = json.updatedAt || new Date().toISOString();
           this.config.lastError = '';
@@ -1682,6 +1762,8 @@ const cloudSync = {
           if (!isSilent && typeof app !== 'undefined') {
             app.showToast(`🎉 Google Firebase वरून ${recordCount} नोंदी व शाळा माहिती यशस्वीरित्या डाऊनलोड झाली!`, 'success');
             alert(`🎉 Google Firebase वरून ${recordCount} दैनंदिन नोंदी, साठा व शाळा तपशील यशस्वीरित्या डाऊनलोड झाला!\n\nशाळा UDISE: ${currentUdise}\nया डिव्हाइसवर सर्व डेटा अद्ययावत झाला आहे.`);
+          } else if (isSilent && typeof app !== 'undefined' && typeof app.showToast === 'function') {
+            app.showToast(`☁️ रिअल-टाइम डेटा अद्ययावत झाला (${recordCount} नोंदी)`, 'info');
           }
           return true;
         } else {

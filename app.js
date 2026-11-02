@@ -276,6 +276,9 @@ const app = {
     // Initialize Real-time Cloud Synchronization
     if (typeof cloudSync !== 'undefined') {
       cloudSync.init();
+      if (activeUdise && typeof cloudSync.setupRealtimeListener === 'function') {
+        cloudSync.setupRealtimeListener(activeUdise);
+      }
       // Background 2-way sync of registered schools list
       this.syncCloudSchoolRegistry();
     }
@@ -4185,6 +4188,9 @@ const app = {
       // 6. Trigger Cloud Auto-Sync in background if enabled (debounced or immediate, never if skipCloud is true)
       if (!skipCloud && typeof cloudSync !== 'undefined' && cloudSync.getEffectiveFirebaseUrl()) {
         cloudSync.scheduleDebouncedPush(immediateCloud, currentUdise);
+        if (typeof cloudSync.broadcastLocalChange === 'function') {
+          cloudSync.broadcastLocalChange('RECORD_SAVED', currentUdise);
+        }
       }
     } catch (e) {
       console.error("Failed to save state:", e);
