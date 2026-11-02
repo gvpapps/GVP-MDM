@@ -358,6 +358,10 @@ const cloudSync = {
    * Smart Conflict-Free Merge for daily records dictionary
    */
   mergeDayRecordsMap(mapA, mapB, preferA = true, deletedDates = []) {
+    if (Array.isArray(preferA)) {
+      deletedDates = preferA;
+      preferA = true;
+    }
     const result = {};
     const keysA = Object.keys(mapA || {});
     const keysB = Object.keys(mapB || {});
@@ -376,32 +380,49 @@ const cloudSync = {
   },
 
   /**
+   * Helper: compute deterministic signature for stock receipts
+   */
+  getStockReceiptSignature(item) {
+    if (!item || typeof item !== 'object') return '';
+    const dateSig = (item.date || '').trim();
+    const billSig = (item.billNo || '').trim().toLowerCase();
+    const secSig = item.section || 'primary';
+    const itemsKeys = Object.keys(item.items || {}).filter(k => !isNaN(parseFloat(item.items[k])) && parseFloat(item.items[k]) !== 0).sort();
+    const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
+    return `${dateSig}#${billSig}#${secSig}#${itemsSig}`;
+  },
+
+  /**
    * Robust Deduplicating & Tombstone-Aware Merge for Inward Stock Receipts
    * Prevents duplicate entries and ensures deleted receipts are NEVER resurrected
    */
-  mergeStockReceiptsList(localList, remoteList, deletedIds = []) {
+  mergeStockReceiptsList(localList, remoteList, deletedIds = [], deletedSigs = []) {
     const l = Array.isArray(localList) ? localList : [];
     const r = Array.isArray(remoteList) ? remoteList : [];
     const delSet = new Set(Array.isArray(deletedIds) ? deletedIds : []);
+    const delSigSet = new Set(Array.isArray(deletedSigs) ? deletedSigs : []);
 
-    const combined = [...r, ...l].filter(item => item && typeof item === 'object' && (!item.id || !delSet.has(item.id)));
+    const combined = [...r, ...l].filter(item => {
+      if (!item || typeof item !== 'object') return false;
+      if (item.id && delSet.has(item.id)) return false;
+      const sig = this.getStockReceiptSignature(item);
+      if (sig && delSigSet.has(sig)) return false;
+      return true;
+    });
     const seenIds = new Set();
     const seenSigs = new Set();
     const result = [];
 
     combined.forEach(item => {
+      const sig = this.getStockReceiptSignature(item);
+      if (sig && delSigSet.has(sig)) return;
+
       if (!item.id) {
-        item.id = 'rcp_' + (item.date ? item.date.replace(/-/g, '') : 'old') + '_' + Math.random().toString(36).substr(2, 6);
+        const cleanBill = (item.billNo || '').trim().replace(/\W/g, '');
+        item.id = 'rcp_' + (item.date ? item.date.replace(/-/g, '') : 'old') + '_' + (cleanBill || 'nobill') + '_' + (item.section || 'pri');
       }
+      if (delSet.has(item.id)) return;
       if (seenIds.has(item.id)) return;
-
-      const itemsKeys = Object.keys(item.items || {}).filter(k => !isNaN(parseFloat(item.items[k])) && parseFloat(item.items[k]) !== 0).sort();
-      const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
-      const billSig = (item.billNo || '').trim().toLowerCase();
-      const dateSig = (item.date || '').trim();
-      const secSig = item.section || 'primary';
-      const sig = `${dateSig}#${billSig}#${secSig}#${itemsSig}`;
-
       if (seenSigs.has(sig)) return;
 
       seenIds.add(item.id);
@@ -933,6 +954,10 @@ const cloudSync = {
           ...(dataToPush.deletedStockReceiptIds || []),
           ...(remoteData.deletedStockReceiptIds || [])
         ]));
+        const mergedDeletedReceiptSigs = Array.from(new Set([
+          ...(dataToPush.deletedStockReceiptSigs || []),
+          ...(remoteData.deletedStockReceiptSigs || [])
+        ]));
         const mergedDeletedDamaged = Array.from(new Set([
           ...(dataToPush.deletedDamagedIds || []),
           ...(remoteData.deletedDamagedIds || [])
@@ -951,8 +976,8 @@ const cloudSync = {
         ]));
 
         // Stock receipts, damaged stock, and stock transfers with deduplication & tombstone protection
-        const mergedReceipts = this.mergeStockReceiptsList(dataToPush.stockReceipts, remoteData.stockReceipts, mergedDeletedReceipts);
-        const mergedReceiptsUpper = this.mergeStockReceiptsList(dataToPush.stockReceiptsUpper, remoteData.stockReceiptsUpper, mergedDeletedReceipts);
+        const mergedReceipts = this.mergeStockReceiptsList(dataToPush.stockReceipts, remoteData.stockReceipts, mergedDeletedReceipts, mergedDeletedReceiptSigs);
+        const mergedReceiptsUpper = this.mergeStockReceiptsList(dataToPush.stockReceiptsUpper, remoteData.stockReceiptsUpper, mergedDeletedReceipts, mergedDeletedReceiptSigs);
         const mergedDamaged = this.mergeDamagedStockList(dataToPush.damagedStock, remoteData.damagedStock, mergedDeletedDamaged, mergedDeletedDamagedSigs);
         const mergedDamagedUpper = this.mergeDamagedStockList(dataToPush.damagedStockUpper, remoteData.damagedStockUpper, mergedDeletedDamaged, mergedDeletedDamagedSigs);
         const mergedTransfers = this.mergeStockTransfersList(dataToPush.stockTransfers, remoteData.stockTransfers, mergedDeletedTransfers, mergedDeletedTransferSigs);
@@ -977,6 +1002,7 @@ const cloudSync = {
           stockReceipts: mergedReceipts,
           stockReceiptsUpper: mergedReceiptsUpper,
           deletedStockReceiptIds: mergedDeletedReceipts,
+          deletedStockReceiptSigs: mergedDeletedReceiptSigs,
           damagedStock: mergedDamaged,
           damagedStockUpper: mergedDamagedUpper,
           deletedDamagedIds: mergedDeletedDamaged,
@@ -1181,25 +1207,19 @@ const cloudSync = {
               }
             }
 
-            // Active dates present locally or in incoming remote records (Smart Revival: never tombstone active records!)
-            const activePullDatesP = new Set([
-              ...Object.keys(baseData.records || {}),
-              ...Object.keys(remoteRecords || {})
-            ]);
-            const activePullDatesU = new Set([
-              ...Object.keys(baseData.recordsUpper || {}),
-              ...Object.keys(remoteData.recordsUpper || {})
-            ]);
+            // Active dates present strictly locally (Strict Anti-Resurrection: never let stale remote dates wipe tombstones!)
+            const activeLocalDatesP = new Set(Object.keys(baseData.records || {}));
+            const activeLocalDatesU = new Set(Object.keys(baseData.recordsUpper || {}));
 
-            // Union of deleted record date tombstones (strictly excludes any actively present records)
+            // Union of deleted record date tombstones (strictly excludes any actively present LOCAL records)
             const mergedDeletedRecordDates = Array.from(new Set([
               ...(baseData.deletedRecordDates || []),
               ...(remoteData.deletedRecordDates || [])
-            ])).filter(d => !activePullDatesP.has(d));
+            ])).filter(d => !activeLocalDatesP.has(d));
             const mergedDeletedRecordDatesUpper = Array.from(new Set([
               ...(baseData.deletedRecordDatesUpper || []),
               ...(remoteData.deletedRecordDatesUpper || [])
-            ])).filter(d => !activePullDatesU.has(d));
+            ])).filter(d => !activeLocalDatesU.has(d));
 
             // Smart Conflict-Free Merge: Local + Remote (Protects local populated data from being wiped)
             const mergedRecords = this.mergeDayRecordsMap(baseData.records, remoteRecords, false, mergedDeletedRecordDates);
@@ -1216,6 +1236,10 @@ const cloudSync = {
             const mergedDeletedReceipts = Array.from(new Set([
               ...(baseData.deletedStockReceiptIds || []),
               ...(remoteData.deletedStockReceiptIds || [])
+            ]));
+            const mergedDeletedReceiptSigs = Array.from(new Set([
+              ...(baseData.deletedStockReceiptSigs || []),
+              ...(remoteData.deletedStockReceiptSigs || [])
             ]));
             const mergedDeletedDamaged = Array.from(new Set([
               ...(baseData.deletedDamagedIds || []),
@@ -1235,8 +1259,8 @@ const cloudSync = {
             ]));
 
             // Stock receipts, damaged stock, and stock transfers with deduplication & tombstone protection
-            const mergedReceipts = this.mergeStockReceiptsList(baseData.stockReceipts, remoteData.stockReceipts, mergedDeletedReceipts);
-            const mergedReceiptsUpper = this.mergeStockReceiptsList(baseData.stockReceiptsUpper, remoteData.stockReceiptsUpper, mergedDeletedReceipts);
+            const mergedReceipts = this.mergeStockReceiptsList(baseData.stockReceipts, remoteData.stockReceipts, mergedDeletedReceipts, mergedDeletedReceiptSigs);
+            const mergedReceiptsUpper = this.mergeStockReceiptsList(baseData.stockReceiptsUpper, remoteData.stockReceiptsUpper, mergedDeletedReceipts, mergedDeletedReceiptSigs);
             const mergedDamaged = this.mergeDamagedStockList(baseData.damagedStock, remoteData.damagedStock, mergedDeletedDamaged, mergedDeletedDamagedSigs);
             const mergedDamagedUpper = this.mergeDamagedStockList(baseData.damagedStockUpper, remoteData.damagedStockUpper, mergedDeletedDamaged, mergedDeletedDamagedSigs);
             const mergedTransfers = this.mergeStockTransfersList(baseData.stockTransfers, remoteData.stockTransfers, mergedDeletedTransfers, mergedDeletedTransferSigs);
@@ -1256,6 +1280,7 @@ const cloudSync = {
               stockReceipts: mergedReceipts,
               stockReceiptsUpper: mergedReceiptsUpper,
               deletedStockReceiptIds: mergedDeletedReceipts,
+              deletedStockReceiptSigs: mergedDeletedReceiptSigs,
               damagedStock: mergedDamaged,
               damagedStockUpper: mergedDamagedUpper,
               deletedDamagedIds: mergedDeletedDamaged,
@@ -1658,18 +1683,97 @@ const cloudSync = {
 
   /**
    * Delete single day record directly on Google Firebase Realtime Database
+   * Guarantees zero resurrection by removing records, taste, and persisting tombstones
    */
   async deleteDayRecordFromCloud(udise, dateStr, section = 'primary') {
     const cleanBaseUrl = this.getEffectiveFirebaseUrl();
     if (!cleanBaseUrl || !udise || !dateStr) return false;
     const cleanUdise = String(udise).trim();
+    const cloudKey = this.getCloudKey(cleanUdise);
     const pathKey = (section === 'upper') ? 'recordsUpper' : 'records';
-    const endpoint = `${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/appData/${pathKey}/${dateStr}.json`;
+    const tasteKey = (section === 'upper') ? 'tasteRecordsUpper' : 'tasteRecords';
+    const tombKey = (section === 'upper') ? 'deletedRecordDatesUpper' : 'deletedRecordDates';
+    
     try {
-      await this.fetchWithTimeout(endpoint, { method: 'DELETE' }, 6000);
+      await Promise.allSettled([
+        this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/${pathKey}/${dateStr}.json`, { method: 'DELETE' }, 6000),
+        this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/${tasteKey}/${dateStr}.json`, { method: 'DELETE' }, 6000)
+      ]);
+
+      // Direct persistent tombstone on Firebase array
+      const tombRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/${tombKey}.json`, {}, 4000);
+      let existingTombs = [];
+      if (tombRes && tombRes.ok) {
+        const tJson = await tombRes.json();
+        if (Array.isArray(tJson)) existingTombs = tJson;
+      }
+      if (!existingTombs.includes(dateStr)) {
+        existingTombs.push(dateStr);
+        await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/${tombKey}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(existingTombs)
+        }, 5000);
+      }
       return true;
     } catch(e) {
       console.warn("Could not delete record on cloud:", e);
+      return false;
+    }
+  },
+
+  /**
+   * Direct instant purge of a deleted stock receipt from Firebase RTDB
+   * Guarantees zero resurrection by updating remote arrays and saving ID + Signature tombstones
+   */
+  async deleteStockReceiptFromCloud(udise, delId, delSig = null, section = 'primary') {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl || !udise || !delId) return false;
+    const cleanUdise = String(udise).trim();
+    const cloudKey = this.getCloudKey(cleanUdise);
+    const listKey = (section === 'upper') ? 'stockReceiptsUpper' : 'stockReceipts';
+
+    try {
+      const getRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData.json`, {}, 6000);
+      if (getRes.ok) {
+        const remoteAppData = await getRes.json();
+        if (remoteAppData && typeof remoteAppData === 'object') {
+          const list = Array.isArray(remoteAppData[listKey]) ? remoteAppData[listKey] : [];
+          const filtered = list.filter(r => {
+            if (!r) return false;
+            if (r.id && r.id === delId) return false;
+            if (delSig && this.getStockReceiptSignature(r) === delSig) return false;
+            return true;
+          });
+          remoteAppData[listKey] = filtered;
+
+          const delIds = Array.from(new Set([...(remoteAppData.deletedStockReceiptIds || []), delId].filter(Boolean)));
+          const delSigs = Array.from(new Set([...(remoteAppData.deletedStockReceiptSigs || []), delSig].filter(Boolean)));
+          remoteAppData.deletedStockReceiptIds = delIds;
+          remoteAppData.deletedStockReceiptSigs = delSigs;
+
+          await Promise.allSettled([
+            this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/${listKey}.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(filtered)
+            }, 6000),
+            this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/deletedStockReceiptIds.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(delIds)
+            }, 6000),
+            this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/${cloudKey}/appData/deletedStockReceiptSigs.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(delSigs)
+            }, 6000)
+          ]);
+        }
+      }
+      return true;
+    } catch(e) {
+      console.warn("Direct cloud stock receipt delete error:", e);
       return false;
     }
   },

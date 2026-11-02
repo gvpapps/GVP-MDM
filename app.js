@@ -3641,6 +3641,7 @@ const app = {
           stockReceipts: this.deduplicateStockReceipts(parsed.stockReceipts || []),
           stockReceiptsUpper: this.deduplicateStockReceipts(parsed.stockReceiptsUpper || []),
           deletedStockReceiptIds: parsed.deletedStockReceiptIds || [],
+          deletedStockReceiptSigs: parsed.deletedStockReceiptSigs || [],
           damagedStock: parsed.damagedStock || [],
           damagedStockUpper: parsed.damagedStockUpper || [],
           deletedDamagedIds: parsed.deletedDamagedIds || [],
@@ -3680,44 +3681,80 @@ const app = {
       }
       this.data.settings.udise = cleanUdise;
 
-      // Safeguard 1: Restore from dedicated Safe Vault (MDM_SAFE_BACKUP_${cleanUdise}) if records are empty
+      // Safeguard 1: Restore from dedicated Safe Vault (MDM_SAFE_BACKUP_${cleanUdise}) if records are empty (filtering out deleted dates)
       const rawSafe = localStorage.getItem('MDM_SAFE_BACKUP_' + cleanUdise);
       if (rawSafe) {
         try {
           const safeData = JSON.parse(rawSafe);
           if (safeData) {
+            const delPDates = new Set(this.data.deletedRecordDates || []);
+            const delUDates = new Set(this.data.deletedRecordDatesUpper || []);
             if (safeData.records && Object.keys(safeData.records).length > 0 && Object.keys(this.data.records || {}).length === 0) {
-              this.data.records = Object.assign({}, safeData.records, this.data.records);
+              const filtered = {};
+              Object.keys(safeData.records).forEach(d => {
+                if (!delPDates.has(d)) filtered[d] = safeData.records[d];
+              });
+              this.data.records = Object.assign({}, filtered, this.data.records);
             }
             if (safeData.recordsUpper && Object.keys(safeData.recordsUpper).length > 0 && Object.keys(this.data.recordsUpper || {}).length === 0) {
-              this.data.recordsUpper = Object.assign({}, safeData.recordsUpper, this.data.recordsUpper);
+              const filtered = {};
+              Object.keys(safeData.recordsUpper).forEach(d => {
+                if (!delUDates.has(d)) filtered[d] = safeData.recordsUpper[d];
+              });
+              this.data.recordsUpper = Object.assign({}, filtered, this.data.recordsUpper);
             }
             if (safeData.tasteRecords && Object.keys(this.data.tasteRecords || {}).length === 0) {
-              this.data.tasteRecords = Object.assign({}, safeData.tasteRecords, this.data.tasteRecords);
+              const filtered = {};
+              Object.keys(safeData.tasteRecords).forEach(d => {
+                if (!delPDates.has(d)) filtered[d] = safeData.tasteRecords[d];
+              });
+              this.data.tasteRecords = Object.assign({}, filtered, this.data.tasteRecords);
             }
             if (safeData.tasteRecordsUpper && Object.keys(this.data.tasteRecordsUpper || {}).length === 0) {
-              this.data.tasteRecordsUpper = Object.assign({}, safeData.tasteRecordsUpper, this.data.tasteRecordsUpper);
+              const filtered = {};
+              Object.keys(safeData.tasteRecordsUpper).forEach(d => {
+                if (!delUDates.has(d)) filtered[d] = safeData.tasteRecordsUpper[d];
+              });
+              this.data.tasteRecordsUpper = Object.assign({}, filtered, this.data.tasteRecordsUpper);
             }
           }
         } catch(e) {}
       }
 
-      // Safeguard 2: Restore from per-school dedicated backup if records are empty
+      // Safeguard 2: Restore from per-school dedicated backup if records are empty (filtering out deleted dates)
       const savedSchoolBackup = localStorage.getItem(schoolBackupKey);
       if (savedSchoolBackup) {
         try {
           const permSchool = JSON.parse(savedSchoolBackup);
+          const delPDates = new Set(this.data.deletedRecordDates || []);
+          const delUDates = new Set(this.data.deletedRecordDatesUpper || []);
           if (permSchool && permSchool.records && Object.keys(permSchool.records).length > 0 && Object.keys(this.data.records || {}).length === 0) {
-            this.data.records = Object.assign({}, permSchool.records, this.data.records);
+            const filtered = {};
+            Object.keys(permSchool.records).forEach(d => {
+              if (!delPDates.has(d)) filtered[d] = permSchool.records[d];
+            });
+            this.data.records = Object.assign({}, filtered, this.data.records);
           }
           if (permSchool && permSchool.recordsUpper && Object.keys(this.data.recordsUpper || {}).length === 0) {
-            this.data.recordsUpper = Object.assign({}, permSchool.recordsUpper, this.data.recordsUpper);
+            const filtered = {};
+            Object.keys(permSchool.recordsUpper).forEach(d => {
+              if (!delUDates.has(d)) filtered[d] = permSchool.recordsUpper[d];
+            });
+            this.data.recordsUpper = Object.assign({}, filtered, this.data.recordsUpper);
           }
           if (permSchool && permSchool.tasteRecords && Object.keys(this.data.tasteRecords || {}).length === 0) {
-            this.data.tasteRecords = Object.assign({}, permSchool.tasteRecords, this.data.tasteRecords);
+            const filtered = {};
+            Object.keys(permSchool.tasteRecords).forEach(d => {
+              if (!delPDates.has(d)) filtered[d] = permSchool.tasteRecords[d];
+            });
+            this.data.tasteRecords = Object.assign({}, filtered, this.data.tasteRecords);
           }
           if (permSchool && permSchool.tasteRecordsUpper && Object.keys(this.data.tasteRecordsUpper || {}).length === 0) {
-            this.data.tasteRecordsUpper = Object.assign({}, permSchool.tasteRecordsUpper, this.data.tasteRecordsUpper);
+            const filtered = {};
+            Object.keys(permSchool.tasteRecordsUpper).forEach(d => {
+              if (!delUDates.has(d)) filtered[d] = permSchool.tasteRecordsUpper[d];
+            });
+            this.data.tasteRecordsUpper = Object.assign({}, filtered, this.data.tasteRecordsUpper);
           }
         } catch(e) {}
       } else if (udise === '27240304501') {
@@ -3726,7 +3763,12 @@ const app = {
         if (savedPermRecords && Object.keys(this.data.records || {}).length === 0) {
           try {
             const permRecs = JSON.parse(savedPermRecords);
-            this.data.records = Object.assign({}, permRecs, this.data.records);
+            const delPDates = new Set(this.data.deletedRecordDates || []);
+            const filtered = {};
+            Object.keys(permRecs).forEach(d => {
+              if (!delPDates.has(d)) filtered[d] = permRecs[d];
+            });
+            this.data.records = Object.assign({}, filtered, this.data.records);
           } catch(e) {}
         }
       }
@@ -3914,6 +3956,48 @@ const app = {
         }
       }
 
+      // Absolute anti-resurrection purge on load:
+      // Even if local state or backups contained stale records, wipe any dates that were deleted
+      const finalDelP = new Set(this.data.deletedRecordDates || []);
+      const finalDelU = new Set(this.data.deletedRecordDatesUpper || []);
+      if (this.data.records) {
+        Object.keys(this.data.records).forEach(d => {
+          if (finalDelP.has(d)) delete this.data.records[d];
+        });
+      }
+      if (this.data.tasteRecords) {
+        Object.keys(this.data.tasteRecords).forEach(d => {
+          if (finalDelP.has(d)) delete this.data.tasteRecords[d];
+        });
+      }
+      if (this.data.recordsUpper) {
+        Object.keys(this.data.recordsUpper).forEach(d => {
+          if (finalDelU.has(d)) delete this.data.recordsUpper[d];
+        });
+      }
+      if (this.data.tasteRecordsUpper) {
+        Object.keys(this.data.tasteRecordsUpper).forEach(d => {
+          if (finalDelU.has(d)) delete this.data.tasteRecordsUpper[d];
+        });
+      }
+
+      // Purge deleted stock receipts
+      const finalDelRcpIds = new Set(this.data.deletedStockReceiptIds || []);
+      const finalDelRcpSigs = new Set(this.data.deletedStockReceiptSigs || []);
+      const isReceiptDeleted = (r) => {
+        if (!r || typeof r !== 'object') return false;
+        if (r.id && finalDelRcpIds.has(r.id)) return true;
+        const sig = this.getStockReceiptSignature ? this.getStockReceiptSignature(r) : '';
+        if (sig && finalDelRcpSigs.has(sig)) return true;
+        return false;
+      };
+      if (Array.isArray(this.data.stockReceipts)) {
+        this.data.stockReceipts = this.data.stockReceipts.filter(r => !isReceiptDeleted(r));
+      }
+      if (Array.isArray(this.data.stockReceiptsUpper)) {
+        this.data.stockReceiptsUpper = this.data.stockReceiptsUpper.filter(r => !isReceiptDeleted(r));
+      }
+
       // Immediately save clean ordered state for this school
       this.saveState(true);
 
@@ -3967,6 +4051,7 @@ const app = {
         stockReceipts: this.data.stockReceipts,
         stockReceiptsUpper: this.data.stockReceiptsUpper || [],
         deletedStockReceiptIds: this.data.deletedStockReceiptIds || [],
+        deletedStockReceiptSigs: this.data.deletedStockReceiptSigs || [],
         damagedStock: this.data.damagedStock,
         damagedStockUpper: this.data.damagedStockUpper || [],
         deletedDamagedIds: this.data.deletedDamagedIds || [],
@@ -6638,6 +6723,15 @@ const app = {
     }
 
     this.saveState(false, true);
+
+    // Direct Instant Cloud Purge
+    const curUdise = this.getActiveUdise();
+    if (typeof cloudSync !== 'undefined' && typeof cloudSync.deleteDayRecordFromCloud === 'function') {
+      cloudSync.deleteDayRecordFromCloud(curUdise, dateStr, isUpper ? 'upper' : 'primary').catch(() => {});
+      if (typeof cloudSync.pushToCloud === 'function') {
+        cloudSync.pushToCloud(true, curUdise);
+      }
+    }
 
     this.onDateChanged();
     this.renderRecentDaysRibbon();
@@ -10735,31 +10829,44 @@ const app = {
   },
 
   /**
-   * Deduplicate stock receipts list by normalized content signature & id
+   * Compute deterministic signature for stock receipts
+   */
+  getStockReceiptSignature(item) {
+    if (!item || typeof item !== 'object') return '';
+    const dateSig = (item.date || '').trim();
+    const billSig = (item.billNo || '').trim().toLowerCase();
+    const secSig = item.section || 'primary';
+    const itemsKeys = Object.keys(item.items || {}).filter(k => !isNaN(parseFloat(item.items[k])) && parseFloat(item.items[k]) !== 0).sort();
+    const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(item.items[k])}`).join('|');
+    return `${dateSig}#${billSig}#${secSig}#${itemsSig}`;
+  },
+
+  /**
+   * Deduplicate stock receipts list by normalized content signature & id, respecting tombstones
    */
   deduplicateStockReceipts(receiptsList) {
-    if (!Array.isArray(receiptsList) || receiptsList.length <= 1) return receiptsList || [];
+    if (!Array.isArray(receiptsList) || receiptsList.length === 0) return receiptsList || [];
+    const delIds = new Set((this.data && this.data.deletedStockReceiptIds) || []);
+    const delSigs = new Set((this.data && this.data.deletedStockReceiptSigs) || []);
     const seenSigs = new Set();
     const seenIds = new Set();
     const clean = [];
     receiptsList.forEach((r, idx) => {
       if (!r || typeof r !== 'object') return;
+      if (r.id && delIds.has(r.id)) return;
+      const sig = this.getStockReceiptSignature(r);
+      if (sig && delSigs.has(sig)) return;
+
       if (!r.id) {
-        r.id = 'rcp_' + (r.date ? r.date.replace(/-/g, '') : 'old') + '_' + idx + '_' + Math.random().toString(36).substr(2, 6);
+        const cleanBill = (r.billNo || '').trim().replace(/\W/g, '');
+        r.id = 'rcp_' + (r.date ? r.date.replace(/-/g, '') : 'old') + '_' + idx + '_' + (cleanBill || 'nobill') + '_' + (r.section || 'pri');
       }
+      if (delIds.has(r.id)) return;
       if (seenIds.has(r.id)) return;
-
-      const itemsKeys = Object.keys(r.items || {}).filter(k => !isNaN(parseFloat(r.items[k])) && parseFloat(r.items[k]) !== 0).sort();
-      const itemsSig = itemsKeys.map(k => `${k}:${parseFloat(r.items[k])}`).join('|');
-      const billSig = (r.billNo || '').trim().toLowerCase();
-      const dateSig = (r.date || '').trim();
-      const secSig = r.section || 'primary';
-      const sig = `${dateSig}#${billSig}#${secSig}#${itemsSig}`;
-
-      if (seenSigs.has(sig)) return;
+      if (sig && seenSigs.has(sig)) return;
 
       seenIds.add(r.id);
-      seenSigs.add(sig);
+      if (sig) seenSigs.add(sig);
       clean.push(r);
     });
     return clean;
@@ -11928,13 +12035,29 @@ const app = {
           const aIdx = altReceipts.findIndex(r => r.id === receiptIdOrIdx);
           if (aIdx !== -1) {
             const delItem = altReceipts[aIdx];
-            const delId = delItem.id || ('rcp_' + (delItem.date || '') + '_' + (delItem.billNo || ''));
+            const cleanBill = (delItem.billNo || '').trim().replace(/\W/g, '');
+            const delId = delItem.id || ('rcp_' + (delItem.date ? delItem.date.replace(/-/g, '') : 'old') + '_' + (cleanBill || 'nobill') + '_' + altSec);
+            const delSig = (typeof cloudSync !== 'undefined' && typeof cloudSync.getStockReceiptSignature === 'function')
+              ? cloudSync.getStockReceiptSignature(delItem)
+              : '';
+
             if (!this.data.deletedStockReceiptIds) this.data.deletedStockReceiptIds = [];
             if (!this.data.deletedStockReceiptIds.includes(delId)) {
               this.data.deletedStockReceiptIds.push(delId);
             }
+            if (delSig) {
+              if (!this.data.deletedStockReceiptSigs) this.data.deletedStockReceiptSigs = [];
+              if (!this.data.deletedStockReceiptSigs.includes(delSig)) {
+                this.data.deletedStockReceiptSigs.push(delSig);
+              }
+            }
             altReceipts.splice(aIdx, 1);
             this.saveState(false, true);
+
+            const activeU = this.getActiveUdise();
+            if (typeof cloudSync !== 'undefined' && typeof cloudSync.deleteStockReceiptFromCloud === 'function') {
+              cloudSync.deleteStockReceiptFromCloud(activeU, delId, delSig, altSec).catch(() => {});
+            }
             if (typeof cloudSync !== 'undefined' && typeof cloudSync.pushToCloud === 'function') {
               cloudSync.pushToCloud(true);
             }
@@ -11947,13 +12070,29 @@ const app = {
 
       if (index !== -1 && targetReceipts[index]) {
         const delItem = targetReceipts[index];
-        const delId = delItem.id || ('rcp_' + (delItem.date || '') + '_' + (delItem.billNo || ''));
+        const cleanBill = (delItem.billNo || '').trim().replace(/\W/g, '');
+        const delId = delItem.id || ('rcp_' + (delItem.date ? delItem.date.replace(/-/g, '') : 'old') + '_' + (cleanBill || 'nobill') + '_' + section);
+        const delSig = (typeof cloudSync !== 'undefined' && typeof cloudSync.getStockReceiptSignature === 'function')
+          ? cloudSync.getStockReceiptSignature(delItem)
+          : '';
+
         if (!this.data.deletedStockReceiptIds) this.data.deletedStockReceiptIds = [];
         if (!this.data.deletedStockReceiptIds.includes(delId)) {
           this.data.deletedStockReceiptIds.push(delId);
         }
+        if (delSig) {
+          if (!this.data.deletedStockReceiptSigs) this.data.deletedStockReceiptSigs = [];
+          if (!this.data.deletedStockReceiptSigs.includes(delSig)) {
+            this.data.deletedStockReceiptSigs.push(delSig);
+          }
+        }
         targetReceipts.splice(index, 1);
         this.saveState(false, true);
+
+        const activeU = this.getActiveUdise();
+        if (typeof cloudSync !== 'undefined' && typeof cloudSync.deleteStockReceiptFromCloud === 'function') {
+          cloudSync.deleteStockReceiptFromCloud(activeU, delId, delSig, section).catch(() => {});
+        }
         if (typeof cloudSync !== 'undefined' && typeof cloudSync.pushToCloud === 'function') {
           cloudSync.pushToCloud(true);
         }
