@@ -2040,12 +2040,15 @@ const cloudSync = {
     const cleanBaseUrl = this.getEffectiveFirebaseUrl();
     if (!cleanBaseUrl || !udise) return null;
     const cleanUdise = String(udise).trim();
-    const endpoint = `${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/auth.json`;
+    const endpoint = `${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/auth.json?t=${Date.now()}`;
     try {
-      const res = await this.fetchWithTimeout(endpoint, {}, 8000);
+      const res = await this.fetchWithTimeout(endpoint, { cache: 'no-store' }, 8000);
       if (res.ok) {
         const remoteAuth = await res.json();
         if (remoteAuth && remoteAuth.passwordHash) {
+          if (typeof app !== 'undefined' && typeof app.removeLocalTombstone === 'function') {
+            app.removeLocalTombstone(cleanUdise);
+          }
           if (typeof app !== 'undefined' && typeof app.saveSchoolAuth === 'function') {
             app.saveSchoolAuth(cleanUdise, remoteAuth);
           }
@@ -2288,6 +2291,9 @@ const cloudSync = {
     if (!cleanBaseUrl || !udise) return false;
     const cleanUdise = String(udise).trim();
     try {
+      if (typeof app !== 'undefined' && typeof app.removeLocalTombstone === 'function') {
+        app.removeLocalTombstone(cleanUdise);
+      }
       await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_tombstones/mdm_${cleanUdise}.json`, { method: 'DELETE' }, 6000);
       return true;
     } catch (e) {
