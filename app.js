@@ -265,7 +265,11 @@ const app = {
       this.populateInitialSampleDataIfEmpty();
       this.initCalcTableVisibility();
       this.refreshAllViews();
-      this.renderCurrentTab();
+      if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+        this.switchTab('dashboard');
+      } else {
+        this.renderCurrentTab();
+      }
       this.updateDailyEntryViewOnlyBanner();
     }
 
@@ -2384,7 +2388,11 @@ const app = {
     this.showToast(`🎉 शाळा '${this.data.settings.schoolName}' यशस्वीरीत्या लॉगिन झाली!`, 'success');
     this.checkAccessControl();
     this.refreshAllViews();
-    this.renderCurrentTab();
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      this.switchTab('dashboard');
+    } else {
+      this.renderCurrentTab();
+    }
     this.updateDailyEntryViewOnlyBanner();
     return true;
   },
@@ -5207,6 +5215,9 @@ const app = {
    */
   renderCurrentTab() {
     switch (this.currentTab) {
+      case 'dashboard':
+        this.renderDashboardCards();
+        break;
       case 'daily':
         this.onDateChanged();
         break;
@@ -5246,6 +5257,63 @@ const app = {
       case 'tests':
         testSuite.runAllTests();
         break;
+    }
+  },
+
+  /**
+   * Render Mobile Dashboard Cards & Summary
+   */
+  renderDashboardCards() {
+    try {
+      const today = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const dateStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+
+      // 1. Date display in Marathi
+      const dateEl = document.getElementById('dashTodayDate');
+      if (dateEl) {
+        const dayName = this.getDayNameMarathi(dateStr);
+        const months = ['जानेवारी', 'फेब्रुवारी', 'मार्च', 'एप्रिल', 'मे', 'जून', 'जुलै', 'ऑगस्ट', 'सप्टेंबर', 'ऑक्टोबर', 'नोव्हेंबर', 'डिसेंबर'];
+        const formattedDate = `${dayName ? dayName + ', ' : ''}${today.getDate()} ${months[today.getMonth()]} ${today.getFullYear()}`;
+        dateEl.textContent = formattedDate;
+      }
+
+      // 2. Today's Menu display
+      const menuEl = document.getElementById('dashTodayMenu');
+      if (menuEl) {
+        const activeRecs = (typeof this.getActiveRecords === 'function') ? this.getActiveRecords() : (this.data?.records || {});
+        const existingRec = activeRecs ? activeRecs[dateStr] : null;
+        if (existingRec) {
+          if (existingRec.isHoliday) {
+            menuEl.textContent = '🏖️ आज सुट्टी आहे';
+          } else {
+            menuEl.textContent = existingRec.menuName || 'मूगडाळ खिचडी';
+          }
+        } else {
+          const defaultMenu = (typeof this.getDefaultMenuForDay === 'function') ? this.getDefaultMenuForDay(dateStr) : 'मूगडाळ खिचडी';
+          const dayCode = (typeof this.getDayCode === 'function') ? this.getDayCode(dateStr) : 0;
+          if (dayCode === 1) {
+            menuEl.textContent = '🏖️ आज रविवार (सुट्टी)';
+          } else {
+            menuEl.textContent = defaultMenu || 'मूगडाळ खिचडी';
+          }
+        }
+      }
+
+      // 3. School Total Enrollment
+      const patEl = document.getElementById('dashTotalPat');
+      if (patEl) {
+        const pPat = parseInt(this.data?.settings?.patPrimary !== undefined ? this.data.settings.patPrimary : this.data?.settings?.pat) || 0;
+        const uPat = parseInt(this.data?.settings?.patUpper) || 0;
+        const total = pPat + uPat;
+        if (uPat > 0) {
+          patEl.textContent = `${total} विद्यार्थी (प्राथ: ${pPat}, उच्च: ${uPat})`;
+        } else {
+          patEl.textContent = `${total || pPat} विद्यार्थी`;
+        }
+      }
+    } catch (err) {
+      console.warn('renderDashboardCards notice:', err);
     }
   },
 

@@ -6751,6 +6751,108 @@ body.level-mode-both #headerSchoolLevelBadge {
   font-weight: 800;
 }
 
+/* ==========================================================================
+   MOBILE CARD VIEW & DASHBOARD (Card Grid & Prominent Logout)
+   ========================================================================== */
+.mobile-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 769px) {
+  .mobile-cards-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+}
+
+.mobile-menu-card {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+  min-height: 125px;
+}
+
+.mobile-menu-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.mobile-menu-card:active {
+  transform: scale(0.96);
+  background: #f8fafc;
+}
+
+.mobile-menu-card .card-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  margin-bottom: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.mobile-menu-card .card-title {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0 0 3px 0;
+  line-height: 1.2;
+}
+
+.mobile-menu-card .card-desc {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.mobile-menu-card .card-arrow {
+  align-self: flex-end;
+  font-weight: 800;
+  font-size: 0.85rem;
+  margin-top: 6px;
+}
+
+.card-theme-blue { border-color: #bfdbfe; }
+.card-theme-purple { border-color: #e9d5ff; }
+.card-theme-emerald { border-color: #a7f3d0; }
+.card-theme-rose { border-color: #fecdd3; }
+.card-theme-amber { border-color: #fde68a; }
+.card-theme-cyan { border-color: #a5f3fc; }
+.card-theme-indigo { border-color: #c7d2fe; }
+.card-theme-slate { border-color: #cbd5e1; }
+
+.mobile-back-banner button {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  font-size: 0.82rem;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
+}
+
+.mobile-back-banner button:active {
+  background: #dbeafe;
+}
+
+.mobile-header-tools .mobile-logout-btn:active {
+  transform: scale(0.94);
+  background: rgba(239, 68, 68, 0.4) !important;
+}
+
 
 
 
