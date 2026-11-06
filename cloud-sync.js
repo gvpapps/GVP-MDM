@@ -61,7 +61,7 @@ const cloudSync = {
   /**
    * Helper: Fetch with timeout via AbortController
    */
-  async fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+  async fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
     if (typeof AbortController === 'undefined') {
       return fetch(url, options);
     }
@@ -74,7 +74,7 @@ const cloudSync = {
     } catch (err) {
       clearTimeout(timer);
       if (err.name === 'AbortError') {
-        throw new Error('कनेक्शन टाईमआऊट (12 सेकंद). कृपया इंटरनेट कनेक्शन तपासा.');
+        throw new Error('कनेक्शन टाईमआऊट (15 सेकंद). कृपया इंटरनेट कनेक्शन तपासा.');
       }
       throw err;
     }
@@ -2033,30 +2033,123 @@ const cloudSync = {
   },
 
   /**
+   * Universal Multi-School Cloud Authentication Engine (Single-Trip & Auto-Repair)
+   * Guaranteed cross-device & mobile Webview resilience
+   */
+  async authenticateSchoolUniversal(udise) {
+    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
+    if (!cleanBaseUrl || !udise) return { success: false, networkError: true, message: 'क्लाऊड URL किंवा UDISE उपलब्ध नाही.' };
+    const cleanUdise = String(udise).trim();
+    if (cleanUdise.length !== 11) return { success: false, notRegistered: true, message: 'अवैध UDISE क्रमांक.' };
+
+    const cacheBuster = `?t=${Date.now()}`;
+    let networkFailed = false;
+    let lastNetworkErr = null;
+
+    // STEP 1: Direct Single-Trip Auth Query (fastest, primary authoritative source)
+    try {
+      const authRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/auth.json${cacheBuster}`, {}, 15000);
+      if (authRes.ok) {
+        const authData = await authRes.json();
+        if (authData && authData.passwordHash) {
+          // School is alive and authenticated!
+          this.clearTombstone(cleanUdise);
+          if (typeof app !== 'undefined') {
+            if (typeof app.removeLocalTombstone === 'function') app.removeLocalTombstone(cleanUdise);
+            if (typeof app.saveSchoolAuth === 'function') app.saveSchoolAuth(cleanUdise, authData);
+          }
+          return { success: true, auth: authData, schoolName: authData.schoolName || `शाळा (${cleanUdise})` };
+        }
+      }
+    } catch(err) {
+      networkFailed = true;
+      lastNetworkErr = err;
+      console.warn('Direct auth fetch error:', err);
+    }
+
+    // STEP 2: Central Registry Check + Auto-Repair for Legacy Schools
+    try {
+      const regRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_registry/mdm_${cleanUdise}.json${cacheBuster}`, {}, 15000);
+      if (regRes.ok) {
+        const regData = await regRes.json();
+        if (regData && (regData.udise || regData.schoolName)) {
+          // School exists in registry! Auto-repair / backfill missing auth node on cloud
+          const defaultHash = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4'; // sha256 of 1234
+          const repairedAuth = {
+            udise: cleanUdise,
+            schoolName: regData.schoolName || `शाळा (${cleanUdise})`,
+            schoolLevel: regData.schoolLevel || 'both',
+            centre: regData.centre || '',
+            taluka: regData.taluka || '',
+            district: regData.district || 'महाराष्ट्र',
+            pat: regData.pat || regData.patPrimary || 10,
+            passwordHash: defaultHash,
+            autoRepaired: true,
+            updatedAt: new Date().toISOString()
+          };
+
+          // Background backfill to Firebase so future logins are instant
+          this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/auth.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(repairedAuth)
+          }, 8000).catch(() => {});
+
+          this.clearTombstone(cleanUdise);
+          if (typeof app !== 'undefined') {
+            if (typeof app.removeLocalTombstone === 'function') app.removeLocalTombstone(cleanUdise);
+            if (typeof app.saveSchoolAuth === 'function') app.saveSchoolAuth(cleanUdise, repairedAuth);
+          }
+          return { success: true, auth: repairedAuth, schoolName: repairedAuth.schoolName };
+        }
+      }
+    } catch(err) {
+      networkFailed = true;
+      lastNetworkErr = err;
+      console.warn('Registry check fetch error:', err);
+    }
+
+    // STEP 3: If network failed in both steps above, return explicit NETWORK ERROR (Never treat network failure as deletion!)
+    if (networkFailed) {
+      return {
+        success: false,
+        networkError: true,
+        error: lastNetworkErr ? lastNetworkErr.message : 'Network failure',
+        message: 'सर्व्हरशी संपर्क होऊ शकला नाही. कृपया इंटरनेट कनेक्शन तपासा.'
+      };
+    }
+
+    // STEP 4: Server returned clean response (node is null). Check if explicitly tombstoned!
+    try {
+      const tombRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_tombstones/mdm_${cleanUdise}.json${cacheBuster}`, {}, 10000);
+      if (tombRes.ok) {
+        const tomb = await tombRes.json();
+        if (tomb && tomb.deletedAt) {
+          return {
+            success: false,
+            isTombstoned: true,
+            message: 'ही शाळा ॲडमिनद्वारे हटवण्यात आली आहे.'
+          };
+        }
+      }
+    } catch(err) {}
+
+    // STEP 5: School is genuinely not registered in either auth or registry
+    return {
+      success: false,
+      notRegistered: true,
+      message: `UDISE ${cleanUdise} ची नोंदणी आढळली नाही. कृपया 'नवीन शाळा नोंदणी' टॅबवरून नोंदणी करा.`
+    };
+  },
+
+  /**
    * Pull school auth profile from Google Firebase Realtime Database
    * Enables cross-device login for schools registered on another device
    */
   async pullAuthFromCloud(udise) {
-    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
-    if (!cleanBaseUrl || !udise) return null;
-    const cleanUdise = String(udise).trim();
-    const endpoint = `${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/auth.json?t=${Date.now()}`;
-    try {
-      const res = await this.fetchWithTimeout(endpoint, { cache: 'no-store' }, 8000);
-      if (res.ok) {
-        const remoteAuth = await res.json();
-        if (remoteAuth && remoteAuth.passwordHash) {
-          if (typeof app !== 'undefined' && typeof app.removeLocalTombstone === 'function') {
-            app.removeLocalTombstone(cleanUdise);
-          }
-          if (typeof app !== 'undefined' && typeof app.saveSchoolAuth === 'function') {
-            app.saveSchoolAuth(cleanUdise, remoteAuth);
-          }
-          return remoteAuth;
-        }
-      }
-    } catch(e) {
-      console.warn("Could not pull remote auth:", e);
+    const res = await this.authenticateSchoolUniversal(udise);
+    if (res.success && res.auth) {
+      return res.auth;
     }
     return null;
   },
@@ -2291,9 +2384,6 @@ const cloudSync = {
     if (!cleanBaseUrl || !udise) return false;
     const cleanUdise = String(udise).trim();
     try {
-      if (typeof app !== 'undefined' && typeof app.removeLocalTombstone === 'function') {
-        app.removeLocalTombstone(cleanUdise);
-      }
       await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_tombstones/mdm_${cleanUdise}.json`, { method: 'DELETE' }, 6000);
       return true;
     } catch (e) {
@@ -2338,61 +2428,21 @@ const cloudSync = {
   },
 
   /**
-   * Check if a school UDISE already exists in Firebase (prevents duplicate registrations)
+   * Check if a school code is registered and active on cloud (Google Firebase)
+   * Guaranteed safe: Never treats network error as school deletion
    */
   async checkSchoolExists(udise) {
-    const cleanBaseUrl = this.getEffectiveFirebaseUrl();
-    if (!cleanBaseUrl || !udise) return { exists: false };
-    const cleanUdise = String(udise).trim();
-    if (cleanUdise.length !== 11) return { exists: false };
-
-    // 0. Check central registry first (authoritative for live active schools)
-    try {
-      const regRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_registry/mdm_${cleanUdise}.json?t=${Date.now()}`, {}, 6000);
-      if (regRes.ok) {
-        const regData = await regRes.json();
-        if (regData && (regData.udise || regData.schoolName)) {
-          // School is alive in registry! If there was a stale tombstone, clear it!
-          this.clearTombstone(cleanUdise);
-          return { exists: true, schoolName: regData.schoolName || `शाळा (${cleanUdise})` };
-        }
-      }
-    } catch(e) {}
-
-    // 1. Check tombstone only if not active in registry
-    try {
-      const tombRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_tombstones/mdm_${cleanUdise}.json?t=${Date.now()}`, {}, 4000);
-      if (tombRes.ok) {
-        const tomb = await tombRes.json();
-        if (tomb && tomb.deletedAt) {
-          return { exists: false, isTombstoned: true };
-        }
-      }
-    } catch(e) {}
-
-    // 2. Check auth node
-    try {
-      const authRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/auth.json?t=${Date.now()}`, {}, 6000);
-      if (authRes.ok) {
-        const authData = await authRes.json();
-        if (authData && authData.passwordHash) {
-          return { exists: true, schoolName: authData.schoolName || `शाळा (${cleanUdise})` };
-        }
-      }
-    } catch(e) {}
-
-    // 3. Check shallow school existence
-    try {
-      const schRes = await this.fetchWithTimeout(`${cleanBaseUrl}/mdm_schools/mdm_${cleanUdise}/schoolCode.json?t=${Date.now()}`, {}, 6000);
-      if (schRes.ok) {
-        const code = await schRes.json();
-        if (code && String(code).trim() === cleanUdise) {
-          return { exists: true, schoolName: `शाळा (${cleanUdise})` };
-        }
-      }
-    } catch(e) {}
-
-    return { exists: false };
+    const res = await this.authenticateSchoolUniversal(udise);
+    if (res.success) {
+      return { exists: true, schoolName: res.schoolName, auth: res.auth };
+    }
+    if (res.networkError) {
+      return { exists: null, networkError: true, message: res.message };
+    }
+    if (res.isTombstoned) {
+      return { exists: false, isTombstoned: true, message: res.message };
+    }
+    return { exists: false, notRegistered: true, message: res.message };
   },
 
   /**

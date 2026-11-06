@@ -4541,11 +4541,7 @@ body {
     padding-top: 6px !important;
     border-top: 1pt solid #94a3b8 !important;
     display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
     justify-content: space-between !important;
-    align-items: flex-end !important;
-    width: 100% !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
@@ -4553,8 +4549,7 @@ body {
   body.print-taste .taste-sign-col,
   body.printing-taste .taste-sign-col {
     text-align: center !important;
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
+    flex: 1 !important;
   }
 
   body.print-taste .taste-sign-col .sign-space,
@@ -6337,24 +6332,18 @@ body.level-mode-both #headerSchoolLevelBadge {
 }
 
 .stock-print-signatures {
-  display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
-  justify-content: space-between !important;
-  align-items: flex-end !important;
-  width: 100% !important;
+  display: flex;
+  justify-content: space-between;
   margin-top: auto;
   padding: 25px 15px 5px 15px;
   font-size: 12px;
   font-weight: 700;
   page-break-inside: avoid;
-  box-sizing: border-box !important;
 }
 
 .stock-print-sig-col {
   text-align: center;
-  flex: 1 1 0 !important;
-  min-width: 0 !important;
+  min-width: 160px;
 }
 
 .stock-print-sig-col .sig-space {
@@ -6386,20 +6375,9 @@ body.level-mode-both #headerSchoolLevelBadge {
     box-sizing: border-box !important;
   }
   .stock-print-signatures {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
-    justify-content: space-between !important;
-    align-items: flex-end !important;
-    width: 100% !important;
     margin-top: auto !important;
     padding-top: 25px !important;
     page-break-inside: avoid !important;
-    box-sizing: border-box !important;
-  }
-  .stock-print-sig-col {
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
   }
   .stock-print-sig-col .sig-space {
     height: 55px !important;

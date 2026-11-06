@@ -214,21 +214,24 @@ const excelEngine = {
       `महिना : ${monthName}`
     ]);
 
-    // Row 3: Main Headers (Total 28 columns)
+    // Row 3: Main Headers
     wsData.push([
       "दिनांक", "वार", "वार कोड", "आजचा आहार", "लाभार्थी ↓", "ताटांची संख्या", "तांदूळ",
-      "मुगडाळ", "तूरडाळ", "मसूरडाळ", "मूग", "मटकी", "चवळी", "हरभरा", "वाटाणा",
-      "जिरे", "मोहरी", "हळद", "मिरची पावडर", "सोयाबीन तेल", "मीठ", "कांदा-लसून मसाला",
-      "पूरक आहार", "सोयावडी", "गुळ साखर", "दूध पावडर", "इंधन खर्च", "शेरा"
+      "मुगडाळ", "तूरडाळ", "मसूरडाळ", "मटकी", "मूग", "चवळी", "हरभरा", "वाटाणा",
+      "जिरे", "मोहरी", "हळद", "मिरची पावडर", "सोयाबीन तेल", "मीठ", "कांदा-लसून मसाला", "सोयावडी", "इंधन खर्च", "शेरा"
     ]);
 
     // Row 4: Sub Headers
-    wsData.push(new Array(28).fill(""));
+    wsData.push([
+      "", "", "", "", "", "", "",
+      "", "", "", "", "", "", "", "",
+      "", "", "", "", "", "", "", "", "", ""
+    ]);
 
     // Row 5: Rates (प्रमाण)
     const getRate = (k) => {
       if (typeof app !== 'undefined' && app.getIngredientRate) {
-        return app.getIngredientRate(k, section, yearMonth);
+        return app.getIngredientRate(k, section);
       }
       const ing = (appData.ingredients || {})[k];
       if (!ing) return 0;
@@ -245,8 +248,8 @@ const excelEngine = {
       getRate('moong_dal'),
       getRate('tur_dal'),
       getRate('masoor_dal'),
-      getRate('moong'),
       getRate('matki'),
+      getRate('moong'),
       getRate('chavali'),
       getRate('chana'),
       getRate('vatana'),
@@ -257,16 +260,13 @@ const excelEngine = {
       getRate('oil'),
       getRate('salt'),
       getRate('masala'),
-      getRate('purak_ahar'),
       getRate('soyavadi'),
-      getRate('gul_sakhar'),
-      getRate('doodh_powder'),
       fuelRate, ""
     ]);
 
-    // Row 6: Column Numbers (1 ते 28)
+    // Row 6: Column Numbers (1 ते 25)
     wsData.push([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25
     ]);
 
     // Row 7: मागील शिल्लक धान्य/किराणा (Opening Stock)
@@ -282,28 +282,28 @@ const excelEngine = {
 
     wsData.push([
       "", "मागील शिल्लक धान्य/किराणा :-", "", "", "", "",
-      op.rice || 0, op.moong_dal || 0, op.tur_dal || 0, op.masoor_dal || 0, op.moong || 0, op.matki || 0, op.chavali || 0,
+      op.rice || 0, op.moong_dal || 0, op.tur_dal || 0, op.masoor_dal || 0, op.matki || 0, op.moong || 0, op.chavali || 0,
       op.chana || 0, op.vatana || 0,
       op.cumin || 0, op.mustard || 0, op.turmeric || 0, op.chilli || 0,
-      op.oil || 0, op.salt || 0, op.masala || 0, op.purak_ahar || 0, op.soyavadi || 0, op.gul_sakhar || 0, op.doodh_powder || 0, "", ""
+      op.oil || 0, op.salt || 0, op.masala || 0, op.soyavadi || 0, "", ""
     ]);
 
     // Row 8: प्राप्त धान्य/किराणा (Received Stock)
     wsData.push([
       "", "प्राप्त धान्य/किराणा :-", "", "", "", "",
-      rc.rice || 0, rc.moong_dal || 0, rc.tur_dal || 0, rc.masoor_dal || 0, rc.moong || 0, rc.matki || 0, rc.chavali || 0,
+      rc.rice || 0, rc.moong_dal || 0, rc.tur_dal || 0, rc.masoor_dal || 0, rc.matki || 0, rc.moong || 0, rc.chavali || 0,
       rc.chana || 0, rc.vatana || 0,
       rc.cumin || 0, rc.mustard || 0, rc.turmeric || 0, rc.chilli || 0,
-      rc.oil || 0, rc.salt || 0, rc.masala || 0, rc.purak_ahar || 0, rc.soyavadi || 0, rc.gul_sakhar || 0, rc.doodh_powder || 0, "", ""
+      rc.oil || 0, rc.salt || 0, rc.masala || 0, rc.soyavadi || 0, "", ""
     ]);
 
     // Row 9: Total Available
     wsData.push([
       "", "एकूण प्राप्त धान्य/किराणा :-", "", "", "", "",
-      totAvail.rice || 0, totAvail.moong_dal || 0, totAvail.tur_dal || 0, totAvail.masoor_dal || 0, totAvail.moong || 0, totAvail.matki || 0, totAvail.chavali || 0,
+      totAvail.rice || 0, totAvail.moong_dal || 0, totAvail.tur_dal || 0, totAvail.masoor_dal || 0, totAvail.matki || 0, totAvail.moong || 0, totAvail.chavali || 0,
       totAvail.chana || 0, totAvail.vatana || 0,
       totAvail.cumin || 0, totAvail.mustard || 0, totAvail.turmeric || 0, totAvail.chilli || 0,
-      totAvail.oil || 0, totAvail.salt || 0, totAvail.masala || 0, totAvail.purak_ahar || 0, totAvail.soyavadi || 0, totAvail.gul_sakhar || 0, totAvail.doodh_powder || 0, "", ""
+      totAvail.oil || 0, totAvail.salt || 0, totAvail.masala || 0, totAvail.soyavadi || 0, "", ""
     ]);
 
     // Daily Rows 10 to 40
@@ -332,8 +332,8 @@ const excelEngine = {
         q.moong_dal || '',
         q.tur_dal || '',
         q.masoor_dal || '',
-        q.moong || '',
         q.matki || '',
+        q.moong || '',
         q.chavali || '',
         q.chana || '',
         q.vatana || '',
@@ -344,10 +344,7 @@ const excelEngine = {
         q.oil || '',
         q.salt || '',
         q.masala || '',
-        q.purak_ahar || '',
         q.soyavadi || '',
-        q.gul_sakhar || '',
-        q.doodh_powder || '',
         isHoliday ? '' : rec.fuelCost,
         rec.remarks || ''
       ]);
@@ -356,23 +353,20 @@ const excelEngine = {
     // Consumed Row
     wsData.push([
       "एकूण वापरलेले धान्य/किराणा :-", "", "", "", "", stockSummary.totalPlates,
-      consumed.rice || 0, consumed.moong_dal || 0, consumed.tur_dal || 0, consumed.masoor_dal || 0, consumed.moong || 0, consumed.matki || 0, consumed.chavali || 0,
+      consumed.rice || 0, consumed.moong_dal || 0, consumed.tur_dal || 0, consumed.masoor_dal || 0, consumed.matki || 0, consumed.moong || 0, consumed.chavali || 0,
       consumed.chana || 0, consumed.vatana || 0,
       consumed.cumin || 0, consumed.mustard || 0, consumed.turmeric || 0, consumed.chilli || 0,
-      consumed.oil || 0, consumed.salt || 0, consumed.masala || 0,
-      consumed.purak_ahar || 0, consumed.soyavadi || 0, consumed.gul_sakhar || 0, consumed.doodh_powder || 0,
+      consumed.oil || 0, consumed.salt || 0, consumed.masala || 0, consumed.soyavadi || 0,
       stockSummary.totalFuel || 0, ""
     ]);
 
     // Closing Stock Row
     wsData.push([
       "शिल्लक धान्य/किराणा :-", "", "", "", "", "",
-      closing.rice || 0, closing.moong_dal || 0, closing.tur_dal || 0, closing.masoor_dal || 0, closing.moong || 0, closing.matki || 0, closing.chavali || 0,
+      closing.rice || 0, closing.moong_dal || 0, closing.tur_dal || 0, closing.masoor_dal || 0, closing.matki || 0, closing.moong || 0, closing.chavali || 0,
       closing.chana || 0, closing.vatana || 0,
       closing.cumin || 0, closing.mustard || 0, closing.turmeric || 0, closing.chilli || 0,
-      closing.oil || 0, closing.salt || 0, closing.masala || 0,
-      closing.purak_ahar || 0, closing.soyavadi || 0, closing.gul_sakhar || 0, closing.doodh_powder || 0,
-      "", ""
+      closing.oil || 0, closing.salt || 0, closing.masala || 0, closing.soyavadi || 0, "", ""
     ]);
 
     const pat = (typeof app !== 'undefined' && app.getActivePat)
@@ -405,8 +399,8 @@ const excelEngine = {
       { wch: 7 },  // H: मुगडाळ
       { wch: 7 },  // I: तूरडाळ
       { wch: 7 },  // J: मसूरडाळ
-      { wch: 7 },  // K: मूग
-      { wch: 7 },  // L: मटकी
+      { wch: 7 },  // K: मटकी
+      { wch: 7 },  // L: मूग
       { wch: 7 },  // M: चवळी
       { wch: 7 },  // N: हरभरा
       { wch: 7 },  // O: वाटाणा
@@ -417,12 +411,9 @@ const excelEngine = {
       { wch: 8 },  // T: सोयाबीन तेल
       { wch: 7 },  // U: मीठ
       { wch: 8 },  // V: कांदा-लसून मसाला
-      { wch: 8 },  // W: पूरक आहार
-      { wch: 7 },  // X: सोयावडी
-      { wch: 8 },  // Y: गुळ साखर
-      { wch: 8 },  // Z: दूध पावडर
-      { wch: 9 },  // AA: इंधन खर्च
-      { wch: 12 }  // AB: शेरा
+      { wch: 7 },  // W: सोयावडी
+      { wch: 9 },  // X: इंधन खर्च
+      { wch: 12 }  // Y: शेरा
     ];
 
     // Page Setup: A4 Landscape & Fit to Page
@@ -555,7 +546,7 @@ const excelEngine = {
       const usedQty = consumed[item.key] || 0;
       const balQty = closing[item.key] || 0;
       const itemRate = (typeof app !== 'undefined' && app.getIngredientRate)
-        ? app.getIngredientRate(item.key, section, yearMonth)
+        ? app.getIngredientRate(item.key, section)
         : (isUpper ? +(item.rate * 1.5).toFixed(5) : item.rate);
 
       const defaultDemand = +(itemRate * pat * 20).toFixed(3);
@@ -678,8 +669,8 @@ const excelEngine = {
 
     Object.keys(appData.ingredients || {}).forEach(k => {
       const ing = appData.ingredients[k];
-      const rP = (typeof app !== 'undefined' && app.getIngredientRate) ? app.getIngredientRate(k, 'primary', yearMonth) : (ing.ratePrimary || ing.defaultRate);
-      const rU = (typeof app !== 'undefined' && app.getIngredientRate) ? app.getIngredientRate(k, 'upper', yearMonth) : (ing.rateUpper || +(rP * 1.5).toFixed(5));
+      const rP = (typeof app !== 'undefined' && app.getIngredientRate) ? app.getIngredientRate(k, 'primary') : (ing.ratePrimary || ing.defaultRate);
+      const rU = (typeof app !== 'undefined' && app.getIngredientRate) ? app.getIngredientRate(k, 'upper') : (ing.rateUpper || +(rP * 1.5).toFixed(5));
       rulesData.push([
         k,
         ing.name,
@@ -695,13 +686,8 @@ const excelEngine = {
     ws3['!pageSetup'] = { orientation: 'portrait', paperSize: 9 };
     XLSX.utils.book_append_sheet(wb, ws3, "मेन्यू व प्रमाण नियम");
 
-    // Write file and trigger download with Month and Report Name
-    const [yrS, moS] = yearMonth.split('-');
-    const mNum = parseInt(moS, 10);
-    const mNames = ['', 'जानेवारी', 'फेब्रुवारी', 'मार्च', 'एप्रिल', 'मे', 'जून', 'जुलै', 'ऑगस्ट', 'सप्टेंबर', 'ऑक्टोबर', 'नोव्हेंबर', 'डिसेंबर'];
-    const mName = mNames[mNum] || moS;
-    const cleanUdise = (appData.settings && appData.settings.udise) || '';
-    const fileName = `${mName}_${yrS}_मासिक_अहवाल_${cleanUdise}.xlsx`;
+    // Write file and trigger download
+    const fileName = `MDM_Report_${appData.settings.schoolName.replace(/\s+/g, '_')}_${yearMonth}.xlsx`;
     XLSX.writeFile(wb, fileName);
     if (typeof app !== 'undefined' && app.showToast) {
       app.showToast(`✅ A4 फॉरमॅट Excel फाईल डाऊनलोड झाली: ${fileName}`, 'success');
@@ -738,52 +724,47 @@ const excelEngine = {
     const closing = stockSummary.closing || {};
 
     const receiptsInMonth = (appData.stockReceipts || []).filter(r => r.date && r.date.startsWith(yearMonth));
-    const riceReceipts = receiptsInMonth.filter(r => r.items && Number(r.items.rice) > 0);
-    const groceryReceipts = receiptsInMonth.filter(r => r.items && Object.keys(r.items).some(k => k !== 'rice' && Number(r.items[k]) > 0));
-
-    const fmtRc = (arr) => {
-      if (!arr || arr.length === 0) return 'निरंक / —';
-      return arr.map(r => {
+    let receiptText = 'निरंक / —';
+    if (receiptsInMonth.length > 0) {
+      receiptText = receiptsInMonth.map(r => {
         const [yr, mo, dy] = r.date.split('-');
         return r.billNo ? `${dy}/${mo}/${yr} (${r.billNo})` : `${dy}/${mo}/${yr}`;
       }).join(', ');
-    };
+    }
 
     const fbData = [];
-    fbData.push(["शालेय पोषण आहार योजना - प्रपत्र ब"]);
-    fbData.push(["शाळेने केंद्र प्रमुखांना दरमहा ५ तारखेपर्यंत द्यावयाचा अहवाल (२ प्रतीत)"]);
-    fbData.push([`पंचायत समिती ${appData.settings.taluka || 'कर्जत'}`]);
+    fbData.push(["शालेय पोषण आहार योजना - प्रपत्र ब (इ. 1 ते 5)"]);
+    fbData.push(["शाळेने केंद्रप्रमुखांना दरमहा 1 तारखेपर्यंत द्यायचा अहवाल (2 प्रतीत)"]);
     fbData.push([`शाळेचे नांव : ${appData.settings.schoolName}, केंद्र : ${appData.settings.centre}, ता. ${appData.settings.taluka}, जि. ${appData.settings.district}`]);
     fbData.push([]);
     fbData.push([
-      `पटसंख्या : ${appData.settings.pat}`, ``, `जिल्हा : ${appData.settings.district || 'रायगड'}`
+      `महिना व वर्ष: ${monthName}`, ``, 
+      `पटसंख्या: ${appData.settings.pat}`, ``, 
+      `उपस्थित विद्यार्थी (ताटे): ${stockSummary.totalPlates}`, ``, 
+      `एकूण कार्यदिवस: ${stockSummary.workingDays}`, ``, 
+      `अन्न शिजवून दिलेले दिवस: ${stockSummary.workingDays}`
     ]);
-    fbData.push([
-      `महिन्यातील एकूण उपस्थित विद्यार्थी (ताटे) : ${stockSummary.totalPlates}`, ``, `एकूण कामाचे दिवस : ${stockSummary.workingDays}`
-    ]);
-    fbData.push([
-      `तांदूळ प्राप्त दिनांक : ${fmtRc(riceReceipts)}`, ``, `अन्न शिजवून दिलेले दिवस : ${stockSummary.workingDays}`
-    ]);
-    fbData.push([
-      `धान्यादी वस्तू प्राप्त दिनांक : ${fmtRc(groceryReceipts)}`, ``, `महिना : ${monthName}`
-    ]);
+    fbData.push([`धान्य प्राप्त दिनांक व पावती क्र.: ${receiptText}`]);
     fbData.push([]);
     fbData.push([
-      "अ.क्र.", "वस्तूचे नांव", "मागील शिल्लक (कि.ग्रॅ.)", "चालू प्राप्त (कि.ग्रॅ.)",
-      "एकूण वस्तू (३+४) (कि.ग्रॅ.)", "वापरलेल्या वस्तू (कि.ग्रॅ.)",
-      "शिल्लक वस्तू (५-६) (कि.ग्रॅ.)", "पुढील महिन्यासाठी मागणी (कि.ग्रॅ.)", "शेरा"
+      "अ.क्र.", "वस्तूचे नांव", "मागील शिल्लक (कि.ग्रॅ.)", "चालू महिन्यात प्राप्त (कि.ग्रॅ.)",
+      "एकूण प्राप्त (3+4) (कि.ग्रॅ.)", "अन्न शिजवण्यासाठी वापरलेल्या वस्तू (कि.ग्रॅ.)",
+      "शिल्लक वस्तू (5-6) (कि.ग्रॅ.)", "पुढील महिन्यासाठी मागणी (कि.ग्रॅ.)", "शेरा"
     ]);
     fbData.push([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
-    const canonicalItems = (typeof app !== 'undefined' && app.FORM_B_ITEMS)
-      ? app.FORM_B_ITEMS
-      : Object.keys(appData.ingredients || {}).map(key => ({
-          name: appData.ingredients[key].name,
-          key: key,
-          rate: appData.ingredients[key].defaultRate
-        }));
+    const fbItems = Object.keys(appData.ingredients || {}).map(key => {
+      const ing = appData.ingredients[key];
+      return {
+        name: ing.name,
+        key: key,
+        rate: ing.defaultRate,
+        unit: ing.unit,
+        category: ing.category
+      };
+    });
 
-    canonicalItems.forEach((item, idx) => {
+    fbItems.forEach((item, idx) => {
       const openQty = op[item.key] || 0;
       const recQty = rc[item.key] || 0;
       const totQty = totAvail[item.key] || 0;
@@ -806,7 +787,7 @@ const excelEngine = {
     });
 
     fbData.push([]);
-    fbData.push(["* मागणी नोंदविताना शाळेकडे वीस दिवसाचा साठा शिल्लक राहील याची दक्षता घेऊन मागणी नोंदवावी . आवश्यकते पेक्षा जास्त साठा करून धान्य खराब होणार नाही याची दक्षता घ्यावी."]);
+    fbData.push(["* मागणी नोंदवताना शाळेकडे वीस दिवसांचा साठा शिल्लक राहील याची दक्षता घेऊन मागणी नोंदवावी."]);
     const damagedKeys = Object.keys(stockSummary.damaged || {}).filter(k => stockSummary.damaged[k] > 0);
     if (damagedKeys.length > 0) {
       const dmgDetails = damagedKeys.map(k => `${(appData.ingredients && appData.ingredients[k]) ? appData.ingredients[k].name : k}: ${stockSummary.damaged[k]} kg`).join(', ');
@@ -818,24 +799,15 @@ const excelEngine = {
     const cookRate = appData.settings.cookHonorarium || 2500;
     const cookAmt = cookRate * (appData.settings.cookCount || 1);
     fbData.push([`3) स्वयंपाकी तथा मदतनीस मानधन रु. =${cookAmt}/- (रु. ${cookRate} X नेमलेले स्वयंपाकी संख्या: ${appData.settings.cookCount || 1})`]);
-    
-    // Activity dates
-    const act = (appData.formBActivityDates && appData.formBActivityDates[yearMonth]) || {};
-    fbData.push([`स्नेह भोजन तारीख : ${act.snehBhojan || '—'}`, ``, `आरोग्य तपासणी तारीख : ${act.healthCheckup || '—'}`]);
-    fbData.push([`जंत नाशक गोळ्या देण्यात आल्याची तारीख : ${act.deworming || '—'}`, ``, `फॉलिक ऍसिड गोळ्या दिल्याची तारीख : ${act.folicAcid || '—'}`]);
-    
-    fbData.push(["प्रमाणित करण्यात येत आहे की धान्य व धान्यादी माल हा शा. पो. आहार फक्त मुलांच्या आहारासाठी देण्यात आला आहे."]);
+    fbData.push(["प्रमाणित करण्यात येते की, वर नमूद केलेली माहिती दैनंदिन नोंदवहीवरून घेतलेली आहे. ती तपासली आहे व बरोबर आहे."]);
     fbData.push([]);
     const dNow = new Date();
     const todayStr = String(dNow.getDate()).padStart(2, '0') + '/' + String(dNow.getMonth() + 1).padStart(2, '0') + '/' + dNow.getFullYear();
     fbData.push([
-      `दिनांक : ${todayStr}`, ``, ``, `मुख्याध्यापक / सचिव`, ``, ``, ``, `केंद्र प्रमुख`
+      `दिनांक : ${todayStr}`, ``, ``, `मुख्याध्यापक / सचिव`, ``, ``, ``, `केंद्रप्रमुख`
     ]);
     fbData.push([
       ``, ``, ``, `शाळा व्यवस्थापन समिती ${appData.settings.schoolName}`, ``, ``, ``, `केंद्र : ${appData.settings.centre}`
-    ]);
-    fbData.push([
-      ``, ``, ``, `ता. ${appData.settings.taluka} जि. ${appData.settings.district}`, ``, ``, ``, `ता. ${appData.settings.taluka} जि. ${appData.settings.district}`
     ]);
 
     const ws = XLSX.utils.aoa_to_sheet(fbData);
@@ -870,8 +842,7 @@ const excelEngine = {
     this.applyWorksheetStyles(ws, { type: 'form_b' });
     XLSX.utils.book_append_sheet(wb, ws, "प्रपत्र ब");
 
-    const cleanUdise = (appData.settings && appData.settings.udise) || '';
-    const filename = `${monthNamesMarathi[month]}_${year}_प्रपत्र_ब_${cleanUdise}.xlsx`;
+    const filename = `MDM_Form_B_${monthNamesMarathi[month]}_${year}_${appData.settings.schoolName.replace(/\s+/g, '_')}.xlsx`;
     XLSX.writeFile(wb, filename);
     app.showToast(`✅ प्रपत्र ब Excel फाईल '${filename}' डाऊनलोड झाली!`, 'success');
   },
@@ -1051,8 +1022,7 @@ const excelEngine = {
     this.applyWorksheetStyles(ws, { type: 'yearly_matrix' });
     XLSX.utils.book_append_sheet(wb, ws, `सन ${data.startYear}-${String(data.endYear).slice(-2)}`);
 
-    const cleanUdise = (settings && settings.udise) || '';
-    const filename = `${data.startYear}-${data.endYear}_वार्षिक_अहवाल_${cleanUdise}.xlsx`;
+    const filename = `MDM_Yearly_Report_${data.startYear}-${data.endYear}_${settings.schoolName.replace(/\s+/g, '_')}.xlsx`;
     XLSX.writeFile(wb, filename);
     app.showToast(`✅ A4 फॉरमॅट वार्षिक अहवाल Excel फाईल '${filename}' डाऊनलोड झाली!`, 'success');
   },
