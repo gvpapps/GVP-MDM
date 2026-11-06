@@ -6752,6 +6752,27 @@ body.level-mode-both #headerSchoolLevelBadge {
 }
 
 /* ==========================================================================
+   MOBILE MODERN APP BAR (Image 2 Design: clean 2-row layout)
+   ========================================================================== */
+@media (max-width: 768px) {
+  .creator-ribbon {
+    display: none !important;
+  }
+  .app-header {
+    display: none !important;
+  }
+  .mobile-app-header-bar {
+    display: block !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-app-header-bar {
+    display: none !important;
+  }
+}
+
+/* ==========================================================================
    MOBILE CARD VIEW & DASHBOARD (Card Grid & Prominent Logout)
    ========================================================================== */
 .mobile-cards-grid {

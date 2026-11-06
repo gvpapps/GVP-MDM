@@ -3320,11 +3320,26 @@ const app = {
     });
   },
 
+  /**
+   * Safe Return to Master Admin Panel from any school view
+   */
+  returnToAdminPanel() {
+    sessionStorage.setItem('MDM_ADMIN_LOGGED_IN', 'true');
+    this.isAdminLoggedIn = true;
+    this.openMasterAdminModal();
+    this.updateAdminVisibility();
+    this.showToast('👑 मास्टर ॲडमिन पॅनेलवर सुरक्षित परत आलात.', 'info');
+  },
+
   async adminOpenSchool(udise) {
     if (!/^\d{11}$/.test(udise)) return;
     sessionStorage.setItem('MDM_ADMIN_LOGGED_IN', 'true');
     this.isAdminLoggedIn = true;
     localStorage.setItem(this.ACTIVE_UDISE_STORAGE_KEY, udise);
+
+    try {
+      history.pushState({ mdmAdminViewing: udise }, '', window.location.pathname);
+    } catch(e) {}
 
     this.showToast(`🔄 शाळा (${udise}) चा डेटा थेट उघडत आहे...`, 'info');
 
@@ -3609,6 +3624,14 @@ const app = {
    * Logout current school and return to Login Screen
    */
   logoutSchool() {
+    if (this.isAdmin()) {
+      const wantAdminPanel = confirm("👑 आपण मास्टर ॲडमिन मोडमध्ये आहात!\n\nतुम्हाला 'मास्टर ॲडमिन पॅनेल'वर परत जायचे आहे का?\n\n[OK] = ॲडमिन पॅनेलवर जा (शिफारस)\n[Cancel] = शाळेतच राहा");
+      if (wantAdminPanel) {
+        this.returnToAdminPanel();
+      }
+      return;
+    }
+
     if (confirm("तुम्हाला खात्री आहे का? सध्याच्या शाळेतून (UDISE) लॉगआउट करायचे आहे का?")) {
       this.saveState(true);
       localStorage.removeItem(this.ACTIVE_UDISE_STORAGE_KEY);
@@ -5022,6 +5045,16 @@ const app = {
       const printSlip = document.getElementById('printSlipContainer');
       if (printSlip) printSlip.innerHTML = '';
     });
+
+    // Support Browser Back Button in Master Admin Mode
+    window.addEventListener('popstate', () => {
+      if (this.isAdmin()) {
+        const adminModal = document.getElementById('masterAdminModal');
+        if (!adminModal || adminModal.style.display === 'none') {
+          this.returnToAdminPanel();
+        }
+      }
+    });
   },
 
   /**
@@ -5073,6 +5106,67 @@ const app = {
     const headerVoPill = document.getElementById('headerViewOnlyModePill');
     if (headerVoPill) {
       headerVoPill.style.display = (typeof this.isViewOnlyMode === 'function' && this.isViewOnlyMode()) ? 'inline-flex' : 'none';
+    }
+
+    // 📱 Mobile Modern Header Sync (Exact match to Image 2 design)
+    const mobileSchool = document.getElementById('mobileSchoolNameDisplay');
+    if (mobileSchool) {
+      mobileSchool.textContent = (this.data && this.data.settings && this.data.settings.schoolName) ? this.data.settings.schoolName : 'शाळा थेट पोर्टल';
+    }
+
+    const mobileUdise = document.getElementById('mobileUdiseDisplay');
+    if (mobileUdise) {
+      const activeU = (this.data && this.data.settings && this.data.settings.udise) || (typeof this.getActiveUdise === 'function' ? this.getActiveUdise() : '');
+      mobileUdise.textContent = activeU ? `UDISE: ${activeU}` : '';
+    }
+
+    const mobileLvlText = document.getElementById('mobileHeaderLevelText');
+    const mobileLvlIcon = document.getElementById('mobileHeaderLevelIcon');
+    if (mobileLvlText) {
+      const lvl = (this.data && this.data.settings && this.data.settings.schoolLevel) || 'both';
+      if (lvl === 'primary') {
+        mobileLvlText.textContent = 'इ. १ ते ५';
+        if (mobileLvlIcon) mobileLvlIcon.textContent = '🎒';
+      } else if (lvl === 'upper') {
+        mobileLvlText.textContent = 'इ. ६ ते ८';
+        if (mobileLvlIcon) mobileLvlIcon.textContent = '🎓';
+      } else {
+        mobileLvlText.textContent = (this.activeSection === 'upper') ? 'इ. ६ ते ८' : 'इ. १ ते ५';
+        if (mobileLvlIcon) mobileLvlIcon.textContent = (this.activeSection === 'upper') ? '🎓' : '🎒';
+      }
+    }
+
+    // Admin Mode vs Standard School Action Button & Admin Banner
+    const mobileActionBtn = document.getElementById('mobileHeaderActionBtn');
+    const mobileActionLabel = document.getElementById('mobileHeaderActionLabel');
+    const mobileActionIcon = document.getElementById('mobileHeaderActionIcon');
+    const adminBanner = document.getElementById('adminReturnBanner');
+
+    const isAdmin = this.isAdmin();
+    if (adminBanner) {
+      adminBanner.style.display = isAdmin ? 'block' : 'none';
+      const adminBannerSchool = document.getElementById('adminBannerSchoolName');
+      if (adminBannerSchool) {
+        adminBannerSchool.textContent = `${this.data?.settings?.schoolName || ''} (${this.getActiveUdise()})`;
+      }
+    }
+
+    if (mobileActionBtn && mobileActionLabel) {
+      if (isAdmin) {
+        mobileActionBtn.style.background = 'linear-gradient(135deg, #d97706 0%, #b45309 100%)';
+        mobileActionBtn.style.boxShadow = '0 2px 6px rgba(217, 119, 6, 0.4)';
+        mobileActionBtn.title = 'मास्टर ॲडमिन पॅनेलवर परत जा';
+        mobileActionBtn.onclick = () => this.returnToAdminPanel();
+        if (mobileActionIcon) mobileActionIcon.textContent = '👑';
+        mobileActionLabel.textContent = 'ॲडमिन';
+      } else {
+        mobileActionBtn.style.background = '#ef4444';
+        mobileActionBtn.style.boxShadow = '0 2px 6px rgba(239, 68, 68, 0.35)';
+        mobileActionBtn.title = 'शाळा सुरक्षितपणे लॉगआउट करा';
+        mobileActionBtn.onclick = () => this.logoutSchool();
+        if (mobileActionIcon) mobileActionIcon.textContent = '🚪';
+        mobileActionLabel.textContent = 'लॉगआउट';
+      }
     }
   },
 
@@ -6046,13 +6140,35 @@ const app = {
       tableBody.appendChild(tr);
     });
 
-    if (alertBanner && alertDetails) {
+    if (alertBanner) {
       if (hasShortage) {
-        alertBanner.style.display = 'flex';
-        alertDetails.textContent = `अपुरा साठा: ${shortageDetails.join(', ')}. कृपया प्राप्त धान्याची नोंद तपासा.`;
+        alertBanner.style.display = 'block';
+        const summaryEl = document.getElementById('stockAlertSummary');
+        const shortageCount = shortageDetails.length;
+        if (summaryEl) {
+          const mainNames = shortageDetails.slice(0, 3).map(s => s.split(' ')[0]).join(', ');
+          summaryEl.textContent = `(${mainNames}${shortageCount > 3 ? ` सह ${shortageCount} वस्तू कमी` : ' कमी'})`;
+        }
+        if (alertDetails) {
+          alertDetails.innerHTML = shortageDetails.map(s => `• <strong>${s}</strong>`).join('<br>');
+        }
       } else {
         alertBanner.style.display = 'none';
       }
+    }
+  },
+
+  /**
+   * Toggle Insufficient Stock Details Expand/Collapse
+   */
+  toggleShortageDetails() {
+    const box = document.getElementById('stockAlertDetailsBox');
+    const btn = document.getElementById('btnToggleStockShortage');
+    if (!box) return;
+    const isHidden = (box.style.display === 'none' || !box.style.display);
+    box.style.display = isHidden ? 'block' : 'none';
+    if (btn) {
+      btn.textContent = isHidden ? 'लपवा ▲' : 'तपशील पहा ▼';
     }
   },
 
