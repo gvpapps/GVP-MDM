@@ -465,25 +465,58 @@ const app = {
   },
 
   /**
-   * Get Pat count for the active (or specified) section
+   * Get Pat count for the active (or specified) section, strictly adhering to schoolLevel
    */
-  getActivePat(section = this.activeSection) {
+  getActivePat(section = null) {
     if (!this.data || !this.data.settings) return 9;
-    if (section === 'upper') {
-      return parseInt(this.data.settings.patUpper) || 15;
+    const level = this.data.settings.schoolLevel || 'both';
+
+    // 1. Primary Only School (१ ते ५): Upper pat does not exist!
+    if (level === 'primary') {
+      const p = parseInt(this.data.settings.patPrimary !== undefined ? this.data.settings.patPrimary : this.data.settings.pat);
+      return (!isNaN(p) && p > 0) ? p : (parseInt(this.data.settings.pat) || 9);
     }
-    return parseInt(this.data.settings.patPrimary !== undefined ? this.data.settings.patPrimary : this.data.settings.pat) || 9;
+
+    // 2. Upper Only School (६ ते ८): Primary pat does not exist!
+    if (level === 'upper') {
+      const u = parseInt(this.data.settings.patUpper !== undefined ? this.data.settings.patUpper : this.data.settings.pat);
+      return (!isNaN(u) && u > 0) ? u : (parseInt(this.data.settings.pat) || 15);
+    }
+
+    // 3. Composite School (both 1-5 and 6-8): determine by section parameter or activeSection
+    const targetSec = section || this.activeSection || 'primary';
+    if (targetSec === 'upper') {
+      const u = parseInt(this.data.settings.patUpper);
+      return (!isNaN(u) && u > 0) ? u : 15;
+    }
+    const p = parseInt(this.data.settings.patPrimary !== undefined ? this.data.settings.patPrimary : this.data.settings.pat);
+    return (!isNaN(p) && p > 0) ? p : 9;
   },
 
   /**
-   * Get Fuel rate for the active (or specified) section
+   * Get Fuel rate for the active (or specified) section, strictly adhering to schoolLevel
    */
-  getActiveFuelRate(section = this.activeSection) {
+  getActiveFuelRate(section = null) {
     if (!this.data || !this.data.settings) return 1.51;
-    if (section === 'upper') {
-      return parseFloat(this.data.settings.fuelRateUpper) || 2.17;
+    const level = this.data.settings.schoolLevel || 'both';
+
+    if (level === 'primary') {
+      const p = parseFloat(this.data.settings.fuelRatePrimary !== undefined ? this.data.settings.fuelRatePrimary : this.data.settings.fuelRate);
+      return (!isNaN(p) && p > 0) ? p : 1.51;
     }
-    return parseFloat(this.data.settings.fuelRatePrimary !== undefined ? this.data.settings.fuelRatePrimary : this.data.settings.fuelRate) || 1.51;
+
+    if (level === 'upper') {
+      const u = parseFloat(this.data.settings.fuelRateUpper !== undefined ? this.data.settings.fuelRateUpper : this.data.settings.fuelRate);
+      return (!isNaN(u) && u > 0) ? u : 2.17;
+    }
+
+    const targetSec = section || this.activeSection || 'primary';
+    if (targetSec === 'upper') {
+      const u = parseFloat(this.data.settings.fuelRateUpper);
+      return (!isNaN(u) && u > 0) ? u : 2.17;
+    }
+    const p = parseFloat(this.data.settings.fuelRatePrimary !== undefined ? this.data.settings.fuelRatePrimary : this.data.settings.fuelRate);
+    return (!isNaN(p) && p > 0) ? p : 1.51;
   },
 
   /**
@@ -5303,13 +5336,23 @@ const app = {
       // 3. School Total Enrollment
       const patEl = document.getElementById('dashTotalPat');
       if (patEl) {
+        const level = (this.data && this.data.settings && this.data.settings.schoolLevel) || 'both';
         const pPat = parseInt(this.data?.settings?.patPrimary !== undefined ? this.data.settings.patPrimary : this.data?.settings?.pat) || 0;
         const uPat = parseInt(this.data?.settings?.patUpper) || 0;
-        const total = pPat + uPat;
-        if (uPat > 0) {
-          patEl.textContent = `${total} विद्यार्थी (प्राथ: ${pPat}, उच्च: ${uPat})`;
+
+        if (level === 'primary') {
+          const pat = pPat || this.getActivePat('primary') || 0;
+          patEl.textContent = `${pat} विद्यार्थी (इ. १ ते ५ प्राथमिक)`;
+        } else if (level === 'upper') {
+          const pat = uPat || this.getActivePat('upper') || 0;
+          patEl.textContent = `${pat} विद्यार्थी (इ. ६ ते ८ उच्च प्राथमिक)`;
         } else {
-          patEl.textContent = `${total || pPat} विद्यार्थी`;
+          const total = pPat + uPat;
+          if (uPat > 0 && pPat > 0) {
+            patEl.textContent = `${total} विद्यार्थी (प्राथ: ${pPat}, उच्च: ${uPat})`;
+          } else {
+            patEl.textContent = `${total || pPat || uPat} विद्यार्थी`;
+          }
         }
       }
     } catch (err) {
@@ -6021,15 +6064,17 @@ const app = {
     if (!container) return;
     container.innerHTML = '';
 
-    const pat = parseInt(this.data.settings.pat) || 9;
+    const pat = (typeof this.getActivePat === 'function') ? this.getActivePat() : (parseInt(this.data?.settings?.pat) || 9);
     const chipsData = [];
 
-    // Full 100% attendance chip
-    chipsData.push({ val: pat, label: `100% सर्व पट (${pat})` });
+    if (pat > 0) {
+      // Full 100% attendance chip
+      chipsData.push({ val: pat, label: `100% सर्व पट (${pat})` });
 
-    // Descending variations (up to 4 lower values if pat > 1)
-    for (let i = 1; i <= 4 && (pat - i) > 0; i++) {
-      chipsData.push({ val: pat - i, label: `${pat - i} विद्यार्थी` });
+      // Descending variations (up to 4 lower values if pat > 1)
+      for (let i = 1; i <= 4 && (pat - i) > 0; i++) {
+        chipsData.push({ val: pat - i, label: `${pat - i} विद्यार्थी` });
+      }
     }
 
     // Holiday / 0 attendance chip
@@ -6259,13 +6304,14 @@ const app = {
       return;
     }
     try {
-      // Auto-enable composite / both classes mode if user desires dual quick entry
-      if (this.data && this.data.settings && this.data.settings.schoolLevel !== 'both') {
-        this.data.settings.schoolLevel = 'both';
-        if (typeof this.applySchoolLevelMode === 'function') {
-          this.applySchoolLevelMode('both');
-        }
-        this.saveState(false, true);
+      const currentLevel = (this.data && this.data.settings && this.data.settings.schoolLevel) || 'both';
+      if (currentLevel === 'primary') {
+        this.showToast('ℹ️ आपली शाळा इ. १ ते ५ (प्राथमिक) असल्याने दोन्ही एकत्र नोंदीची आवश्यकता नाही.', 'info');
+        return;
+      }
+      if (currentLevel === 'upper') {
+        this.showToast('ℹ️ आपली शाळा इ. ६ ते ८ (उच्च प्राथमिक) असल्याने दोन्ही एकत्र नोंदीची आवश्यकता नाही.', 'info');
+        return;
       }
 
       const modal = document.getElementById('dualEntryModal');
@@ -13916,45 +13962,65 @@ const app = {
     if (sCentre && sCentre.value.trim()) this.data.settings.centre = sCentre.value.trim();
     if (sTaluka && sTaluka.value.trim()) this.data.settings.taluka = sTaluka.value.trim();
     if (sDist && sDist.value.trim()) this.data.settings.district = sDist.value.trim();
+    const schLevel = this.data.settings.schoolLevel || 'both';
+
     if (sPatPrimary && sPatPrimary.value.trim()) {
       const val = parseInt(sPatPrimary.value) || 0;
-      if (val > 0) {
-        this.data.settings.patPrimary = val;
-        if (this.activeSection === 'primary') this.data.settings.pat = val;
-      }
+      if (val > 0) this.data.settings.patPrimary = val;
     }
     if (sPatUpper && sPatUpper.value.trim()) {
       const val = parseInt(sPatUpper.value) || 0;
-      if (val > 0) {
-        this.data.settings.patUpper = val;
-        if (this.activeSection === 'upper') this.data.settings.pat = val;
-      }
+      if (val > 0) this.data.settings.patUpper = val;
     }
     if (sPat && !sPatPrimary && sPat.value.trim()) {
       const val = parseInt(sPat.value) || 0;
       if (val > 0) this.data.settings.pat = val;
     }
+
+    if (schLevel === 'primary') {
+      const p = parseInt(this.data.settings.patPrimary) || parseInt(this.data.settings.pat) || 0;
+      if (p > 0) this.data.settings.pat = p;
+      this.data.settings.patUpper = 0;
+    } else if (schLevel === 'upper') {
+      const u = parseInt(this.data.settings.patUpper) || parseInt(this.data.settings.pat) || 0;
+      if (u > 0) this.data.settings.pat = u;
+      this.data.settings.patPrimary = 0;
+    } else {
+      const p = parseInt(this.data.settings.patPrimary) || 0;
+      const u = parseInt(this.data.settings.patUpper) || 0;
+      this.data.settings.pat = (this.activeSection === 'upper') ? (u || p) : (p || u);
+    }
+
     if (sHead && sHead.value.trim()) this.data.settings.headmaster = sHead.value.trim();
     if (sPres && sPres.value.trim()) this.data.settings.president = sPres.value.trim();
     if (sAsst && sAsst.value.trim()) this.data.settings.assistantTeacher = sAsst.value.trim();
     if (sCook && sCook.value.trim()) this.data.settings.cookName = sCook.value.trim();
+
     if (sFuelPrimary && sFuelPrimary.value.trim()) {
       const val = parseFloat(sFuelPrimary.value);
-      if (!isNaN(val) && val > 0) {
-        this.data.settings.fuelRatePrimary = val;
-        if (this.activeSection === 'primary') this.data.settings.fuelRate = val;
-      }
+      if (!isNaN(val) && val > 0) this.data.settings.fuelRatePrimary = val;
     }
     if (sFuelUpper && sFuelUpper.value.trim()) {
       const val = parseFloat(sFuelUpper.value);
-      if (!isNaN(val) && val > 0) {
-        this.data.settings.fuelRateUpper = val;
-        if (this.activeSection === 'upper') this.data.settings.fuelRate = val;
-      }
+      if (!isNaN(val) && val > 0) this.data.settings.fuelRateUpper = val;
     }
     if (sFuel && !sFuelPrimary && sFuel.value.trim()) {
       const val = parseFloat(sFuel.value);
       if (!isNaN(val) && val > 0) this.data.settings.fuelRate = val;
+    }
+
+    if (schLevel === 'primary') {
+      const fp = parseFloat(this.data.settings.fuelRatePrimary) || parseFloat(this.data.settings.fuelRate) || 0;
+      if (fp > 0) this.data.settings.fuelRate = fp;
+      this.data.settings.fuelRateUpper = 0;
+    } else if (schLevel === 'upper') {
+      const fu = parseFloat(this.data.settings.fuelRateUpper) || parseFloat(this.data.settings.fuelRate) || 0;
+      if (fu > 0) this.data.settings.fuelRate = fu;
+      this.data.settings.fuelRatePrimary = 0;
+    } else {
+      const fp = parseFloat(this.data.settings.fuelRatePrimary) || 0;
+      const fu = parseFloat(this.data.settings.fuelRateUpper) || 0;
+      this.data.settings.fuelRate = (this.activeSection === 'upper') ? (fu || fp) : (fp || fu);
     }
     if (sCookH && sCookH.value.trim()) {
       const val = parseInt(sCookH.value);

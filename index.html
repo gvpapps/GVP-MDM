@@ -26,7 +26,137 @@
     }
   </script>
 
-  <link rel="stylesheet" href="styles.css?v=20261106_v5">
+  <link rel="stylesheet" href="styles.css?v=20261106_v7_cards">
+
+  <style id="mobileCardDashboardStyles">
+    /* ==========================================================================
+       BULLETPROOF MOBILE CARD DASHBOARD & ACTIONS (Always 2-Column Touch Grid)
+       ========================================================================== */
+    .mobile-cards-grid {
+      display: grid !important;
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 12px !important;
+      width: 100% !important;
+      margin: 0 auto !important;
+      box-sizing: border-box !important;
+    }
+
+    @media (min-width: 769px) {
+      .mobile-cards-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 16px !important;
+      }
+    }
+
+    .mobile-menu-card {
+      background: #ffffff !important;
+      border: 1.5px solid #e2e8f0 !important;
+      border-radius: 18px !important;
+      padding: 13px 12px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-between !important;
+      cursor: pointer !important;
+      transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.18s ease !important;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
+      position: relative !important;
+      overflow: hidden !important;
+      min-height: 128px !important;
+      box-sizing: border-box !important;
+      text-align: left !important;
+    }
+
+    .mobile-menu-card:hover {
+      transform: translateY(-2px) !important;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.09) !important;
+    }
+
+    .mobile-menu-card:active {
+      transform: scale(0.96) !important;
+      background: #f8fafc !important;
+    }
+
+    .mobile-menu-card .card-icon-box {
+      width: 42px !important;
+      height: 42px !important;
+      min-width: 42px !important;
+      min-height: 42px !important;
+      border-radius: 12px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 1.3rem !important;
+      margin-bottom: 8px !important;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12) !important;
+      flex-shrink: 0 !important;
+    }
+
+    .mobile-menu-card .card-title {
+      font-size: 0.95rem !important;
+      font-weight: 800 !important;
+      color: #1e293b !important;
+      margin: 0 0 3px 0 !important;
+      line-height: 1.25 !important;
+    }
+
+    .mobile-menu-card .card-desc {
+      font-size: 0.72rem !important;
+      color: #64748b !important;
+      margin: 0 !important;
+      line-height: 1.3 !important;
+    }
+
+    .mobile-menu-card .card-action-bar {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      margin-top: 8px !important;
+      padding-top: 6px !important;
+      border-top: 1px solid #f1f5f9 !important;
+      font-size: 0.75rem !important;
+      font-weight: 800 !important;
+    }
+
+    /* Card Themes */
+    .card-theme-blue { border-color: #bfdbfe !important; background: linear-gradient(180deg, #ffffff 0%, #f0f7ff 100%) !important; }
+    .card-theme-blue .card-action-bar { color: #2563eb !important; }
+
+    .card-theme-purple { border-color: #e9d5ff !important; background: linear-gradient(180deg, #ffffff 0%, #faf5ff 100%) !important; }
+    .card-theme-purple .card-action-bar { color: #7c3aed !important; }
+
+    .card-theme-emerald { border-color: #a7f3d0 !important; background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%) !important; }
+    .card-theme-emerald .card-action-bar { color: #059669 !important; }
+
+    .card-theme-rose { border-color: #fecdd3 !important; background: linear-gradient(180deg, #ffffff 0%, #fff1f2 100%) !important; }
+    .card-theme-rose .card-action-bar { color: #e11d48 !important; }
+
+    .card-theme-amber { border-color: #fde68a !important; background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%) !important; }
+    .card-theme-amber .card-action-bar { color: #d97706 !important; }
+
+    .card-theme-cyan { border-color: #a5f3fc !important; background: linear-gradient(180deg, #ffffff 0%, #ecfeff 100%) !important; }
+    .card-theme-cyan .card-action-bar { color: #0891b2 !important; }
+
+    .card-theme-indigo { border-color: #c7d2fe !important; background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%) !important; }
+    .card-theme-indigo .card-action-bar { color: #4f46e5 !important; }
+
+    .card-theme-slate { border-color: #cbd5e1 !important; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important; }
+    .card-theme-slate .card-action-bar { color: #475569 !important; }
+
+    /* Strict School Level Isolation */
+    body.level-mode-primary .upper-only,
+    body.level-mode-primary .dual-only {
+      display: none !important;
+    }
+    body.level-mode-upper .primary-only,
+    body.level-mode-upper .dual-only {
+      display: none !important;
+    }
+    body.level-mode-primary .section-switcher-control,
+    body.level-mode-upper .section-switcher-control,
+    body.level-mode-both #headerSchoolLevelBadge {
+      display: none !important;
+    }
+  </style>
 </head>
 <body>
 
@@ -795,122 +925,145 @@
 
       <!-- TAB 0: DASHBOARD / MOBILE CARD VIEW (मुख्य कार्ड डॅशबोर्ड) -->
       <section id="tab-dashboard" class="tab-panel">
-        <div class="container py-2" style="max-width: 680px;">
+        <div class="container py-2" style="max-width: 680px; margin: 0 auto; padding: 0 10px;">
           
           <!-- Today's Live Attendance & Menu Quick Card -->
-          <div class="card shadow-sm border-0 mb-3" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 1.5px solid #bfdbfe !important; border-radius: 16px;">
-            <div class="card-body p-3">
-              <div class="d-flex align-items-center justify-content-between mb-2">
-                <span class="badge" style="background: #2563eb; color: #fff; font-size: 0.75rem; padding: 4px 8px; border-radius: 6px;">आजचा मेनू व हजेरी</span>
-                <span class="text-muted small fw-bold" id="dashTodayDate"></span>
-              </div>
-              <h4 class="fw-bold mb-1" id="dashTodayMenu" style="color: #1e3a8a; font-size: 1.15rem;">मूगडाळ खिचडी</h4>
-              <div class="d-flex align-items-center justify-content-between mt-2 pt-2" style="border-top: 1px dashed #93c5fd;">
-                <span class="small text-muted">शाळा एकूण पट: <strong id="dashTotalPat" class="text-dark">० विद्यार्थी</strong></span>
-                <button type="button" class="btn btn-sm btn-primary px-3 fw-bold rounded-pill" onclick="app.switchTab('daily')">
-                  नोंद करा ✍️
-                </button>
-              </div>
+          <div class="card shadow-sm border-0 mb-3" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 1.5px solid #bfdbfe !important; border-radius: 18px; padding: 14px; box-shadow: 0 2px 8px rgba(37,99,235,0.08);">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="badge" style="background: #2563eb; color: #fff; font-size: 0.75rem; padding: 4px 9px; border-radius: 6px; font-weight: 700;">आजचा मेनू व हजेरी</span>
+              <span class="text-muted small fw-bold" id="dashTodayDate"></span>
+            </div>
+            <h4 class="fw-bold mb-1" id="dashTodayMenu" style="color: #1e3a8a; font-size: 1.15rem; margin: 4px 0 8px 0;">मूगडाळ खिचडी</h4>
+            <div class="d-flex align-items-center justify-content-between pt-2" style="border-top: 1px dashed #93c5fd; display: flex; align-items: center; justify-content: space-between;">
+              <span class="small text-muted" style="font-size: 0.82rem;">शाळेचा पट: <strong id="dashTotalPat" style="color: #1e3a8a; font-weight: 800;">लोड होत आहे...</strong></span>
+              <button type="button" class="btn btn-sm btn-primary px-3 fw-bold rounded-pill" onclick="app.switchTab('daily')" style="border-radius: 20px; font-size: 0.8rem; padding: 5px 14px; background: #2563eb; color: #fff; border: none; cursor: pointer;">
+                नोंद करा ✍️
+              </button>
             </div>
           </div>
 
-          <!-- 2-Column Responsive Card Grid -->
-          <div class="d-flex align-items-center justify-content-between mb-2 px-1">
-            <span class="small fw-bold text-uppercase text-muted" style="letter-spacing: 0.5px;">सर्व विभाग व मेनू (Card View)</span>
-            <span class="badge bg-light text-primary border">८ मुख्य विभाग</span>
+          <!-- 2-Column Responsive Card Grid Header -->
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding: 0 4px;">
+            <span style="font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b;">सर्व विभाग व मेनू (Card View)</span>
+            <span style="font-size: 0.72rem; font-weight: 700; color: #2563eb; background: #eff6ff; border: 1px solid #bfdbfe; padding: 2px 8px; border-radius: 12px;">८ मुख्य विभाग</span>
           </div>
 
-          <div class="mobile-cards-grid">
+          <!-- 2-Column Touch Grid -->
+          <div class="mobile-cards-grid" style="display: grid !important; grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; width: 100% !important; margin: 0 auto !important; box-sizing: border-box !important;">
             
             <!-- Card 1: दैनिक नोंद -->
-            <div class="mobile-menu-card card-theme-blue" onclick="app.switchTab('daily')">
-              <div class="card-icon-box" style="background: #2563eb; color: #fff;">📝</div>
-              <div class="card-content">
-                <h5 class="card-title">दैनिक नोंद</h5>
-                <p class="card-desc">आजची उपस्थिती व मेनू नोंदवा</p>
+            <div class="mobile-menu-card card-theme-blue" onclick="app.switchTab('daily')" style="display: flex !important; flex-direction: column !important; justify-content: space-between !important; min-height: 128px !important; border-radius: 18px !important; padding: 13px 12px !important; background: linear-gradient(180deg, #ffffff 0%, #f0f7ff 100%) !important; border: 1.5px solid #bfdbfe !important; box-shadow: 0 2px 6px rgba(0,0,0,0.05) !important; cursor: pointer !important; position: relative !important; overflow: hidden !important; box-sizing: border-box !important; text-align: left !important;">
+              <div>
+                <div class="card-icon-box" style="width: 42px !important; height: 42px !important; min-width: 42px !important; min-height: 42px !important; border-radius: 12px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-size: 1.3rem !important; margin-bottom: 8px !important; box-shadow: 0 3px 8px rgba(37,99,235,0.2) !important; background: #2563eb !important; color: #fff !important; flex-shrink: 0 !important;">📝</div>
+                <h5 class="card-title" style="font-size: 0.95rem !important; font-weight: 800 !important; color: #1e293b !important; margin: 0 0 3px 0 !important; line-height: 1.25 !important;">दैनिक नोंद</h5>
+                <p class="card-desc" style="font-size: 0.72rem !important; color: #64748b !important; margin: 0 !important; line-height: 1.3 !important;">आजची उपस्थिती व मेनू नोंदवा</p>
               </div>
-              <div class="card-arrow text-primary">➔</div>
+              <div class="card-action-bar" style="display: flex !important; align-items: center !important; justify-content: space-between !important; margin-top: 8px !important; padding-top: 6px !important; border-top: 1px solid #dbeafe !important; font-size: 0.75rem !important; font-weight: 800 !important; color: #2563eb !important;">
+                <span>उघडा</span>
+                <span>➔</span>
+              </div>
             </div>
 
             <!-- Card 2: दैनिक नोंदवही -->
-            <div class="mobile-menu-card card-theme-purple" onclick="app.switchTab('register')">
-              <div class="card-icon-box" style="background: #7c3aed; color: #fff;">📖</div>
-              <div class="card-content">
-                <h5 class="card-title">दैनिक नोंदवही</h5>
-                <p class="card-desc">महिनावारी संपूर्ण नोंदवही तपासा</p>
+            <div class="mobile-menu-card card-theme-purple" onclick="app.switchTab('register')" style="display: flex !important; flex-direction: column !important; justify-content: space-between !important; min-height: 128px !important; border-radius: 18px !important; padding: 13px 12px !important; background: linear-gradient(180deg, #ffffff 0%, #faf5ff 100%) !important; border: 1.5px solid #e9d5ff !important; box-shadow: 0 2px 6px rgba(0,0,0,0.05) !important; cursor: pointer !important; position: relative !important; overflow: hidden !important; box-sizing: border-box !important; text-align: left !important;">
+              <div>
+                <div class="card-icon-box" style="width: 42px !important; height: 42px !important; min-width: 42px !important; min-height: 42px !important; border-radius: 12px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-size: 1.3rem !important; margin-bottom: 8px !important; box-shadow: 0 3px 8px rgba(124,58,237,0.2) !important; background: #7c3aed !important; color: #fff !important; flex-shrink: 0 !important;">📖</div>
+                <h5 class="card-title" style="font-size: 0.95rem !important; font-weight: 800 !important; color: #1e293b !important; margin: 0 0 3px 0 !important; line-height: 1.25 !important;">दैनिक नोंदवही</h5>
+                <p class="card-desc" style="font-size: 0.72rem !important; color: #64748b !important; margin: 0 !important; line-height: 1.3 !important;">महिनावारी संपूर्ण नोंदवही तपासा</p>
               </div>
-              <div class="card-arrow text-purple">➔</div>
+              <div class="card-action-bar" style="display: flex !important; align-items: center !important; justify-content: space-between !important; margin-top: 8px !important; padding-top: 6px !important; border-top: 1px solid #f3e8ff !important; font-size: 0.75rem !important; font-weight: 800 !important; color: #7c3aed !important;">
+                <span>पहा</span>
+                <span>➔</span>
+              </div>
             </div>
 
             <!-- Card 3: अहवाल व प्रपत्र ब -->
-            <div class="mobile-menu-card card-theme-emerald" onclick="app.switchTab('reports')">
-              <div class="card-icon-box" style="background: #059669; color: #fff;">📑</div>
-              <div class="card-content">
-                <h5 class="card-title">अहवाल (Reports)</h5>
-                <p class="card-desc">मासिक प्रपत्र ब, तांदूळ हिशोब प्रिंट</p>
+            <div class="mobile-menu-card card-theme-emerald" onclick="app.switchTab('reports')" style="display: flex !important; flex-direction: column !important; justify-content: space-between !important; min-height: 128px !important; border-radius: 18px !important; padding: 13px 12px !important; background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%) !important; border: 1.5px solid #a7f3d0 !important; box-shadow: 0 2px 6px rgba(0,0,0,0.05) !important; cursor: pointer !important; position: relative !important; overflow: hidden !important; box-sizing: border-box !important; text-align: left !important;">
+              <div>
+                <div class="card-icon-box" style="width: 42px !important; height: 42px !important; min-width: 42px !important; min-height: 42px !important; border-radius: 12px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-size: 1.3rem !important; margin-bottom: 8px !important; box-shadow: 0 3px 8px rgba(5,150,105,0.2) !important; background: #059669 !important; color: #fff !important; flex-shrink: 0 !important;">📑</div>
+                <h5 class="card-title" style="font-size: 0.95rem !important; font-weight: 800 !important; color: #1e293b !important; margin: 0 0 3px 0 !important; line-height: 1.25 !important;">अहवाल (Reports)</h5>
+                <p class="card-desc" style="font-size: 0.72rem !important; color: #64748b !important; margin: 0 !important; line-height: 1.3 !important;">मासिक प्रपत्र ब, तांदूळ हिशोब प्रिंट</p>
               </div>
-              <div class="card-arrow text-success">➔</div>
+              <div class="card-action-bar" style="display: flex !important; align-items: center !important; justify-content: space-between !important; margin-top: 8px !important; padding-top: 6px !important; border-top: 1px solid #d1fae5 !important; font-size: 0.75rem !important; font-weight: 800 !important; color: #059669 !important;">
+                <span>तयार करा</span>
+                <span>➔</span>
+              </div>
             </div>
 
             <!-- Card 4: चव नोंदवही -->
-            <div class="mobile-menu-card card-theme-rose" onclick="app.switchTab('taste')">
-              <div class="card-icon-box" style="background: #e11d48; color: #fff;">👅</div>
-              <div class="card-content">
-                <h5 class="card-title">चव नोंदवही</h5>
-                <p class="card-desc">माता समिती व शिक्षक चव शेरा</p>
+            <div class="mobile-menu-card card-theme-rose" onclick="app.switchTab('taste')" style="display: flex !important; flex-direction: column !important; justify-content: space-between !important; min-height: 128px !important; border-radius: 18px !important; padding: 13px 12px !important; background: linear-gradient(180deg, #ffffff 0%, #fff1f2 100%) !important; border: 1.5px solid #fecdd3 !important; box-shadow: 0 2px 6px rgba(0,0,0,0.05) !important; cursor: pointer !important; position: relative !important; overflow: hidden !important; box-sizing: border-box !important; text-align: left !important;">
+              <div>
+                <div class="card-icon-box" style="width: 42px !important; height: 42px !important; min-width: 42px !important; min-height: 42px !important; border-radius: 12px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-size: 1.3rem !important; margin-bottom: 8px !important; box-shadow: 0 3px 8px rgba(225,29,72,0.2) !important; background: #e11d48 !important; color: #fff !important; flex-shrink: 0 !important;">👅</div>
+                <h5 class="card-title" style="font-size: 0.95rem !important; font-weight: 800 !important; color: #1e293b !important; margin: 0 0 3px 0 !important; line-height: 1.25 !important;">चव नोंदवही</h5>
+                <p class="card-desc" style="font-size: 0.72rem !important; color: #64748b !important; margin: 0 !important; line-height: 1.3 !important;">माता समिती व शिक्षक चव शेरा</p>
               </div>
-              <div class="card-arrow text-danger">➔</div>
+              <div class="card-action-bar" style="display: flex !important; align-items: center !important; justify-content: space-between !important; margin-top: 8px !important; padding-top: 6px !important; border-top: 1px solid #ffe4e6 !important; font-size: 0.75rem !important; font-weight: 800 !important; color: #e11d48 !important;">
+                <span>नोंदवा</span>
+                <span>➔</span>
+              </div>
             </div>
 
             <!-- Card 5: साठा व्यवस्थापन -->
-            <div class="mobile-menu-card card-theme-amber" onclick="app.switchTab('stock')">
-              <div class="card-icon-box" style="background: #d97706; color: #fff;">📦</div>
-              <div class="card-content">
-                <h5 class="card-title">साठा व्यवस्थापन</h5>
-                <p class="card-desc">तांदूळ व धान्य शिल्लक हिशोब</p>
+            <div class="mobile-menu-card card-theme-amber" onclick="app.switchTab('stock')" style="display: flex !important; flex-direction: column !important; justify-content: space-between !important; min-height: 128px !important; border-radius: 18px !important; padding: 13px 12px !important; background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%) !important; border: 1.5px solid #fde68a !important; box-shadow: 0 2px 6px rgba(0,0,0,0.05) !important; cursor: pointer !important; position: relative !important; overflow: hidden !important; box-sizing: border-box !important; text-align: left !important;">
+              <div>
+                <div class="card-icon-box" style="width: 42px !important; height: 42px !important; min-width: 42px !important; min-height: 42px !important; border-radius: 12px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-size: 1.3rem !important; margin-bottom: 8px !important; box-shadow: 0 3px 8px rgba(217,119,6,0.2) !important; background: #d97706 !important; color: #fff !important; flex-shrink: 0 !important;">📦</div>
+                <h5 class="card-title" style="font-size: 0.95rem !important; font-weight: 800 !important; color: #1e293b !important; margin: 0 0 3px 0 !important; line-height: 1.25 !important;">साठा व्यवस्थापन</h5>
+                <p class="card-desc" style="font-size: 0.72rem !important; color: #64748b !important; margin: 0 !important; line-height: 1.3 !important;">तांदूळ व धान्य शिल्लक हिशोब</p>
               </div>
-              <div class="card-arrow text-warning">➔</div>
+              <div class="card-action-bar" style="display: flex !important; align-items: center !important; justify-content: space-between !important; margin-top: 8px !important; padding-top: 6px !important; border-top: 1px solid #fef3c7 !important; font-size: 0.75rem !important; font-weight: 800 !important; color: #d97706 !important;">
+                <span>तपासा</span>
+                <span>➔</span>
+              </div>
             </div>
 
             <!-- Card 6: मासिक जलद नोंद -->
-            <div class="mobile-menu-card card-theme-cyan" onclick="app.switchTab('bulk-entry')">
-              <div class="card-icon-box" style="background: #0891b2; color: #fff;">⚡</div>
-              <div class="card-content">
-                <h5 class="card-title">मासिक जलद नोंद</h5>
-                <p class="card-desc">संपूर्ण महिन्याची उपस्थिती एकाच वेळी</p>
+            <div class="mobile-menu-card card-theme-cyan" onclick="app.switchTab('bulk-entry')" style="display: flex !important; flex-direction: column !important; justify-content: space-between !important; min-height: 128px !important; border-radius: 18px !important; padding: 13px 12px !important; background: linear-gradient(180deg, #ffffff 0%, #ecfeff 100%) !important; border: 1.5px solid #a5f3fc !important; box-shadow: 0 2px 6px rgba(0,0,0,0.05) !important; cursor: pointer !important; position: relative !important; overflow: hidden !important; box-sizing: border-box !important; text-align: left !important;">
+              <div>
+                <div class="card-icon-box" style="width: 42px !important; height: 42px !important; min-width: 42px !important; min-height: 42px !important; border-radius: 12px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-size: 1.3rem !important; margin-bottom: 8px !important; box-shadow: 0 3px 8px rgba(8,145,178,0.2) !important; background: #0891b2 !important; color: #fff !important; flex-shrink: 0 !important;">⚡</div>
+                <h5 class="card-title" style="font-size: 0.95rem !important; font-weight: 800 !important; color: #1e293b !important; margin: 0 0 3px 0 !important; line-height: 1.25 !important;">मासिक जलद नोंद</h5>
+                <p class="card-desc" style="font-size: 0.72rem !important; color: #64748b !important; margin: 0 !important; line-height: 1.3 !important;">संपूर्ण महिन्याची उपस्थिती एकाच वेळी</p>
               </div>
-              <div class="card-arrow text-info">➔</div>
+              <div class="card-action-bar" style="display: flex !important; align-items: center !important; justify-content: space-between !important; margin-top: 8px !important; padding-top: 6px !important; border-top: 1px solid #cffafe !important; font-size: 0.75rem !important; font-weight: 800 !important; color: #0891b2 !important;">
+                <span>जलद भरा</span>
+                <span>➔</span>
+              </div>
             </div>
 
             <!-- Card 7: डेटा बॅकअप -->
-            <div class="mobile-menu-card card-theme-indigo" onclick="app.switchTab('io')">
-              <div class="card-icon-box" style="background: #4f46e5; color: #fff;">💾</div>
-              <div class="card-content">
-                <h5 class="card-title">बॅकअप / रिस्टोअर</h5>
-                <p class="card-desc">Excel, JSON व Google Cloud सिंक</p>
+            <div class="mobile-menu-card card-theme-indigo" onclick="app.switchTab('io')" style="display: flex !important; flex-direction: column !important; justify-content: space-between !important; min-height: 128px !important; border-radius: 18px !important; padding: 13px 12px !important; background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%) !important; border: 1.5px solid #c7d2fe !important; box-shadow: 0 2px 6px rgba(0,0,0,0.05) !important; cursor: pointer !important; position: relative !important; overflow: hidden !important; box-sizing: border-box !important; text-align: left !important;">
+              <div>
+                <div class="card-icon-box" style="width: 42px !important; height: 42px !important; min-width: 42px !important; min-height: 42px !important; border-radius: 12px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-size: 1.3rem !important; margin-bottom: 8px !important; box-shadow: 0 3px 8px rgba(79,70,229,0.2) !important; background: #4f46e5 !important; color: #fff !important; flex-shrink: 0 !important;">💾</div>
+                <h5 class="card-title" style="font-size: 0.95rem !important; font-weight: 800 !important; color: #1e293b !important; margin: 0 0 3px 0 !important; line-height: 1.25 !important;">बॅकअप / रिस्टोअर</h5>
+                <p class="card-desc" style="font-size: 0.72rem !important; color: #64748b !important; margin: 0 !important; line-height: 1.3 !important;">Excel, JSON व Google Cloud सिंक</p>
               </div>
-              <div class="card-arrow text-primary">➔</div>
+              <div class="card-action-bar" style="display: flex !important; align-items: center !important; justify-content: space-between !important; margin-top: 8px !important; padding-top: 6px !important; border-top: 1px solid #e0e7ff !important; font-size: 0.75rem !important; font-weight: 800 !important; color: #4f46e5 !important;">
+                <span>सुरक्षित करा</span>
+                <span>➔</span>
+              </div>
             </div>
 
             <!-- Card 8: शाळा सेटिंग्ज -->
-            <div class="mobile-menu-card card-theme-slate" onclick="app.switchTab('settings')">
-              <div class="card-icon-box" style="background: #475569; color: #fff;">⚙️</div>
-              <div class="card-content">
-                <h5 class="card-title">सेटिंग्ज व नियम</h5>
-                <p class="card-desc">मुख्याध्यापक, दर व पटसंख्या</p>
+            <div class="mobile-menu-card card-theme-slate" onclick="app.switchTab('settings')" style="display: flex !important; flex-direction: column !important; justify-content: space-between !important; min-height: 128px !important; border-radius: 18px !important; padding: 13px 12px !important; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important; border: 1.5px solid #cbd5e1 !important; box-shadow: 0 2px 6px rgba(0,0,0,0.05) !important; cursor: pointer !important; position: relative !important; overflow: hidden !important; box-sizing: border-box !important; text-align: left !important;">
+              <div>
+                <div class="card-icon-box" style="width: 42px !important; height: 42px !important; min-width: 42px !important; min-height: 42px !important; border-radius: 12px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-size: 1.3rem !important; margin-bottom: 8px !important; box-shadow: 0 3px 8px rgba(71,85,105,0.2) !important; background: #475569 !important; color: #fff !important; flex-shrink: 0 !important;">⚙️</div>
+                <h5 class="card-title" style="font-size: 0.95rem !important; font-weight: 800 !important; color: #1e293b !important; margin: 0 0 3px 0 !important; line-height: 1.25 !important;">सेटिंग्ज व नियम</h5>
+                <p class="card-desc" style="font-size: 0.72rem !important; color: #64748b !important; margin: 0 !important; line-height: 1.3 !important;">मुख्याध्यापक, दर व पटसंख्या</p>
               </div>
-              <div class="card-arrow text-secondary">➔</div>
+              <div class="card-action-bar" style="display: flex !important; align-items: center !important; justify-content: space-between !important; margin-top: 8px !important; padding-top: 6px !important; border-top: 1px solid #f1f5f9 !important; font-size: 0.75rem !important; font-weight: 800 !important; color: #475569 !important;">
+                <span>बदला</span>
+                <span>➔</span>
+              </div>
             </div>
 
           </div>
 
           <!-- Prominent Bottom Mobile Logout Card -->
-          <div class="mt-4 pt-2">
-            <button type="button" class="btn btn-outline-danger w-100 py-3 fw-bold rounded-4 shadow-sm d-flex align-items-center justify-content-center gap-2" onclick="app.logoutSchool()" style="border-width: 2px;">
-              <span style="font-size: 1.25rem;">🚪</span>
+          <div class="mt-4 pt-2" style="margin-top: 24px; padding-top: 10px;">
+            <button type="button" class="btn btn-outline-danger w-100 py-3 fw-bold rounded-4 shadow-sm d-flex align-items-center justify-content-center gap-2" onclick="app.logoutSchool()" style="border: 2px solid #ef4444 !important; border-radius: 16px !important; padding: 14px 10px !important; background: #fff5f5 !important; color: #dc2626 !important; font-size: 0.95rem !important; font-weight: 800 !important; width: 100% !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important; cursor: pointer !important;">
+              <span style="font-size: 1.35rem;">🚪</span>
               <span>शाळा सुरक्षितपणे लॉगआउट करा (Logout)</span>
             </button>
-            <p class="text-center text-muted small mt-2 mb-0">PM POSHAN दैनिक नोंद व अहवाल प्रणाली | GVP Apps</p>
+            <p class="text-center text-muted small mt-2 mb-0" style="text-align: center; color: #94a3b8; font-size: 0.75rem; margin-top: 10px;">PM POSHAN दैनिक नोंद व अहवाल प्रणाली | GVP Apps</p>
           </div>
 
         </div>
